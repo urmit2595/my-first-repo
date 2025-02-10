@@ -3,26 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My First GitHub Project</title>
+    <title>Learning Git and GitHub</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            text-align: center;
         }
-        h1 {
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        h1, h2 {
             color: #333;
         }
-        p {
-            color: #666;
+        .command {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
         }
     </style>
 </head>
 <body>
-    <h1>Welcome to My First GitHub Project</h1>
-    <p>This is my first file in my first Git repository!</p>
-    <p>Created on: October 2, 2025</p>
+    <h1>Why Use Git and GitHub?</h1>
+    
+    <div class="section">
+        <h2>1. Version Control - Like a Time Machine</h2>
+        <p>Imagine you're writing a paper and want to try something new, but you're afraid of messing up your current version:</p>
+        <ul>
+            <li>Without Git: You'd make copies like "final.doc", "final_v2.doc", "final_FINAL.doc"</li>
+            <li>With Git: Make changes freely, knowing you can always go back to any previous version!</li>
+        </ul>
+        <div class="command">git commit -m "Your message here"</div>
+        <p>This saves a snapshot of your work with a message explaining what changed.</p>
+    </div>
+
+    <div class="section">
+        <h2>2. Collaboration - Like Google Docs for Code</h2>
+        <p>GitHub is like a central hub where your team can:</p>
+        <ul>
+            <li>See all changes (who changed what and when)</li>
+            <li>Work on different features without interfering with each other</li>
+            <li>Merge everyone's work together safely</li>
+        </ul>
+        <div class="command">git push (send changes to GitHub)</div>
+        <div class="command">git pull (get latest changes from GitHub)</div>
+    </div>
+
+    <div class="section">
+        <h2>3. Basic Git Commands Explained</h2>
+        <ul>
+            <li><strong>git status</strong>: See what files you've changed</li>
+            <li><strong>git add filename</strong>: Tell Git to track changes in a file</li>
+            <li><strong>git commit -m "message"</strong>: Save your changes with a note</li>
+            <li><strong>git push</strong>: Upload your changes to GitHub</li>
+            <li><strong>git pull</strong>: Download latest changes from GitHub</li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h2>4. Real-World Example</h2>
+        <p>Think of Git like saving a video game:</p>
+        <ul>
+            <li><strong>git add</strong> = Choosing what to save</li>
+            <li><strong>git commit</strong> = Creating a save point</li>
+            <li><strong>git push</strong> = Uploading your save to the cloud</li>
+            <li><strong>git pull</strong> = Downloading your save from the cloud</li>
+        </ul>
+    </div>
 </body>
 </html>
