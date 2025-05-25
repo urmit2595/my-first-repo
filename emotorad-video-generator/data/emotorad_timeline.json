@@ -1,0 +1,284 @@
+{
+  "brand": {
+    "name": "Emotorad",
+    "style": "Very lively colors, miniaturized version, playful and energetic with dynamic movement",
+    "colors": {
+      "primary": "#00D4FF",
+      "secondary": "#FF6B35", 
+      "accent": "#4ECDC4",
+      "background": "#FFFFFF",
+      "gradient_start": "#E8F8FF",
+      "gradient_end": "#FFF5F0"
+    },
+    "visual_elements": [
+      "Modern e-bikes with sporty design",
+      "Vibrant and dynamic composition",
+      "Miniaturized cartoon-style characters with exaggerated features",
+      "Tech-forward aesthetic with glowing elements",
+      "Indian cultural elements where relevant",
+      "Speed lines and motion blur for dynamism",
+      "Layered depth for parallax effects"
+    ],
+    "animation_style": "energetic_zoom_pan"
+  },
+  "scenes": [
+    {
+      "scene_number": 1,
+      "year": "2020",
+      "title": "Incorporation & Mission",
+      "description": "EMotorad was set up in Pune by four co-founders",
+      "key_elements": [
+        "Four miniaturized founders in startup garage setting",
+        "Pune city skyline in background with depth layers",
+        "E-bike blueprint floating with glow effect",
+        "Indian flag element with pride",
+        "Startup energy with light streaks",
+        "Tools and parts scattered dynamically"
+      ],
+      "motion_direction": "zoom_in",
+      "camera_movement": {
+        "type": "dolly_zoom",
+        "start": "wide",
+        "end": "medium",
+        "focus_point": "founders_center"
+      },
+      "layer_composition": {
+        "background": "pune_skyline_blurred",
+        "midground": "garage_workshop",
+        "foreground": "founders_and_bike",
+        "overlay": "blueprint_hologram"
+      },
+      "energy_elements": [
+        "spark_effects",
+        "floating_gears",
+        "light_trails"
+      ],
+      "founders_present": ["Rajib", "Kunal", "Aditya", "Sumedh"],
+      "text_overlay": "2020 | The Journey Begins"
+    },
+    {
+      "scene_number": 2,
+      "year": "Nov 2020",
+      "title": "First Products Launch",
+      "description": "Launched flagship EMX and Doodle models",
+      "motion_direction": "rotate_reveal",
+      "camera_movement": {
+        "type": "orbit",
+        "start": "left_side",
+        "end": "hero_angle",
+        "focus_point": "bikes_center"
+      },
+      "key_elements": [
+        "EMX and Doodle e-bikes on rotating platform",
+        "Dual-suspension feature with glow highlight",
+        "₹50,000 price tag as 3D floating text",
+        "Launch event crowd silhouettes",
+        "Tech specs as holographic display",
+        "Confetti and celebration particles"
+      ],
+      "layer_composition": {
+        "background": "event_venue_blur",
+        "midground": "rotating_platform",
+        "foreground": "bikes_hero",
+        "overlay": "specs_hologram"
+      },
+      "text_overlay": "Nov 2020 | First E-Bikes Hit the Road"
+    },
+    {
+      "scene_number": 3,
+      "year": "Feb 2021",
+      "title": "Early Scale Moves",
+      "description": "Expansion to 100+ cities and Cosmos launch",
+      "motion_direction": "map_expansion",
+      "camera_movement": {
+        "type": "aerial_sweep",
+        "start": "india_full",
+        "end": "cities_zoom",
+        "focus_point": "expanding_dots"
+      },
+      "key_elements": [
+        "3D map of India with expanding city dots",
+        "Cosmos heavy-duty e-cycle in action",
+        "Delivery riders in motion blur",
+        "450 outlets as growing counter",
+        "Network connection lines animating",
+        "Growth charts as floating 3D bars"
+      ],
+      "layer_composition": {
+        "background": "india_map_3d",
+        "midground": "city_connections",
+        "foreground": "cosmos_bike_hero",
+        "overlay": "data_visualization"
+      },
+      "text_overlay": "Feb 2021 | Scaling Across India"
+    },
+    {
+      "scene_number": 4,
+      "year": "Aug 2021", 
+      "title": "Dubai Expansion",
+      "description": "First international showroom in Dubai",
+      "motion_direction": "fly_through",
+      "camera_movement": {
+        "type": "drone_flythrough",
+        "start": "burj_khalifa_wide",
+        "end": "showroom_entrance",
+        "focus_point": "emotorad_sign"
+      },
+      "key_elements": [
+        "Dubai skyline with Burj Khalifa prominent",
+        "Showroom with glass facade and neon sign",
+        "Export model bikes in motion",
+        "Dubai Expo 2021 holographic badge",
+        "Middle East map with expansion rays",
+        "Sand particles transforming to tech particles"
+      ],
+      "layer_composition": {
+        "background": "dubai_skyline_golden",
+        "midground": "showroom_modern",
+        "foreground": "bikes_display",
+        "overlay": "expo_badge_float"
+      },
+      "text_overlay": "Aug 2021 | Going Global - Dubai"
+    },
+    {
+      "scene_number": 5,
+      "year": "Oct 2022",
+      "title": "Pre-Series A Funding",
+      "description": "Raised ₹24 crore led by Green Frontier Capital",
+      "motion_direction": "money_flow",
+      "camera_movement": {
+        "type": "push_in",
+        "start": "celebration_wide",
+        "end": "money_visualization",
+        "focus_point": "rupee_symbol"
+      },
+      "key_elements": [
+        "₹24 crore as 3D floating currency",
+        "Investment celebration with team",
+        "Green Frontier Capital logo integration",
+        "Tech network expanding visualization",
+        "Team growth icons multiplying",
+        "Money flow particle effects"
+      ],
+      "layer_composition": {
+        "background": "office_celebration",
+        "midground": "floating_money",
+        "foreground": "team_cheering",
+        "overlay": "growth_particles"
+      },
+      "text_overlay": "Oct 2022 | ₹24 Crore Funding"
+    },
+    {
+      "scene_number": 6,
+      "year": "Nov 2023",
+      "title": "Series B & MS Dhoni",
+      "description": "US$20m funding and MS Dhoni as brand ambassador",
+      "motion_direction": "hero_reveal",
+      "camera_movement": {
+        "type": "dramatic_push",
+        "start": "silhouette",
+        "end": "hero_shot",
+        "focus_point": "dhoni_bike"
+      },
+      "key_elements": [
+        "MS Dhoni heroic pose with e-bike",
+        "US$20 million as epic 3D text",
+        "80k bikes counter rapidly increasing",
+        "₹130 crore revenue visualization",
+        "Cricket bat transforming to e-bike",
+        "Stadium lights and energy effects"
+      ],
+      "layer_composition": {
+        "background": "stadium_lights",
+        "midground": "dhoni_silhouette",
+        "foreground": "bike_hero_glow",
+        "overlay": "achievement_stats"
+      },
+      "text_overlay": "Nov 2023 | MS Dhoni Joins + $20M Funding"
+    },
+    {
+      "scene_number": 7,
+      "year": "Dec 2024",
+      "title": "Hamleys Partnership",
+      "description": "Kids' mobility line with Hamleys",
+      "motion_direction": "playful_bounce",
+      "camera_movement": {
+        "type": "whimsical_float",
+        "start": "toy_store_exterior",
+        "end": "kids_riding",
+        "focus_point": "colorful_bikes"
+      },
+      "key_elements": [
+        "Hamleys storefront with toy magic",
+        "Kids on colorful mini e-bikes",
+        "Toy-like designs with rainbow trails",
+        "Balloons and confetti atmosphere",
+        "Family joy expressions",
+        "Playful particle effects"
+      ],
+      "layer_composition": {
+        "background": "hamleys_magical",
+        "midground": "kids_action",
+        "foreground": "bikes_colorful",
+        "overlay": "toy_particles"
+      },
+      "text_overlay": "Dec 2024 | Kids Line with Hamleys"
+    },
+    {
+      "scene_number": 8,
+      "year": "Early 2025",
+      "title": "Smart Factory & Global Push",
+      "description": "150,000 sq ft smart drivetrain plant",
+      "motion_direction": "industrial_sweep",
+      "camera_movement": {
+        "type": "crane_shot",
+        "start": "factory_aerial",
+        "end": "production_line",
+        "focus_point": "robots_working"
+      },
+      "key_elements": [
+        "Futuristic factory with glass and steel",
+        "400k capacity as holographic display",
+        "18+ country flags in orbital arrangement",
+        "800 dealers network visualization",
+        "Robotic arms in synchronized motion",
+        "Data streams and tech particles"
+      ],
+      "layer_composition": {
+        "background": "factory_exterior",
+        "midground": "production_floor",
+        "foreground": "robot_assembly",
+        "overlay": "global_network"
+      },
+      "text_overlay": "2025 | Smart Factory + 18 Countries"
+    },
+    {
+      "scene_number": 9,
+      "year": "May 2025",
+      "title": "Founders & Future Vision",
+      "description": "Four founders and company snapshot",
+      "motion_direction": "epic_assembly",
+      "camera_movement": {
+        "type": "multi_angle_montage",
+        "start": "individual_portraits",
+        "end": "team_united",
+        "focus_point": "center_convergence"
+      },
+      "key_elements": [
+        "Four founders in heroic arrangement",
+        "14 model bikes in showcase spiral",
+        "US$26m funding as achievement badge",
+        "100k target as glowing goal",
+        "India pride flag integration",
+        "Future vision rays emanating"
+      ],
+      "layer_composition": {
+        "background": "india_tech_future",
+        "midground": "bikes_showcase",
+        "foreground": "founders_heroic",
+        "overlay": "achievement_badges"
+      },
+      "text_overlay": "The Team Behind the Revolution"
+    }
+  ]
+}

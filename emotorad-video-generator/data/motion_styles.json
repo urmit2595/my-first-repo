@@ -1,0 +1,18 @@
+{
+  "energetic_zoom_pan": {
+    "description": "Dynamic camera movements with zoom and pan",
+    "speed": "fast",
+    "easing": "ease-in-out",
+    "effects": ["motion_blur", "speed_lines", "particle_trail"]
+  },
+  "transitions": {
+    "scene_1_to_2": "whip_pan_right",
+    "scene_2_to_3": "zoom_transition", 
+    "scene_3_to_4": "map_morph",
+    "scene_4_to_5": "cash_flow_wipe",
+    "scene_5_to_6": "star_burst",
+    "scene_6_to_7": "playful_bounce",
+    "scene_7_to_8": "tech_glitch",
+    "scene_8_to_9": "epic_reveal"
+  }
+}
