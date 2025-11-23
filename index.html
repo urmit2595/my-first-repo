@@ -3,78 +3,388 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Learning Git and GitHub</title>
+    <title>Naruto vs Sasuke - Mini Arena</title>
     <style>
+        :root {
+            --naruto: #ffba08;
+            --sasuke: #5e72e4;
+            --bg: linear-gradient(180deg, #0d1b2a 0%, #1b263b 70%, #415a77 100%);
+        }
+        * { box-sizing: border-box; }
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: #f7fafc;
+            background: #0b132b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            padding: 18px;
         }
-        .section {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+        header {
+            text-align: center;
         }
-        h1, h2 {
-            color: #333;
+        h1 { margin: 0; letter-spacing: 0.5px; }
+        .subtitle { opacity: 0.85; }
+        #arena-wrapper {
+            position: relative;
+            width: min(100%, 960px);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+            background: #0b132b;
         }
-        .command {
-            background-color: #f5f5f5;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            margin: 10px 0;
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px;
+            background: rgba(0,0,0,0.35);
+            backdrop-filter: blur(6px);
         }
+        .bar {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            height: 18px;
+            position: relative;
+            overflow: hidden;
+        }
+        .bar span {
+            display: block;
+            height: 100%;
+            transition: width 0.2s ease;
+        }
+        .label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 4px;
+            letter-spacing: 0.2px;
+        }
+        #hud .panel {
+            flex: 1;
+            min-width: 200px;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 420px;
+            display: block;
+            background: var(--bg);
+        }
+        #controls {
+            width: min(100%, 960px);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+        }
+        .card {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 12px 14px;
+            line-height: 1.5;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+        }
+        .card h3 { margin-top: 0; }
+        .keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+        .key { font-weight: 700; color: #ffd166; }
+        #log { font-family: "Fira Code", monospace; max-height: 140px; overflow-y: auto; font-size: 13px; }
+        #startBtn {
+            padding: 10px 16px;
+            border-radius: 10px;
+            border: none;
+            background: #06d6a0;
+            color: #0b132b;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.2s;
+        }
+        #startBtn:active { transform: translateY(1px); }
+        footer { opacity: 0.8; font-size: 13px; }
     </style>
 </head>
 <body>
-    <h1>Why Use Git and GitHub?</h1>
-    
-    <div class="section">
-        <h2>1. Version Control - Like a Time Machine</h2>
-        <p>Imagine you're writing a paper and want to try something new, but you're afraid of messing up your current version:</p>
-        <ul>
-            <li>Without Git: You'd make copies like "final.doc", "final_v2.doc", "final_FINAL.doc"</li>
-            <li>With Git: Make changes freely, knowing you can always go back to any previous version!</li>
-        </ul>
-        <div class="command">git commit -m "Your message here"</div>
-        <p>This saves a snapshot of your work with a message explaining what changed.</p>
+    <header>
+        <h1>Naruto vs Sasuke</h1>
+        <p class="subtitle">Fast-paced micro arena. You play Naruto; Sasuke is driven by simple AI.</p>
+    </header>
+
+    <div id="arena-wrapper">
+        <div id="hud">
+            <div class="panel">
+                <div class="label"><span>Naruto (You)</span><span id="narutoHPLabel">100</span></div>
+                <div class="bar"><span id="narutoHP" style="background: var(--naruto); width: 100%"></span></div>
+            </div>
+            <div class="panel" style="text-align:center; max-width:160px;">
+                <button id="startBtn">Start / Reset</button>
+            </div>
+            <div class="panel">
+                <div class="label"><span>Sasuke (AI)</span><span id="sasukeHPLabel">100</span></div>
+                <div class="bar"><span id="sasukeHP" style="background: var(--sasuke); width: 100%"></span></div>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="960" height="420"></canvas>
     </div>
 
-    <div class="section">
-        <h2>2. Collaboration - Like Google Docs for Code</h2>
-        <p>GitHub is like a central hub where your team can:</p>
-        <ul>
-            <li>See all changes (who changed what and when)</li>
-            <li>Work on different features without interfering with each other</li>
-            <li>Merge everyone's work together safely</li>
-        </ul>
-        <div class="command">git push (send changes to GitHub)</div>
-        <div class="command">git pull (get latest changes from GitHub)</div>
-    </div>
+    <section id="controls">
+        <div class="card">
+            <h3>Move & Jump</h3>
+            <div class="keys">
+                <div><span class="key">A / D</span> Move left / right</div>
+                <div><span class="key">W</span> Jump</div>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Attacks</h3>
+            <div class="keys">
+                <div><span class="key">J</span> Chakra Punch</div>
+                <div><span class="key">K</span> Kunai Throw</div>
+                <div><span class="key">J + K</span> Rasengan Combo</div>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Tips</h3>
+            <ul>
+                <li>Rasengan triggers if you press J then K quickly.</li>
+                <li>Keep Sasuke at bay—he dashes when you're low.</li>
+                <li>Reset anytime to restart the duel.</li>
+            </ul>
+        </div>
+        <div class="card">
+            <h3>Battle Log</h3>
+            <div id="log"></div>
+        </div>
+    </section>
 
-    <div class="section">
-        <h2>3. Basic Git Commands Explained</h2>
-        <ul>
-            <li><strong>git status</strong>: See what files you've changed</li>
-            <li><strong>git add filename</strong>: Tell Git to track changes in a file</li>
-            <li><strong>git commit -m "message"</strong>: Save your changes with a note</li>
-            <li><strong>git push</strong>: Upload your changes to GitHub</li>
-            <li><strong>git pull</strong>: Download latest changes from GitHub</li>
-        </ul>
-    </div>
+    <footer>
+        Built with plain HTML, CSS, and JS. Fight on!
+    </footer>
 
-    <div class="section">
-        <h2>4. Real-World Example</h2>
-        <p>Think of Git like saving a video game:</p>
-        <ul>
-            <li><strong>git add</strong> = Choosing what to save</li>
-            <li><strong>git commit</strong> = Creating a save point</li>
-            <li><strong>git push</strong> = Uploading your save to the cloud</li>
-            <li><strong>git pull</strong> = Downloading your save from the cloud</li>
-        </ul>
-    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const keys = {};
+        const logEl = document.getElementById('log');
+        const hpUI = {
+            narutoBar: document.getElementById('narutoHP'),
+            sasukeBar: document.getElementById('sasukeHP'),
+            narutoLabel: document.getElementById('narutoHPLabel'),
+            sasukeLabel: document.getElementById('sasukeHPLabel'),
+        };
+
+        const SFX = {
+            punch: new Audio('https://actions.google.com/sounds/v1/cartoon/punch_02.mp3'),
+            whoosh: new Audio('https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.mp3'),
+            rasengan: new Audio('https://actions.google.com/sounds/v1/human_voices/chanting_male.mp3'),
+        };
+        Object.values(SFX).forEach(a => a.volume = 0.35);
+
+        const ground = 360;
+        const GRAVITY = 0.8;
+        const WIDTH = canvas.width;
+
+        function createFighter(opts) {
+            return {
+                ...opts,
+                vy: 0,
+                onGround: true,
+                facing: 1,
+                cooldown: 0,
+                comboWindow: 0,
+                alive: true,
+            };
+        }
+
+        let naruto, sasuke, projectiles, running = false;
+
+        function resetGame() {
+            naruto = createFighter({ x: 160, y: ground, color: '#ffdd57', name: 'Naruto', hp: 100 });
+            sasuke = createFighter({ x: WIDTH - 160, y: ground, color: '#7180ff', name: 'Sasuke', hp: 100, ai: true });
+            projectiles = [];
+            logEl.innerHTML = '';
+            updateHPUI();
+            running = true;
+        }
+
+        function log(message) {
+            const div = document.createElement('div');
+            div.textContent = message;
+            logEl.prepend(div);
+            while (logEl.childNodes.length > 30) logEl.removeChild(logEl.lastChild);
+        }
+
+        function updateHPUI() {
+            const nHP = Math.max(Math.min(naruto.hp, 100), 0);
+            const sHP = Math.max(Math.min(sasuke.hp, 100), 0);
+            hpUI.narutoBar.style.width = nHP + '%';
+            hpUI.sasukeBar.style.width = sHP + '%';
+            hpUI.narutoLabel.textContent = nHP;
+            hpUI.sasukeLabel.textContent = sHP;
+        }
+
+        function handleInput() {
+            if (!running) return;
+            const speed = 3.5;
+            if (keys['a']) naruto.x -= speed;
+            if (keys['d']) naruto.x += speed;
+            naruto.x = Math.max(30, Math.min(WIDTH - 30, naruto.x));
+
+            if (keys['w'] && naruto.onGround) {
+                naruto.vy = -12;
+                naruto.onGround = false;
+            }
+
+            if (naruto.cooldown > 0) naruto.cooldown--;
+            if (naruto.comboWindow > 0) naruto.comboWindow--;
+        }
+
+        function attack(attacker, target, type) {
+            if (attacker.cooldown > 0 || !attacker.alive || !target.alive) return;
+            if (type === 'punch') {
+                attacker.cooldown = 20;
+                SFX.punch.currentTime = 0; SFX.punch.play();
+                if (Math.abs(attacker.x - target.x) < 70) {
+                    target.hp -= 10;
+                    log(`${attacker.name} lands a Chakra Punch! (-10)`);
+                } else {
+                    log(`${attacker.name} whiffs the punch.`);
+                }
+                attacker.comboWindow = 25;
+            }
+            if (type === 'kunai') {
+                attacker.cooldown = 30;
+                SFX.whoosh.currentTime = 0; SFX.whoosh.play();
+                const dir = attacker.facing;
+                projectiles.push({ x: attacker.x, y: attacker.y - 30, vx: 6 * dir, owner: attacker.name });
+                if (attacker.comboWindow > 0) {
+                    // combo finisher
+                    attacker.cooldown = 50;
+                    target.hp -= 20;
+                    SFX.rasengan.currentTime = 0; SFX.rasengan.play();
+                    log(`${attacker.name} unleashes Rasengan! (-20)`);
+                    attacker.comboWindow = 0;
+                } else {
+                    log(`${attacker.name} throws a kunai.`);
+                }
+            }
+            updateHPUI();
+            checkEnd();
+        }
+
+        function aiLogic() {
+            if (!sasuke.alive || !running) return;
+            const distance = sasuke.x - naruto.x;
+            sasuke.facing = distance > 0 ? -1 : 1;
+            // movement
+            if (Math.abs(distance) > 140) sasuke.x += Math.sign(-distance) * 2.5;
+            else if (Math.abs(distance) < 90) sasuke.x += Math.sign(distance) * 2;
+
+            // jump over projectiles
+            const incoming = projectiles.some(p => p.owner !== 'Sasuke' && Math.abs(p.x - sasuke.x) < 60);
+            if (incoming && sasuke.onGround) {
+                sasuke.vy = -10;
+                sasuke.onGround = false;
+            }
+
+            // attack logic
+            if (sasuke.cooldown > 0) sasuke.cooldown--;
+            if (sasuke.comboWindow > 0) sasuke.comboWindow--;
+            if (Math.abs(distance) < 80) attack(sasuke, naruto, 'punch');
+            else if (Math.abs(distance) < 220 && sasuke.cooldown === 0) attack(sasuke, naruto, 'kunai');
+
+            // desperation dash when low
+            if (sasuke.hp < 40 && Math.random() < 0.02 && sasuke.onGround) {
+                sasuke.vy = -8;
+                sasuke.x += sasuke.facing * 40;
+            }
+        }
+
+        function physics(f) {
+            if (!f.onGround) {
+                f.vy += GRAVITY;
+                f.y += f.vy;
+                if (f.y >= ground) { f.y = ground; f.onGround = true; f.vy = 0; }
+            }
+        }
+
+        function drawFighter(f) {
+            ctx.fillStyle = f.color;
+            ctx.fillRect(f.x - 25, f.y - 60, 50, 60);
+            ctx.fillStyle = '#111';
+            ctx.fillRect(f.x - (f.facing === 1 ? -5 : 15), f.y - 45, 20, 8); // headband
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillRect(f.x - 18, f.y - 25, 36, 14); // torso band
+        }
+
+        function drawProjectiles() {
+            ctx.fillStyle = '#f08c00';
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.x += p.vx;
+                ctx.fillRect(p.x - 6, p.y - 6, 12, 12);
+                const hitSasuke = p.owner === 'Naruto' && Math.abs(p.x - sasuke.x) < 24 && Math.abs(p.y - sasuke.y) < 40;
+                const hitNaruto = p.owner === 'Sasuke' && Math.abs(p.x - naruto.x) < 24 && Math.abs(p.y - naruto.y) < 40;
+                if (hitSasuke) {
+                    sasuke.hp -= 6; projectiles.splice(i,1); log('Kunai hits Sasuke! (-6)'); updateHPUI(); checkEnd();
+                    continue;
+                }
+                if (hitNaruto) {
+                    naruto.hp -= 6; projectiles.splice(i,1); log('Kunai hits Naruto! (-6)'); updateHPUI(); checkEnd();
+                    continue;
+                }
+                if (p.x < 0 || p.x > WIDTH) projectiles.splice(i,1);
+            }
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#1b263b';
+            ctx.fillRect(0, 320, WIDTH, 140);
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < WIDTH; i += 60) {
+                ctx.beginPath();
+                ctx.moveTo(i, 320);
+                ctx.lineTo(i + 20, 420);
+                ctx.stroke();
+            }
+        }
+
+        function checkEnd() {
+            if (naruto.hp <= 0 || sasuke.hp <= 0) {
+                running = false;
+                naruto.alive = naruto.hp > 0;
+                sasuke.alive = sasuke.hp > 0;
+                const winner = naruto.hp > sasuke.hp ? 'Naruto' : 'Sasuke';
+                log(`${winner} wins! Press Start to play again.`);
+            }
+        }
+
+        function loop() {
+            ctx.clearRect(0, 0, WIDTH, canvas.height);
+            drawBackground();
+            handleInput();
+            aiLogic();
+            physics(naruto); physics(sasuke);
+            naruto.facing = naruto.x < sasuke.x ? 1 : -1;
+            drawFighter(naruto); drawFighter(sasuke);
+            drawProjectiles();
+            requestAnimationFrame(loop);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key.toLowerCase() === 'j') attack(naruto, sasuke, 'punch');
+            if (e.key.toLowerCase() === 'k') attack(naruto, sasuke, 'kunai');
+        });
+        document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+        document.getElementById('startBtn').addEventListener('click', resetGame);
+
+        resetGame();
+        loop();
+    </script>
 </body>
 </html>
