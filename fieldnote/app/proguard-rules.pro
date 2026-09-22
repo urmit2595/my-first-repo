@@ -1,0 +1,6 @@
+-keep class com.meta.wearable.** { *; }
+-keep class com.facebook.** { *; }
+-dontwarn com.facebook.**
+-dontwarn com.meta.**
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keep class com.urmit.glasses.dev.data.** { *; }

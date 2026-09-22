@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Fieldnote" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#141416</item>
+        <item name="android:statusBarColor">#141416</item>
+        <item name="android:navigationBarColor">#1A1B1D</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

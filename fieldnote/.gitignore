@@ -1,0 +1,18 @@
+# Build output
+build/
+.gradle/
+.kotlin/
+*.apk
+*.aab
+captures/
+
+# Machine-local secrets: SDK path, telemetry endpoint/key, signing keystore and passwords
+local.properties
+keystore.properties
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+.DS_Store
