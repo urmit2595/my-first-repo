@@ -63,6 +63,11 @@ class Prefs(ctx: Context) {
     var speakOnPhone: Boolean
         get() = sp.getBoolean("speakOnPhone", true)
         set(v) { sp.edit().putBoolean("speakOnPhone", v).apply(); touch() }
+    /** Photos taken for an answer (double-tap, "what am I looking at", the brain's look/take_photo) grab a frame from the
+     *  live stream (~3 s) instead of waiting for the glasses' full photo (10 s+). A single tap still takes a full photo. */
+    var quickPhotos: Boolean
+        get() = sp.getBoolean("quickPhotos", true)
+        set(v) { sp.edit().putBoolean("quickPhotos", v).apply(); touch() }
     var wakeWordEnabled: Boolean
         get() = sp.getBoolean("wakeWord", false)
         set(v) { sp.edit().putBoolean("wakeWord", v).apply(); touch() }

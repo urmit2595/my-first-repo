@@ -54,7 +54,7 @@ class Diagnostics private constructor(private val ctx: Context) {
         if (!enabled) return
         val ev = JSONObject().put("event", name).put("event_id", UUID.randomUUID().toString())
             .put("session_id", sessionId).put("install_id", installId)
-            .put("ts", java.time.Instant.now().toString()).put("app_version", "3.1").put("android_api", Build.VERSION.SDK_INT)
+            .put("ts", java.time.Instant.now().toString()).put("app_version", "3.3").put("android_api", Build.VERSION.SDK_INT)
             .put("props", JSONObject(props.filterValues { it != null }))
         synchronized(this) {
             val arr = runCatching { JSONArray(queueFile.readText()) }.getOrDefault(JSONArray())
@@ -74,7 +74,16 @@ class Diagnostics private constructor(private val ctx: Context) {
             .header("apikey", token).header("Authorization", "Bearer $token").header("Prefer", "return=minimal")
             .post(arr.toString().toRequestBody("application/json".toMediaType())).build()
         val status = runCatching {
-            client.newCall(req).execute().use { r -> if (r.isSuccessful) { synchronized(this) { queueFile.delete() }; "Cloud synced ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(System.currentTimeMillis())}" } else "Rejected (${r.code})" }
+            client.newCall(req).execute().use { r ->
+                when {
+                    // 409 = rows already stored (a retry after a lost response): treat as delivered.
+                    r.isSuccessful || r.code == 409 -> { synchronized(this) { queueFile.delete() }; "Synced ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(System.currentTimeMillis())}" }
+                    // Server-side trouble: keep the queue and try again with the next event.
+                    r.code !in 400..499 -> "Server error (${r.code}); will retry"
+                    // The server refuses this batch outright; resending it would fail forever, so drop it.
+                    else -> { synchronized(this) { queueFile.delete() }; "Server refused (${r.code}); cleared the queue" }
+                }
+            }
         }.getOrElse { "Offline, ${arr.length()} queued" }
         lastStatus = status
         return status

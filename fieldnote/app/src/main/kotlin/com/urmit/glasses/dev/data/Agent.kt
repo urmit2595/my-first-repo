@@ -62,6 +62,7 @@ class Agent private constructor(private val ctx: Context) {
             try {
                 val out = loop(text, photoKey, byVoice, onStatus, userMsg)
                 chat.add(ChatMessage("assistant", out.text, System.currentTimeMillis(), photoKey = out.photoKey, mealId = out.mealId, model = prefs.agentModel, ms = System.currentTimeMillis() - t0))
+                com.urmit.glasses.dev.service.Bus.lastAnswer.value = out.text
                 diag.event("agent_ok", mapOf("ms" to (System.currentTimeMillis() - t0), "model" to prefs.agentModel, "by_voice" to byVoice, "chars" to out.text.length))
                 out
             } catch (e: Exception) {
@@ -237,6 +238,8 @@ class Agent private constructor(private val ctx: Context) {
     private fun call(key: String, model: String, messages: JSONArray): JSONObject {
         val body = JSONObject().put("model", model).put("messages", messages).put("tools", tools()).put("tool_choice", "auto").put("max_tokens", 900)
         if (!model.contains("gpt-5")) body.put("temperature", 0.3)
+        // Reasoning models spent ~20 s per turn at their default effort (telemetry, 3.0); low effort keeps voice replies quick.
+        if (model.contains("gpt-5") || model.contains("gemini-2.5-pro") || model.contains("claude")) body.put("reasoning", JSONObject().put("effort", "low"))
         val req = Request.Builder().url("${Analyst.baseUrl(key)}/chat/completions").header("Authorization", "Bearer $key").header("HTTP-Referer", "https://fieldnote.app").header("X-Title", "Fieldnote")
             .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         val resp = try { client.newCall(req).execute() } catch (e: java.io.IOException) { throw AnalystError("No internet right now", network = true) }

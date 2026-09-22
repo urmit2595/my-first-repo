@@ -165,9 +165,11 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
             Text(when { prefs.testResult("A").startsWith("pass") -> "Tap, double-tap and triple-tap are working."; prefs.testResult("A").startsWith("fail") -> "Taps aren't reaching Fieldnote: use the notification buttons or Chat."; else -> "Not tested yet. Run the tap test in Setup." }, style = MaterialTheme.typography.bodySmall, color = F.Muted)
             Text("The shutter button takes Meta's own photo; it shows up in Photos once the Meta AI app imports it.", style = MaterialTheme.typography.bodySmall, color = F.Muted)
             HorizontalDivider(color = F.Line2)
+            ToggleRow("Quick photos for answers", "Grabs a frame from the live stream (about 3 s) instead of the glasses' full photo (10 s+). A single tap still takes a full photo.", prefs.quickPhotos) { prefs.quickPhotos = it }
+            HorizontalDivider(color = F.Line2)
             Text("Keep the camera warm after a photo", style = MaterialTheme.typography.titleMedium)
             Text("Off: the camera starts fresh each time (saves glasses battery). Warm: a second photo within the window skips the 2–3 s start-up, but a tap during that window may pause the glasses instead.", style = MaterialTheme.typography.bodySmall, color = F.Muted)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(0 to "Off", 30 to "30 s", 90 to "90 s").forEach { (v, l) -> Chip(l, prefs.warmSeconds == v) { prefs.warmSeconds = v; FieldService.send(ctx, FieldService.ACT_RELOAD) } } }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf(0 to "Off", 45 to "45 s", 120 to "2 min").forEach { (v, l) -> Chip(l, prefs.warmSeconds == v) { prefs.warmSeconds = v; FieldService.send(ctx, FieldService.ACT_RELOAD) } } }
             HorizontalDivider(color = F.Line2)
             Text("Sounds", style = MaterialTheme.typography.titleMedium)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -197,7 +199,7 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
             if (log.isEmpty()) Text("Nothing yet", style = MaterialTheme.typography.bodySmall, color = F.Muted)
             log.forEach { Text(it, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = F.Muted) }
         }
-        Text("Fieldnote 3.1 · Meta DAT SDK 0.9.0 · Developer Mode build. Photos, chats and meals stay on this phone; only the images you ask about go to your model provider with your key.", style = MaterialTheme.typography.bodySmall, color = F.Muted, textAlign = TextAlign.Center)
+        Text("Fieldnote 3.3 · Meta DAT SDK 0.9.0 · Developer Mode build. Photos, chats and meals stay on this phone; only the images you ask about go to your model provider with your key.", style = MaterialTheme.typography.bodySmall, color = F.Muted, textAlign = TextAlign.Center)
     }
 }
 

@@ -8,7 +8,7 @@ log a meal, and so on.
 
 Package `com.urmit.glasses.dev`, minSdk 31, target 34, arm64 only, Developer Mode (Meta APPLICATION_ID 0).
 
-Release history and the device-test results are in `RELEASE-v2.1.md` (covers 2.0 to 3.1).
+Release history and the device-test results are in `RELEASE-v2.1.md` (covers 2.0 to 3.3).
 
 ## Building
 

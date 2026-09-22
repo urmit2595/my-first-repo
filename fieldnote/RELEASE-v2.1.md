@@ -89,3 +89,24 @@ Observed on device: registration OK, taps arrive as media keys (Test A effective
 
 - Brain default is now `openai/gpt-5.6-sol` (verified on OpenRouter: tools + images, $2/$10 per M tokens); Luna and 5.4-mini offered as cheaper options. Sol/Luna also selectable as "eyes".
 - Chats (topics): messages live in named chats. Tap the title in Chat for the list, New chat, delete, and "Auto". Selecting a chat pins it; the brain then stays there. In Auto, the brain gets other chats' titles + last reply and may `switch_chat` / `new_chat` / `rename_chat`; on ambiguity it asks instead of switching. "New topic"/"new chat" spoken or typed starts one; "back to <name>" reopens. Old single-thread history migrates into "Earlier chat".
+
+## 3.2 and 3.3 — recovered from the 3.3 APK (22 September 2026)
+
+The 3.3 source was not in the handover (only `Fieldnote-3.1-source.zip` and `Fieldnote-3.3.apk`). It was rebuilt from the 3.1
+source and a decompile of the signed 3.3 APK, then checked by building it and comparing every class structurally with the
+real APK: the data and service layers match exactly; the UI matches once built the same incremental way the original was.
+3.2 was an intermediate build (telemetry shows it on 20 Sep); its changes are folded into 3.3 below.
+
+- Quick photos for answers (Glasses → More glasses options, on by default): double-tap, the notification's analyse action and
+  the brain's photo tools grab a frame off the live stream (about 3 s) instead of the glasses' full photo (10 s+). A single
+  tap still takes the full photo. The stream is now MEDIUM quality (504×896) and uncompressed so frames can be encoded to
+  JPEG on the phone; if a frame's layout is unknown it falls back to a full photo on the same session.
+- Warm-camera window options changed from 30 s / 90 s to 45 s / 2 min.
+- Brain requests to reasoning models (GPT-5 family, Gemini 2.5 Pro, Claude) ask for low reasoning effort; 3.0 telemetry
+  showed ~20 s per brain turn at the default. Chat answers now also update the session's last-answer line.
+- Diagnostics upload: HTTP 409 counts as delivered, 5xx keeps the queue for a retry, other 4xx clear it; status reads
+  "Synced", "Server error (…); will retry" or "Server refused (…); cleared the queue".
+
+Telemetry from 3.2 (20 Sep): Test B cold capture median about 11 s (10.5–15.8 s over 9 runs), so Test B still fails the
+4 s target; one "Can only capture photos while streaming video" failure after two in-session retries. No 3.3 telemetry
+has arrived yet.

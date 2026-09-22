@@ -17,8 +17,8 @@ android {
         applicationId = "com.urmit.glasses.dev"
         minSdk = 31
         targetSdk = 34
-        versionCode = 310
-        versionName = "3.1"
+        versionCode = 330
+        versionName = "3.3"
         // Meta Developer Mode placeholders. Replace with the registered values for a production build.
         buildConfigField("String", "DIAG_ENDPOINT", "\"${localProp("fieldnote.diagEndpoint")}\"")
         buildConfigField("String", "DIAG_KEY", "\"${localProp("fieldnote.diagKey")}\"")

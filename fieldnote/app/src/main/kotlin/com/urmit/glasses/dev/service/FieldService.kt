@@ -77,7 +77,7 @@ class FieldService : Service(), AgentHands {
     /* ---------------- what the orchestrator may do while a session runs ---------------- */
     override val sessionRunning: Boolean get() = Bus.state.value != SessionState.DISARMED
     override suspend fun takePhoto(): String {
-        val key = capture(analyseWith = null, silentAuto = true) ?: throw com.urmit.glasses.dev.data.AnalystError(Bus.lastError.value.ifBlank { "The photo didn't work" })
+        val key = capture(analyseWith = null, silentAuto = true, quick = prefs.quickPhotos) ?: throw com.urmit.glasses.dev.data.AnalystError(Bus.lastError.value.ifBlank { "The photo didn't work" })
         if (Bus.state.value != SessionState.DISARMED) Bus.state.value = SessionState.STANDBY
         return key
     }
@@ -258,18 +258,27 @@ class FieldService : Service(), AgentHands {
         updateNotification()
     }
 
-    private suspend fun capture(analyseWith: String?, question: String = "", byVoice: Boolean = false, silentAuto: Boolean = false): String? {
+    /**
+     * [quick] grabs a frame from the live stream instead of the glasses' full photo: about 3 s against 10 s+, which is
+     * what an answer is waiting on. Plain taps keep the full photo unless the caller asks otherwise.
+     */
+    private suspend fun capture(analyseWith: String?, question: String = "", byVoice: Boolean = false, silentAuto: Boolean = false,
+                                quick: Boolean = analyseWith != null && prefs.quickPhotos): String? {
         Bus.state.value = SessionState.CAPTURING; updateNotification()
         val captured = try {
-            glasses.capture()
+            grab(quick)
         } catch (e: Exception) {
             // One retry, then a spoken failure (brief §4.2).
-            try { delay(800); glasses.capture() } catch (e2: Exception) { fail(friendlyCapture(e2.message ?: "The photo didn't work")); return null }
+            try { delay(800); grab(quick) } catch (e2: Exception) { fail(friendlyCapture(e2.message ?: "The photo didn't work")); return null }
         }
         val tSave = System.currentTimeMillis()
-        val saved = if (captured.heic != null) media.saveCaptureBytes(captured.heic, "image/heic", "heic") else media.saveCapture(captured.bitmap!!)
+        val saved = when {
+            captured.jpeg != null -> media.saveCaptureBytes(captured.jpeg, "image/jpeg", "jpg")
+            captured.heic != null -> media.saveCaptureBytes(captured.heic, "image/heic", "heic")
+            else -> media.saveCapture(captured.bitmap!!)
+        }
         if (saved == null) { fail("The photo couldn't be saved to the phone"); return null }
-        diag.event("photo_saved", mapOf("save_ms" to (System.currentTimeMillis() - tSave), "format" to (if (captured.heic != null) "heic" else "jpeg")))
+        diag.event("photo_saved", mapOf("save_ms" to (System.currentTimeMillis() - tSave), "format" to (if (captured.heic != null) "heic" else if (captured.jpeg != null) "frame" else "jpeg")))
         Bus.lastCaptureKey.value = saved.first
         Bus.captureTimings.value = (Bus.captureTimings.value + captured.timing).takeLast(20)
         repo.update(saved.first) { it.copy(state = AnalysisState.SAVED) }
@@ -278,6 +287,9 @@ class FieldService : Service(), AgentHands {
         if (lens != null) analyse(saved.first, saved.second, lens, question, byVoice)
         return saved.first
     }
+
+    /** A frame off the live stream when [quick], otherwise the glasses' full photo. */
+    private suspend fun grab(quick: Boolean) = if (quick) glasses.captureFrame() else glasses.capture()
 
     private suspend fun analyse(key: String, uri: android.net.Uri, lensId: String, question: String, byVoice: Boolean) {
         Bus.state.value = SessionState.ANALYSING; updateNotification()
