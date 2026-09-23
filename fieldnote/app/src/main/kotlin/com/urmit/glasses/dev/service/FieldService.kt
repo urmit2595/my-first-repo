@@ -23,7 +23,10 @@ import com.urmit.glasses.dev.data.Agent
 import com.urmit.glasses.dev.data.AgentHands
 import com.urmit.glasses.dev.data.AnalysisQueue
 import com.urmit.glasses.dev.data.AnalysisState
+import com.urmit.glasses.dev.data.ChatMessage
+import com.urmit.glasses.dev.data.ChatRepo
 import com.urmit.glasses.dev.data.Diagnostics
+import com.urmit.glasses.dev.data.Locator
 import com.urmit.glasses.dev.data.Media
 import com.urmit.glasses.dev.data.Prefs
 import com.urmit.glasses.dev.data.Repo
@@ -36,6 +39,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 /**
@@ -49,6 +53,8 @@ class FieldService : Service(), AgentHands {
         object Ask : Trigger("ask")
         class AnalyseLast(val lensId: String, val question: String = "") : Trigger("analyse-last")
         object More : Trigger("more")
+        /** A spoken command heard in wake-word mode; routed through the queue like every other trigger. */
+        class Command(val text: String) : Trigger("command")
         object Stop : Trigger("stop")
         object Disarm : Trigger("disarm")
     }
@@ -62,6 +68,7 @@ class FieldService : Service(), AgentHands {
     private lateinit var voice: Voice
     private lateinit var speaker: Speaker
     private lateinit var diag: Diagnostics
+    private lateinit var travel: TravelSession
     private var mediaSession: MediaSessionCompat? = null
     private var silence: MediaPlayer? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -76,30 +83,45 @@ class FieldService : Service(), AgentHands {
 
     /* ---------------- what the orchestrator may do while a session runs ---------------- */
     override val sessionRunning: Boolean get() = Bus.state.value != SessionState.DISARMED
-    override suspend fun takePhoto(): String {
-        val key = capture(analyseWith = null, silentAuto = true, quick = prefs.quickPhotos) ?: throw com.urmit.glasses.dev.data.AnalystError(Bus.lastError.value.ifBlank { "The photo didn't work" })
-        if (Bus.state.value != SessionState.DISARMED) Bus.state.value = SessionState.STANDBY
-        return key
+    override suspend fun takePhoto(sharp: Boolean): String {
+        // Restore the caller's state: a voice turn (worker, ANALYSING) goes on thinking and handle() resets it afterwards;
+        // a Chat turn runs outside the worker from STANDBY, and nothing else would bring it back there.
+        val before = Bus.state.value
+        try {
+            return capture(analyseWith = null, silentAuto = true, quick = prefs.quickPhotos && !sharp) ?: throw com.urmit.glasses.dev.data.AnalystError(Bus.lastError.value.ifBlank { "The photo didn't work" })
+        } finally {
+            if (Bus.state.value != SessionState.DISARMED) { Bus.state.value = if (before == SessionState.STANDBY) SessionState.STANDBY else SessionState.ANALYSING; updateNotification() }
+        }
     }
     override fun endSession() { enqueue(Trigger.Disarm) }
 
     override fun onCreate() {
         super.onCreate()
+        Bus.lastError.value = ""
         prefs = Prefs.get(this); repo = Repo.get(this); media = Media(this)
-        glasses = Glasses(this); voice = Voice(this); speaker = Speaker(this); diag = Diagnostics.get(this)
+        glasses = Glasses(this); voice = Voice(this); speaker = Speaker(this); diag = Diagnostics.get(this); travel = TravelSession(this, scope)
         glasses.onSessionState = { s ->
             // Hold on PAUSED, never restart while paused; STOPPED mid-capture is reported by the capture itself.
             if (s == DeviceSessionState.PAUSED && Bus.state.value == SessionState.CAPTURING) Bus.state.value = SessionState.HELD
         }
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(CH, "Glasses session", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
-        // Microphone type is only allowed when started from the foreground; fall back without it if Android objects.
-        try {
-            startForeground(NID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        } catch (e: Exception) {
-            startForeground(NID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-            Bus.lastError.value = "Started without microphone access. Open the app and start the session again for voice."
+        // Microphone and location types are only allowed when started from the foreground with the permission granted (a
+        // START_STICKY restart is not); fall back type by type, and say when voice is missing. Location is optional.
+        val base = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        val mic = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        val loc = if (Locator.permitted(this)) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+        val used = listOf(base or mic or loc, base or mic, base or loc, base).distinct().firstOrNull { t -> runCatching { startForeground(NID, notification(), t) }.isSuccess }
+        if (used == null) {
+            // Android refused every type, e.g. a START_STICKY restart while the app is in the background. Don't crash: say why.
+            prefs.armedPersisted = false; Bus.state.value = SessionState.DISARMED
+            Bus.lastError.value = "Android didn't let the session restart in the background. Open Fieldnote and start it again."
+            diag.event("fgs_refused")
+            stopSelf(); return
         }
+        if (used and mic == 0) Bus.lastError.value = "Started without microphone access. Open the app and start the session again for voice."
+        locationAllowed = loc != 0 && used and loc != 0
+        fgsTypes = used
         arm()
     }
 
@@ -114,6 +136,7 @@ class FieldService : Service(), AgentHands {
             ACT_TEST_B -> scope.launch { runTestB() }
             ACT_MODE -> setMode(if (intent.getStringExtra("mode") == "wake") Mode.WAKE_WORD else Mode.TAP)
             ACT_RELOAD -> glasses.warmMs = prefs.warmSeconds * 1000L
+            ACT_LOCATION -> enableLocation()
         }
         return START_STICKY
     }
@@ -124,12 +147,15 @@ class FieldService : Service(), AgentHands {
         prefs.armedPersisted = true
         Bus.armedSince.value = System.currentTimeMillis()
         Bus.state.value = SessionState.STANDBY
-        Bus.lastError.value = ""
+        // A wake-word loop cancelled with the last session never reset these, leaving every tap ignored in the next one.
+        Bus.mode.value = Mode.TAP; Bus.wakeWordEndsAt.value = 0
         claimMediaButtons()
         wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "fieldnote:armed").apply { acquire() }
         glasses.warmMs = prefs.warmSeconds * 1000L
-        worker = scope.launch { for (t in queue) handle(t) }
+        // Nothing runs after Disarm: a tap queued behind it would reopen the glasses from a stopped service.
+        worker = scope.launch { for (t in queue) { working = true; try { handle(t) } finally { working = false }; if (t is Trigger.Disarm) break } }
         Agent.get(this).hands = this
+        travel.start(withLocation = locationAllowed)
         refreshChecks()
         speaker.tone(Speaker.Tone.ARMED)
         diag.event("armed", mapOf("checks_ok" to Bus.checks.value.all { it.second }, "mic" to voice.glassesMicAvailable, "registered" to glasses.registered))
@@ -139,12 +165,14 @@ class FieldService : Service(), AgentHands {
     private fun disarm() {
         prefs.armedPersisted = false
         Agent.get(this).hands = null
+        travel.stop()
         glasses.release()
         speaker.stop()
         diag.event("disarmed", mapOf("armed_min" to ((System.currentTimeMillis() - Bus.armedSince.value) / 60000)))
         Bus.state.value = SessionState.DISARMED
         Bus.armedSince.value = 0
-        Bus.wakeWordEndsAt.value = 0
+        Bus.mode.value = Mode.TAP; Bus.wakeWordEndsAt.value = 0
+        wakeJob?.cancel()
         releaseMediaButtons()
         runCatching { wakeLock?.release() }
         speaker.tone(Speaker.Tone.DISARMED)
@@ -152,19 +180,24 @@ class FieldService : Service(), AgentHands {
         stopSelf()
     }
 
+    private var wakeJob: Job? = null
+
     private fun setMode(m: Mode) {
         Bus.mode.value = m
         if (m == Mode.WAKE_WORD) {
             Bus.wakeWordEndsAt.value = System.currentTimeMillis() + WAKE_WORD_MS
-            scope.launch {
+            wakeJob?.cancel()   // one loop only: two would run two recognisers and fight over the glasses' mic route
+            wakeJob = scope.launch {
                 // Wake-word mode is time-boxed. Recognition runs in listen windows rather than a true always-on engine:
                 // the SDK offers no on-glasses wake word, and an always-open HFP mic costs battery and audio quality (brief §2.4).
                 while (Bus.mode.value == Mode.WAKE_WORD && System.currentTimeMillis() < Bus.wakeWordEndsAt.value && Bus.state.value != SessionState.DISARMED) {
-                    if (Bus.state.value == SessionState.STANDBY) {
+                    // Not while a command is still being handled: it would reopen the mic over the answer.
+                    if (Bus.state.value == SessionState.STANDBY && !working && pendingCaptures == 0) {
                         val heard = runCatching { voice.listenOnce(6_000) }.getOrNull()?.lowercase() ?: ""
                         if (heard.contains("fieldnote") || heard.contains("field note")) {
                             val cmd = heard.substringAfter("note").trim()
-                            if (cmd.isNotBlank()) route(cmd, byVoice = true) else enqueue(Trigger.Ask)
+                            // Through the queue, so the state returns to STANDBY afterwards and the loop listens again.
+                            if (cmd.isNotBlank()) enqueue(Trigger.Command(cmd)) else enqueue(Trigger.Ask)
                         }
                     }
                     delay(500)
@@ -235,16 +268,29 @@ class FieldService : Service(), AgentHands {
         if (Bus.state.value == SessionState.DISARMED) return
         // One capture at a time and at most one waiting: extra taps while busy are dropped, not stacked (brief §4.1 says queue,
         // but stacked captures were timing out on the glasses; one pending is the useful limit).
-        if ((t is Trigger.Capture || t is Trigger.CaptureAndAnalyse || t is Trigger.Ask) && pendingCaptures >= 1 && Bus.state.value != SessionState.STANDBY) { diag.event("trigger_dropped", mapOf("kind" to t.label)); return }
-        if (t is Trigger.Capture || t is Trigger.CaptureAndAnalyse || t is Trigger.Ask) pendingCaptures++
+        if ((t is Trigger.Capture || t is Trigger.CaptureAndAnalyse || t is Trigger.Ask || t is Trigger.Command) && pendingCaptures >= 1 && Bus.state.value != SessionState.STANDBY) { diag.event("trigger_dropped", mapOf("kind" to t.label)); return }
+        if (t is Trigger.Capture || t is Trigger.CaptureAndAnalyse || t is Trigger.Ask || t is Trigger.Command) pendingCaptures++
         diag.event("trigger", mapOf("kind" to t.label, "state" to Bus.state.value.name.lowercase()))
         queue.trySend(t)
     }
 
     @Volatile private var pendingCaptures = 0
+    /** True while the worker is handling a trigger (the wake-word loop stays quiet meanwhile). */
+    @Volatile private var working = false
+    /** Whether this run of the service may read location (typed as a location foreground service). */
+    private var locationAllowed = false
+    private var fgsTypes = 0
+
+    /** Location allowed during a session: re-declare the service with the location type and start the track now. */
+    private fun enableLocation() {
+        if (locationAllowed || Bus.state.value == SessionState.DISARMED || !Locator.permitted(this)) return
+        val t = fgsTypes or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        if (runCatching { startForeground(NID, notification(), t) }.isSuccess) { fgsTypes = t; locationAllowed = true; travel.start(withLocation = true) }
+    }
 
     private suspend fun handle(t: Trigger) {
-        if (t is Trigger.Capture || t is Trigger.CaptureAndAnalyse || t is Trigger.Ask) pendingCaptures = (pendingCaptures - 1).coerceAtLeast(0)
+        if (t is Trigger.Capture || t is Trigger.CaptureAndAnalyse || t is Trigger.Ask || t is Trigger.Command) pendingCaptures = (pendingCaptures - 1).coerceAtLeast(0)
+        if (Bus.state.value == SessionState.DISARMED && t !is Trigger.Disarm) return
         when (t) {
             is Trigger.Disarm -> { disarm(); return }
             is Trigger.Capture -> capture(analyseWith = null)
@@ -252,6 +298,7 @@ class FieldService : Service(), AgentHands {
             is Trigger.Ask -> ask()
             is Trigger.AnalyseLast -> analyseLast(t.lensId, t.question, byVoice = false)
             is Trigger.More -> more()
+            is Trigger.Command -> route(t.text, byVoice = true)
             is Trigger.Stop -> {}
         }
         if (Bus.state.value != SessionState.DISARMED) Bus.state.value = SessionState.STANDBY
@@ -260,16 +307,19 @@ class FieldService : Service(), AgentHands {
 
     /**
      * [quick] grabs a frame from the live stream instead of the glasses' full photo: about 3 s against 10 s+, which is
-     * what an answer is waiting on. Plain taps keep the full photo unless the caller asks otherwise.
+     * what an answer is waiting on. Plain taps keep the full photo unless the caller asks otherwise, and so do the reading
+     * lenses (menus, receipts, boards): a 504×896 frame is too coarse for small print.
      */
     private suspend fun capture(analyseWith: String?, question: String = "", byVoice: Boolean = false, silentAuto: Boolean = false,
-                                quick: Boolean = analyseWith != null && prefs.quickPhotos): String? {
+                                quick: Boolean = analyseWith != null && prefs.quickPhotos && analyseWith !in com.urmit.glasses.dev.data.Lenses.READING): String? {
+        if (Bus.state.value == SessionState.DISARMED) return null
         Bus.state.value = SessionState.CAPTURING; updateNotification()
         val captured = try {
             grab(quick)
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e
         } catch (e: Exception) {
             // One retry, then a spoken failure (brief §4.2).
-            try { delay(800); grab(quick) } catch (e2: Exception) { fail(friendlyCapture(e2.message ?: "The photo didn't work")); return null }
+            try { delay(800); grab(quick) } catch (e2: kotlinx.coroutines.CancellationException) { throw e2 } catch (e2: Exception) { fail(friendlyCapture(e2.message ?: "The photo didn't work")); return null }
         }
         val tSave = System.currentTimeMillis()
         val saved = when {
@@ -280,6 +330,7 @@ class FieldService : Service(), AgentHands {
         if (saved == null) { fail("The photo couldn't be saved to the phone"); return null }
         diag.event("photo_saved", mapOf("save_ms" to (System.currentTimeMillis() - tSave), "format" to (if (captured.heic != null) "heic" else if (captured.jpeg != null) "frame" else "jpeg")))
         Bus.lastCaptureKey.value = saved.first
+        if (locationAllowed) travel.tagCapture(saved.first)
         Bus.captureTimings.value = (Bus.captureTimings.value + captured.timing).takeLast(20)
         repo.update(saved.first) { it.copy(state = AnalysisState.SAVED) }
         speaker.tone(Speaker.Tone.CAPTURED)
@@ -328,11 +379,27 @@ class FieldService : Service(), AgentHands {
     private suspend fun route(heardRaw: String, byVoice: Boolean) {
         val h = heardRaw.lowercase().trim()
         when {
-            h.contains("end session") || h.contains("end the session") || h == "disarm" -> { speaker.say("Ending the session"); enqueue(Trigger.Disarm) }
+            // Said and awaited before disarming, which otherwise cut it off mid-word.
+            h.contains("end session") || h.contains("end the session") || h == "disarm" -> { speak("Ending the session."); enqueue(Trigger.Disarm) }
             h == "stop" || h.startsWith("stop ") || h == "cancel" -> { speaker.stop() }
-            h == "more" || h.startsWith("more ") || h.contains("tell me more") || h.contains("continue") -> more()
+            // Exact phrases only: "tell me more about the fort" or "does the road continue" are questions for the brain.
+            h.trimEnd('.', '!', '?') in MORE -> more()
             h == "take a photo" || h == "take photo" || h == "photo" || h == "capture" -> capture(null, byVoice = true)
             else -> {
+                // Travel commands that need neither the brain nor data (notes, take me home, cards) answer instantly.
+                var photo: String? = null
+                // silentAuto: a "remember this" photo is for finding later, not for an auto-answer.
+                val instant = travel.handle(h, heardRaw.trim()) { capture(null, byVoice = true, silentAuto = true, quick = prefs.quickPhotos).also { photo = it } }
+                if (instant != null) {
+                    // The kind of command only, never the words (the diagnostics promise).
+                    diag.event("travel_command", mapOf("kind" to travel.lastKind))
+                    val chat = ChatRepo.get(this)
+                    chat.add(ChatMessage("user", heardRaw.trim(), System.currentTimeMillis(), photoKey = photo ?: "", byVoice = true))
+                    chat.add(ChatMessage("assistant", instant, System.currentTimeMillis(), model = "on phone"))
+                    Bus.lastAnswer.value = instant
+                    speak(instant)
+                    return
+                }
                 Bus.state.value = SessionState.ANALYSING; updateNotification()
                 speaker.tone(Speaker.Tone.ANALYSING)
                 val out = Agent.get(this).run(heardRaw, byVoice = byVoice) { st -> Bus.toast.value = null; Bus.lastError.value = ""; updateNotification(st) }
@@ -353,11 +420,20 @@ class FieldService : Service(), AgentHands {
     /* ---------------- speaking ---------------- */
 
     private suspend fun speak(text: String, append: Boolean = false) {
-        if (!append) { fullAnswer = text; spokenChars = 0 }
+        // One space between words, so nextChunk's position arithmetic holds for answers with line breaks.
+        if (!append) { fullAnswer = text.replace(Regex("\\s+"), " ").trim(); spokenChars = 0 }
         val chunk = if (append) text else nextChunk()
         stopSpeaking = false
         Bus.state.value = SessionState.SPEAKING; updateNotification()
-        suspendCancellableCoroutine { cont -> speaker.say(chunk) { if (cont.isActive) cont.resume(Unit) } }
+        sayAndWait(chunk)
+    }
+
+    /**
+     * Waits for the utterance to finish, but never forever: if the TTS engine dies or drops the utterance without a callback,
+     * the worker would otherwise hang and every later trigger, End included, would queue behind it.
+     */
+    private suspend fun sayAndWait(text: String) {
+        withTimeoutOrNull(8_000L + text.length * 90L) { suspendCancellableCoroutine { cont -> speaker.say(text) { if (cont.isActive) cont.resume(Unit) } } }
     }
 
     /** About [Prefs.answerSeconds] of speech per chunk; "more" continues (brief §4.7). */
@@ -368,7 +444,8 @@ class FieldService : Service(), AgentHands {
         val words = rest.split(Regex("\\s+"))
         val take = words.take(wordsPer).joinToString(" ")
         // Cut at the last sentence end inside the chunk when there is one.
-        val cut = take.lastIndexOfAny(charArrayOf('.', '!', '?')).let { if (it > take.length / 2) it + 1 else take.length }
+        // A sentence end is . ! or ? followed by a space or the end, so "12.50" and "2.4 km" are never split.
+        val cut = SENTENCE_END.findAll(take).lastOrNull()?.range?.first?.let { if (it > take.length / 2) it + 1 else null } ?: take.length
         val chunk = take.substring(0, cut).trim()
         spokenChars += rest.indexOf(chunk) + chunk.length
         return chunk + if (spokenChars < fullAnswer.length) " Say more to continue." else ""
@@ -380,7 +457,7 @@ class FieldService : Service(), AgentHands {
         Bus.lastError.value = msg
         diag.event("failure", mapOf("state" to Bus.state.value.name.lowercase(), "reason" to msg.take(80)))
         speaker.tone(Speaker.Tone.FAILED)
-        suspendCancellableCoroutine { cont -> speaker.say(msg) { if (cont.isActive) cont.resume(Unit) } }
+        sayAndWait(msg)
     }
 
     /* ---------------- self-tests ---------------- */
@@ -438,7 +515,9 @@ class FieldService : Service(), AgentHands {
         return NotificationCompat.Builder(this, CH).setSmallIcon(R.drawable.ic_notif).setContentTitle(title).setContentText(text)
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
             .addAction(0, "Photo", pi(ACT_CAPTURE)).addAction(0, "Ask", pi(ACT_ASK)).addAction(0, "End", pi(ACT_END))
-            .setStyle(androidx.media.app.NotificationCompat.MediaStyle().setShowActionsInCompactView(0, 1, 2).setMediaSession(mediaSession?.sessionToken))
+            // No session token: on Android 13+ a token makes the shade and lock screen show the session's play/pause/skip
+            // controls instead of Photo/Ask/End. Tap routing comes from the active session and the silent player, not this.
+            .setStyle(androidx.media.app.NotificationCompat.MediaStyle().setShowActionsInCompactView(0, 1, 2))
             .build()
     }
 
@@ -446,6 +525,7 @@ class FieldService : Service(), AgentHands {
     private fun updateNotification(status: String = "") { statusLine = status; runCatching { getSystemService(NotificationManager::class.java).notify(NID, notification()) } }
 
     override fun onDestroy() {
+        travel.stop()
         releaseMediaButtons()
         runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
         speaker.shutdown()
@@ -458,8 +538,10 @@ class FieldService : Service(), AgentHands {
         const val CH = "session"; const val NID = 7
         const val ACT_CAPTURE = "fn.capture"; const val ACT_ASK = "fn.ask"; const val ACT_END = "fn.end"
         const val ACT_ANALYSE = "fn.analyse"; const val ACT_ANALYSE_LAST = "fn.analyse_last"
-        const val ACT_TEST_A = "fn.testA"; const val ACT_TEST_B = "fn.testB"; const val ACT_MODE = "fn.mode"; const val ACT_RELOAD = "fn.reload"
+        const val ACT_TEST_A = "fn.testA"; const val ACT_TEST_B = "fn.testB"; const val ACT_MODE = "fn.mode"; const val ACT_RELOAD = "fn.reload"; const val ACT_LOCATION = "fn.location"
         const val WAKE_WORD_MS = 20 * 60_000L
+        private val MORE = setOf("more", "more please", "tell me more", "continue", "go on", "keep going", "carry on", "and", "what else")
+        private val SENTENCE_END = Regex("[.!?](?=\\s|$)")
 
         fun arm(ctx: Context) { ctx.startForegroundService(Intent(ctx, FieldService::class.java)) }
         fun send(ctx: Context, action: String, extras: Map<String, String> = emptyMap()) {

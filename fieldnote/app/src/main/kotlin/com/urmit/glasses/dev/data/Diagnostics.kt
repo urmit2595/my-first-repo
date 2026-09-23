@@ -54,7 +54,7 @@ class Diagnostics private constructor(private val ctx: Context) {
         if (!enabled) return
         val ev = JSONObject().put("event", name).put("event_id", UUID.randomUUID().toString())
             .put("session_id", sessionId).put("install_id", installId)
-            .put("ts", java.time.Instant.now().toString()).put("app_version", "3.3").put("android_api", Build.VERSION.SDK_INT)
+            .put("ts", java.time.Instant.now().toString()).put("app_version", com.urmit.glasses.dev.BuildConfig.VERSION_NAME).put("android_api", Build.VERSION.SDK_INT)
             .put("props", JSONObject(props.filterValues { it != null }))
         synchronized(this) {
             val arr = runCatching { JSONArray(queueFile.readText()) }.getOrDefault(JSONArray())
@@ -65,7 +65,22 @@ class Diagnostics private constructor(private val ctx: Context) {
         scope.launch { flush() }
     }
 
+    private val flushing = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var again = false
+
+    /**
+     * One flush at a time, and only the events actually sent are removed. Every event launches a flush; overlapping ones
+     * used to delete events queued after their snapshot, and re-send rows another flush had stored, which the unique
+     * event_id turns into a 409 for the whole batch (so its new rows were dropped as "delivered"). A flush that finds one
+     * running asks it to go round again and returns at once, so a slow network never parks a thread per event.
+     */
     fun flush(): String {
+        if (!flushing.compareAndSet(false, true)) { again = true; return "Sync in progress" }
+        try { var status: String; do { again = false; status = flushOnce() } while (again && !status.startsWith("Offline") && !status.startsWith("Server error")); return status }
+        finally { flushing.set(false) }
+    }
+
+    private fun flushOnce(): String {
         if (!enabled) return "Diagnostics off"
         if (endpoint.isBlank() || token.isBlank()) return "No endpoint"
         val arr = synchronized(this) { runCatching { JSONArray(queueFile.readText()) }.getOrDefault(JSONArray()) }
@@ -77,16 +92,24 @@ class Diagnostics private constructor(private val ctx: Context) {
             client.newCall(req).execute().use { r ->
                 when {
                     // 409 = rows already stored (a retry after a lost response): treat as delivered.
-                    r.isSuccessful || r.code == 409 -> { synchronized(this) { queueFile.delete() }; "Synced ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(System.currentTimeMillis())}" }
+                    r.isSuccessful || r.code == 409 -> { dropSent(arr); "Synced ${java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(System.currentTimeMillis())}" }
                     // Server-side trouble: keep the queue and try again with the next event.
                     r.code !in 400..499 -> "Server error (${r.code}); will retry"
                     // The server refuses this batch outright; resending it would fail forever, so drop it.
-                    else -> { synchronized(this) { queueFile.delete() }; "Server refused (${r.code}); cleared the queue" }
+                    else -> { dropSent(arr); "Server refused (${r.code}); dropped that batch" }
                 }
             }
         }.getOrElse { "Offline, ${arr.length()} queued" }
         lastStatus = status
         return status
+    }
+
+    /** Removes exactly the events in [sent] from the queue file; anything queued meanwhile stays for the next flush. */
+    private fun dropSent(sent: JSONArray) = synchronized(this) {
+        val ids = (0 until sent.length()).map { sent.getJSONObject(it).optString("event_id") }.toSet()
+        val cur = runCatching { JSONArray(queueFile.readText()) }.getOrDefault(JSONArray())
+        val keep = JSONArray(); for (i in 0 until cur.length()) cur.optJSONObject(i)?.let { if (it.optString("event_id") !in ids) keep.put(it) }
+        if (keep.length() == 0) queueFile.delete() else queueFile.writeText(keep.toString())
     }
 
     companion object {

@@ -93,51 +93,82 @@ class Voice(private val ctx: Context) {
                 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
                 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
             sr.startListening(i)
-            cont.invokeOnCancellation { runCatching { sr.cancel(); sr.destroy() } }
+            // Cancellation (the listen timeout) arrives off the main thread, where SpeechRecognizer throws; clean up on main.
+            cont.invokeOnCancellation { android.os.Handler(android.os.Looper.getMainLooper()).post { runCatching { sr.cancel() }; runCatching { sr.destroy() } } }
         }
     }
 }
 
 /** Spoken answers and short state tones (build brief §4.7 / §5.6). */
 class Speaker(ctx: Context) {
-    private var ready = false
+    @Volatile private var ready = false
     private lateinit var tts: TextToSpeech
+    /** Callbacks by utterance id, so a new say() can't orphan the previous caller, and every outcome completes one. */
+    private val pending = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
+    /** Said before the engine finished starting (the first spoken chat reply after launch); spoken once it is up. */
+    @Volatile private var early: Pair<String, (() -> Unit)?>? = null
+    /** Init has reported, successfully or not: after a failed init, say() completes at once instead of parking the caller. */
+    @Volatile private var initDone = false
     init {
-        tts = TextToSpeech(ctx) { status -> ready = status == TextToSpeech.SUCCESS; if (ready) runCatching { tts.language = Locale("en", "IN") } }
+        tts = TextToSpeech(ctx) { status ->
+            val waiting = synchronized(this) {
+                ready = status == TextToSpeech.SUCCESS; initDone = true
+                early.also { early = null }
+            }
+            if (ready) runCatching { tts.language = Locale("en", "IN") }
+            waiting?.let { (t, d) -> if (ready) say(t, d) else d?.invoke() }
+        }
     }
     private val tones = runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 80) }.getOrNull()
-    private var onDone: (() -> Unit)? = null
 
     init {
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
-            override fun onDone(id: String?) { onDone?.invoke() }
-            @Deprecated("") override fun onError(id: String?) { onDone?.invoke() }
+            override fun onDone(id: String?) { finish(id) }
+            @Deprecated("") override fun onError(id: String?) { finish(id) }
+            override fun onError(id: String?, errorCode: Int) { finish(id) }
+            // Flushed by a newer utterance or stop(): Android calls onStop, not onDone.
+            override fun onStop(id: String?, interrupted: Boolean) { finish(id) }
         })
     }
 
+    private fun finish(id: String?) { id?.let { pending.remove(it)?.invoke() } }
+
     enum class Tone { ARMED, CAPTURED, LISTENING, ANALYSING, FAILED, DISARMED }
 
-    /** Each state can be told apart with eyes closed. All under 300 ms. */
+    /** Each state can be told apart with eyes closed. All under 300 ms. Never throws (the generator may be released). */
     fun tone(t: Tone) {
         val g = tones ?: return
-        when (t) {
-            Tone.ARMED -> g.startTone(ToneGenerator.TONE_PROP_ACK, 150)          // rising double
-            Tone.CAPTURED -> g.startTone(ToneGenerator.TONE_PROP_BEEP, 120)      // single short
-            Tone.LISTENING -> g.startTone(ToneGenerator.TONE_PROP_BEEP2, 200)    // two quick
-            Tone.ANALYSING -> g.startTone(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 250)
-            Tone.FAILED -> g.startTone(ToneGenerator.TONE_PROP_NACK, 250)        // low buzz
-            Tone.DISARMED -> g.startTone(ToneGenerator.TONE_CDMA_ABBR_ALERT, 200)
+        runCatching {
+            when (t) {
+                Tone.ARMED -> g.startTone(ToneGenerator.TONE_PROP_ACK, 150)          // rising double
+                Tone.CAPTURED -> g.startTone(ToneGenerator.TONE_PROP_BEEP, 120)      // single short
+                Tone.LISTENING -> g.startTone(ToneGenerator.TONE_PROP_BEEP2, 200)    // two quick
+                Tone.ANALYSING -> g.startTone(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 250)
+                Tone.FAILED -> g.startTone(ToneGenerator.TONE_PROP_NACK, 250)        // low buzz
+                Tone.DISARMED -> g.startTone(ToneGenerator.TONE_CDMA_ABBR_ALERT, 200)
+            }
         }
     }
 
     fun say(text: String, done: (() -> Unit)? = null) {
-        onDone = done
-        if (!ready) { done?.invoke(); return }
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "fn")
+        val held = synchronized(this) {
+            if (ready) null
+            else if (initDone) done ?: {}                       // no engine: nothing will ever speak; don't make anyone wait
+            else { val prev = early?.second; early = text to done; prev ?: {} }
+        }
+        if (held != null) { held(); return }
+        val id = java.util.UUID.randomUUID().toString()
+        done?.let { pending[id] = it }
+        val r = runCatching { tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) }.getOrDefault(TextToSpeech.ERROR)
+        // ERROR comes with no callback at all (engine died or is rebinding): complete now rather than never.
+        if (r != TextToSpeech.SUCCESS) pending.remove(id)?.invoke()
     }
 
     fun stop() { runCatching { tts.stop() } }
     val speaking: Boolean get() = runCatching { tts.isSpeaking }.getOrDefault(false)
-    fun shutdown() { runCatching { tts.shutdown() }; runCatching { tones?.release() } }
+    fun shutdown() {
+        runCatching { tts.shutdown() }; runCatching { tones?.release() }
+        pending.keys.toList().forEach { finish(it) }; early?.second?.invoke(); early = null
+    }
 }

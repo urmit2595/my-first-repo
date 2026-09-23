@@ -63,6 +63,7 @@ fun ChatScreen(state: AppState, onOpenPhoto: (String) -> Unit, onOpenMeal: (Stri
     val listening by state.listening.collectAsState()
     val items by state.items.collectAsState(emptyList())
     val st by Bus.state.collectAsState()
+    val trips by state.trips.collectAsState()
     state.prefs.version.collectAsState().value
     var text by remember { mutableStateOf("") }
     var attached by remember { mutableStateOf("") }
@@ -128,7 +129,9 @@ fun ChatScreen(state: AppState, onOpenPhoto: (String) -> Unit, onOpenMeal: (Stri
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val ideas = if (sessionOn) listOf("What am I looking at?", "Log this meal", "Read this for me", "Where am I?", "How much have I eaten today?")
                 else listOf("What's in my last photo?", "How much have I eaten today?", "Log: two rotis, dal and salad", "What did I photograph today?")
-            ideas.forEach { s -> Chip(s, false) { send(s) } }
+            val travel = if (trips.isNotEmpty()) listOf("Take me home", "What did I spend today?", "Translate this sign", "Read the menu", "Where am I?") else emptyList()
+            // Take me home and Where am I are answered on the phone, as by voice: offline and without a key.
+            (travel + ideas).distinct().forEach { s -> Chip(s, false) { when { busy -> {}; s == "Take me home" -> state.takeMeHome(); s == "Where am I?" -> state.whereAmI(); else -> send(s) } } }
         }
         // Input row
         Column(Modifier.fillMaxWidth().background(F.Bar).padding(12.dp, 10.dp, 12.dp, 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

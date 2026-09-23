@@ -3,10 +3,9 @@ package com.urmit.glasses.dev.ui
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -34,6 +33,8 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,11 +52,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.types.RegistrationState
+import com.urmit.glasses.dev.BuildConfig
 import com.urmit.glasses.dev.data.Lenses
+import com.urmit.glasses.dev.data.Locator
 import com.urmit.glasses.dev.service.Bus
 import com.urmit.glasses.dev.service.FieldService
 import com.urmit.glasses.dev.service.SessionState
 import com.urmit.glasses.dev.service.Speaker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> Unit) {
@@ -66,10 +71,12 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
     val armed = st != SessionState.DISARMED
     val reg = runCatching { Wearables.registrationState.collectAsState().value }.getOrDefault(RegistrationState.UNAVAILABLE)
     val devices = runCatching { Wearables.devices.collectAsState().value }.getOrDefault(emptySet())
-    val perms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
-    val needed = listOf(android.Manifest.permission.BLUETOOTH_CONNECT, android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.POST_NOTIFICATIONS, android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VIDEO)
-    val permsOk = needed.all { ctx.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
+    val askPerms = rememberPermsAsk(state)
+    state.permTick.collectAsState().value
+    val permsOk = missingPerms(ctx).isEmpty()
     val battOk = ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName)
+    val located = Locator.permitted(ctx)
+    val askLocation = rememberLocationAsk(state)
     val mediaEvents by Bus.mediaEvents.collectAsState()
     val timings by Bus.captureTimings.collectAsState()
     var key by remember { mutableStateOf(prefs.apiKey) }
@@ -79,7 +86,9 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
     var diagUrl by remember { mutableStateOf(state.diag.endpoint) }
     var diagToken by remember { mutableStateOf(state.diag.token) }
     var diagOn by remember { mutableStateOf(state.diag.enabled) }
-    val speaker = remember { Speaker(ctx) }
+    // Only the Sounds chips use it: made on the first tap, released when the tab leaves the screen.
+    val speaker = remember { lazy { Speaker(ctx.applicationContext) } }
+    DisposableEffect(speaker) { onDispose { if (speaker.isInitialized()) speaker.value.shutdown() } }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp, 24.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -97,10 +106,13 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
         Section(if (setupOk) "Setup · all good" else "Setup · needs attention", open = !setupOk) {
             CheckRow(reg == RegistrationState.REGISTERED, "Glasses linked to Fieldnote", when (reg) { RegistrationState.REGISTERED -> "Fieldnote can use the camera"; RegistrationState.UNAVAILABLE -> "Install the Meta AI app, pair the glasses, then turn on Developer Mode in Meta AI → Settings"; else -> "Tap Link and approve in the Meta AI app" },
                 action = if (reg == RegistrationState.AVAILABLE) "Link" else null) { (ctx as? Activity)?.let { Wearables.startRegistration(it) } }
-            CheckRow(permsOk, "Permissions", "Bluetooth, microphone, notifications, photos", action = if (!permsOk) "Allow" else null) { perms.launch(needed.toTypedArray()) }
+            CheckRow(permsOk, "Permissions", if (Build.VERSION.SDK_INT >= 33) "Bluetooth, microphone, notifications, photos" else "Bluetooth, microphone, photos", action = if (!permsOk) "Allow" else null) { askPerms() }
             CheckRow(battOk, "Keep running in the background", if (battOk) "Allowed" else "Needed so Android doesn't close the session", action = if (!battOk) "Allow" else null) {
                 runCatching { ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))) }
             }
+            // Optional: not part of setupOk. Sessions start without it.
+            CheckRow(located, "Location (photo places, take me home)", if (located) "Allowed" else "Optional. Tags photos with places and finds the way back to your stay",
+                action = if (!located) "Allow" else null, optional = true) { askLocation() }
             TestRow("A", "Taps reach Fieldnote", prefs.testResult("A"), enabled = armed, hint = if (!armed) "Start a session first" else null) {
                 FieldService.send(ctx, FieldService.ACT_TEST_A)
             }
@@ -137,7 +149,7 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
             }
             HorizontalDivider(color = F.Line2)
             Text("Double-tap lens", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Lenses.ALL.forEach { l -> LensChip(l.label, prefs.doubleTapLens == l.id) { prefs.doubleTapLens = l.id } } }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Lenses.ALL.forEach { l -> LensChip(l.label, prefs.doubleTapLens == l.id) { prefs.doubleTapLens = l.id } } }
             ToggleRow("Answer after every single tap", "Off: a tap only saves the photo; double-tap asks", prefs.autoAnalyse) { prefs.autoAnalyse = it }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column { Text("Spoken answer length", style = MaterialTheme.typography.titleMedium); Text("Say “more” to continue", style = MaterialTheme.typography.bodySmall, color = F.Muted) }
@@ -173,12 +185,17 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
             HorizontalDivider(color = F.Line2)
             Text("Sounds", style = MaterialTheme.typography.titleMedium)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Speaker.Tone.values().forEach { t -> Chip(t.name.lowercase().replaceFirstChar { it.uppercase() }, false) { speaker.tone(t) } }
+                Speaker.Tone.values().forEach { t -> Chip(t.name.lowercase().replaceFirstChar { it.uppercase() }, false) { speaker.value.tone(t) } }
             }
             HorizontalDivider(color = F.Line2)
-            val bucket = remember { state.media.detectedGlassesBucket() }
+            // A MediaStore query: off the main thread, once each time the section opens.
+            var looked by remember { mutableStateOf(false) }
+            var bucket by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(Unit) { bucket = withContext(Dispatchers.IO) { state.media.detectedGlassesBucket() }; looked = true }
             Text("Meta AI album", style = MaterialTheme.typography.titleMedium)
-            Text(if (bucket != null) "Watching “$bucket”. New imports appear in Photos automatically." else "No glasses album found yet. Take a shutter photo and import it in the Meta AI app; Fieldnote watches for “Meta AI” or “Meta View”.", style = MaterialTheme.typography.bodySmall, color = if (bucket != null) F.Teal else F.Muted)
+            Text(when { !looked -> "Looking for the glasses album…"; bucket != null -> "Watching “$bucket”. New imports appear in Photos automatically."
+                else -> "No glasses album found yet. Take a shutter photo and import it in the Meta AI app; Fieldnote watches for “Meta AI” or “Meta View”." },
+                style = MaterialTheme.typography.bodySmall, color = if (bucket != null) F.Teal else F.Muted)
             HorizontalDivider(color = F.Line2)
             Text("Unlink the glasses", style = MaterialTheme.typography.titleMedium)
             Text("Hands the glasses back to Meta AI only. You can link again any time.", style = MaterialTheme.typography.bodySmall, color = F.Muted)
@@ -199,7 +216,7 @@ fun GlassesScreen(state: AppState, onOpenPhoto: (String) -> Unit, onArm: () -> U
             if (log.isEmpty()) Text("Nothing yet", style = MaterialTheme.typography.bodySmall, color = F.Muted)
             log.forEach { Text(it, style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), color = F.Muted) }
         }
-        Text("Fieldnote 3.3 · Meta DAT SDK 0.9.0 · Developer Mode build. Photos, chats and meals stay on this phone; only the images you ask about go to your model provider with your key.", style = MaterialTheme.typography.bodySmall, color = F.Muted, textAlign = TextAlign.Center)
+        Text("Fieldnote ${BuildConfig.VERSION_NAME} · Meta DAT SDK 0.9.0 · Developer Mode build. Photos, chats and meals stay on this phone; only the images you ask about go to your model provider with your key.", style = MaterialTheme.typography.bodySmall, color = F.Muted, textAlign = TextAlign.Center)
     }
 }
 
@@ -229,10 +246,12 @@ fun ModelPicker(label: String, current: String, options: List<String>, set: (Str
     }
 }
 
+/** [optional] rows show an empty ring instead of the amber "!" when not done. */
 @Composable
-private fun CheckRow(ok: Boolean, title: String, sub: String, action: String? = null, onAction: () -> Unit = {}) {
+internal fun CheckRow(ok: Boolean, title: String, sub: String, action: String? = null, optional: Boolean = false, onAction: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.size(22.dp).background(if (ok) F.Teal else F.Amber, CircleShape), contentAlignment = Alignment.Center) { Text(if (ok) "✓" else "!", color = F.Bg, style = MaterialTheme.typography.labelLarge) }
+        if (!ok && optional) Box(Modifier.size(22.dp).border(2.dp, F.Line, CircleShape))
+        else Box(Modifier.size(22.dp).background(if (ok) F.Teal else F.Amber, CircleShape), contentAlignment = Alignment.Center) { Text(if (ok) "✓" else "!", color = F.Bg, style = MaterialTheme.typography.labelLarge) }
         Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.bodyLarge); Text(sub, style = MaterialTheme.typography.bodySmall, color = F.Muted) }
         if (action != null) Ghost(action) { onAction() }
     }
@@ -268,7 +287,7 @@ private fun ManualTest(id: String, title: String, procedure: String, prefs: com.
 }
 
 @Composable
-private fun ToggleRow(title: String, sub: String, on: Boolean, set: (Boolean) -> Unit) {
+internal fun ToggleRow(title: String, sub: String, on: Boolean, set: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) { Text(title, style = MaterialTheme.typography.titleMedium); Text(sub, style = MaterialTheme.typography.bodySmall, color = F.Muted) }
         Switch(on, set, colors = SwitchDefaults.colors(checkedTrackColor = F.Accent, checkedThumbColor = F.Bg))

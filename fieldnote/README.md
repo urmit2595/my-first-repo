@@ -8,7 +8,20 @@ log a meal, and so on.
 
 Package `com.urmit.glasses.dev`, minSdk 31, target 34, arm64 only, Developer Mode (Meta APPLICATION_ID 0).
 
-Release history and the device-test results are in `RELEASE-v2.1.md` (covers 2.0 to 3.3).
+Release history, device-test results and the unmet requirements of every build are in `RELEASE-NOTES.md`.
+
+## What's in it
+
+- **Chat**: the brain (a tool-using model) takes typed or spoken requests: take a photo, look through a lens, log a meal
+  or a spend, answer about the trip, save a note, take you home.
+- **Photos**: Fieldnote captures and the Meta AI album, with per-photo answers, lenses and place tags.
+- **Trip** (3.4): bookings shared in from email, PDFs or screenshots; the stay and "take me home"; cards to show a driver
+  or a waiter; the offline pack; the ledger; notes and places; the traveller profile.
+- **Food**: meals, calories and protein against daily targets.
+- **Glasses**: the session, setup and device tests, models per lens, diagnostics.
+
+Code: `data/` (stores, model calls, travel logic), `service/` (the foreground session: glasses capture, taps, voice,
+travel hooks), `ui/` (Compose screens). Unit tests for the travel logic: `gradle testDebugUnitTest`.
 
 ## Building
 

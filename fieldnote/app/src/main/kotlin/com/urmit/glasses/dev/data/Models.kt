@@ -16,7 +16,20 @@ object Lenses {
     val HERITAGE = Lens("heritage", "Heritage", "I am looking at a place, building, monument or artefact. Identify it if you can (style, period, likely region, purpose) and give the two or three most interesting facts. Say what you are unsure of. Keep it under 90 words unless asked for more.")
     val FOOD = Lens("food", "Food", "This is food or drink. Say what it most likely is, how it is usually made or eaten, and a rough calorie range for what is visible. Use Indian portion names where they fit. Under 80 words.")
     val READ = Lens("read", "Read text", "Read aloud all text visible in the image, in reading order, exactly as written. If it is a menu, sign or label, keep the structure. No commentary.")
-    val ALL = listOf(SCENE, HERITAGE, FOOD, READ)
+    /* Travel lenses (travel plan §5-6): one reading pipeline for signs, menus, prices, receipts and departure boards. */
+    val TRANSLATE = Lens("translate", "Translate", "Read the text in this photo and give its meaning in plain English: first say what it is (sign, notice, label, ticket, form) and which language, then the translation, most important part first. Keep numbers, times and names exactly. Skip decorative text. If it is already English, just read it.")
+    val MENU = Lens("menu", "Menu", "This is a menu or a price board for food. Explain the dishes in plain words (what it is, how it is cooked), clearly flag anything that conflicts with the wearer's diet or allergies, and suggest two or three good picks for them. Write every price as {{amount}} in the menu's currency with no symbol and no thousands separator, e.g. {{1200}} or {{12.50}}; never convert prices yourself.")
+    val PRICE = Lens("price", "Price", "Read the prices, tags or bill in this photo.")
+    val RECEIPT = Lens("receipt", "Receipt", "Read this receipt or bill for the trip ledger.")
+    val BOARD = Lens("board", "Flight board", "This is a departures or arrivals board, or a platform display. Find the wearer's own flight or train from the trip details given and read out its line: number, time, gate or platform, and status. If it is not on the board, say so and read the nearest matches. No other commentary.")
+    val ALL = listOf(SCENE, HERITAGE, FOOD, READ, TRANSLATE, MENU, PRICE, RECEIPT, BOARD)
+    /**
+     * Lenses that read small print. They always use the glasses' full photo, never a quick stream frame (504×896 at the 3.3
+     * setting), and send it to the model at high detail.
+     */
+    val READING = setOf(READ.id, TRANSLATE.id, MENU.id, PRICE.id, RECEIPT.id, BOARD.id)
+    /** Lenses whose answer is built from structured extraction rather than free text. */
+    val STRUCTURED = setOf(PRICE.id, RECEIPT.id)
     fun byId(id: String) = ALL.firstOrNull { it.id == id } ?: SCENE
 }
 
@@ -41,19 +54,26 @@ data class Note(
     val favourite: Boolean = false,
     val hidden: Boolean = false,
     val lens: String = "scene",
-    val error: String = ""
+    val error: String = "",
+    /* Auto-tagging (travel plan §9): where the photo was taken. place = "Nishiki Market, Kyoto"; tagTries counts failed namings. */
+    val lat: Double = Double.NaN,
+    val lng: Double = Double.NaN,
+    val place: String = "",
+    val tagTries: Int = 0
 ) {
     val lastAnswer get() = thread.lastOrNull { it.role == "assistant" }?.text ?: ""
     fun toJson() = JSONObject().put("key", key).put("state", state.name)
         .put("thread", JSONArray().apply { thread.forEach { put(it.toJson()) } })
         .put("favourite", favourite).put("hidden", hidden).put("lens", lens).put("error", error)
+        .put("lat", if (lat.isNaN()) JSONObject.NULL else lat).put("lng", if (lng.isNaN()) JSONObject.NULL else lng).put("place", place).put("tagTries", tagTries)
     companion object {
         fun from(o: JSONObject): Note {
             val arr = o.optJSONArray("thread") ?: JSONArray()
             return Note(o.getString("key"),
                 runCatching { AnalysisState.valueOf(o.optString("state")) }.getOrDefault(AnalysisState.SAVED),
                 (0 until arr.length()).map { Message.from(arr.getJSONObject(it)) },
-                o.optBoolean("favourite"), o.optBoolean("hidden"), o.optString("lens", "scene"), o.optString("error"))
+                o.optBoolean("favourite"), o.optBoolean("hidden"), o.optString("lens", "scene"), o.optString("error"),
+                o.optDouble("lat", Double.NaN), o.optDouble("lng", Double.NaN), o.optString("place"), o.optInt("tagTries"))
         }
     }
 }

@@ -17,11 +17,11 @@ android {
         applicationId = "com.urmit.glasses.dev"
         minSdk = 31
         targetSdk = 34
-        versionCode = 330
-        versionName = "3.3"
-        // Meta Developer Mode placeholders. Replace with the registered values for a production build.
+        versionCode = 340
+        versionName = "3.4"
         buildConfigField("String", "DIAG_ENDPOINT", "\"${localProp("fieldnote.diagEndpoint")}\"")
         buildConfigField("String", "DIAG_KEY", "\"${localProp("fieldnote.diagKey")}\"")
+        // Meta Developer Mode placeholders. Replace with the registered values for a production build.
         manifestPlaceholders["mwdat_application_id"] = "0"
         manifestPlaceholders["mwdat_client_token"] = "0"
         ndk { abiFilters += listOf("arm64-v8a") }   // Nothing Phone is arm64; drops ~25 MB of other-ABI native libs
@@ -57,4 +57,14 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.meta.wearable:mwdat-core:0.9.0")
     implementation("com.meta.wearable:mwdat-camera:0.9.0")
+    // On-device reading and translation (OnDevice.kt). Play services text recognition keeps its models out of the APK;
+    // the translation engine adds ~16 MB of native code, the price of reading signs and menus with no data.
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-devanagari:16.0.1")
+    implementation("com.google.mlkit:translate:17.0.3")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")   // real org.json for JVM tests (android.jar only has stubs)
 }

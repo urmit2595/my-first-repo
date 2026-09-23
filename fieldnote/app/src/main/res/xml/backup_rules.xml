@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup and device transfer keep settings, notes, chats, meals, trips and spends, but never the API key (its own
+     preferences file, re-entered after a restore) or the location track. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="fieldnote_secret.xml" />
+        <exclude domain="file" path="track.json" />
+        <exclude domain="file" path="diag_queue.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="fieldnote_secret.xml" />
+        <exclude domain="file" path="track.json" />
+    </device-transfer>
+</data-extraction-rules>

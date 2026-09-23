@@ -63,7 +63,7 @@ class FoodRepo private constructor(ctx: Context) {
     private fun load(): List<Meal> = runCatching {
         if (!file.exists()) return emptyList()
         val arr = JSONArray(file.readText()); (0 until arr.length()).map { Meal.from(arr.getJSONObject(it)) }.sortedByDescending { it.eatenAt }
-    }.getOrDefault(emptyList())
+    }.getOrElse { Store.quarantine(file); emptyList() }
 
     private fun persist(l: List<Meal>) { val tmp = File(file.parentFile, "meals.tmp"); tmp.writeText(JSONArray().apply { l.forEach { put(it.toJson()) } }.toString()); tmp.renameTo(file) }
 
@@ -93,8 +93,9 @@ Reply ONLY with JSON: {"is_food":bool,"title":"short dish name, e.g. Dal, two ro
 
     class NotFood : Exception("That doesn't look like food")
 
-    fun analyse(key: String, model: String, photo: File?, aboutMe: String, note: String, previous: Meal? = null): Meal {
+    fun analyse(key: String, model: String, photo: File?, aboutMe: String, note: String, previous: Meal? = null, prefs: Prefs? = null): Meal {
         if (key.isBlank()) throw AnalystError("Add your API key in Glasses → Answers")
+        prefs?.let { Llm.checkCap(it) }
         if (photo == null && note.isBlank()) throw AnalystError("Nothing to log yet")
         val text = buildString {
             append(if (photo != null) "Estimate this meal." else "Estimate this meal from the description alone.")
@@ -104,16 +105,19 @@ Reply ONLY with JSON: {"is_food":bool,"title":"short dish name, e.g. Dal, two ro
         }
         val content = JSONArray().put(JSONObject().put("type", "text").put("text", text))
         if (photo != null) content.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64," + Base64.encodeToString(photo.readBytes(), Base64.NO_WRAP)).put("detail", "low")))
-        val body = JSONObject().put("model", model).put("response_format", JSONObject().put("type", "json_object")).put("max_tokens", 600)
-            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", SYSTEM)).put(JSONObject().put("role", "user").put("content", content)))
-        if (!model.contains("gpt-5")) body.put("temperature", 0.2)
+        val body = Llm.limits(JSONObject().put("model", model).put("response_format", JSONObject().put("type", "json_object"))
+            .put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", SYSTEM)).put(JSONObject().put("role", "user").put("content", content))), key, model, 600, 0.2)
         val req = Request.Builder().url("${Analyst.baseUrl(key)}/chat/completions").header("Authorization", "Bearer $key").header("HTTP-Referer", "https://fieldnote.app").header("X-Title", "Fieldnote")
             .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         val resp = try { client.newCall(req).execute() } catch (e: java.io.IOException) { throw AnalystError("No internet right now", network = true) }
         resp.use { r ->
             val raw = r.body?.string() ?: ""
             if (!r.isSuccessful) throw AnalystError("The model said no (${r.code}): " + runCatching { JSONObject(raw).getJSONObject("error").getString("message") }.getOrDefault(raw.take(120)))
-            var c = JSONObject(raw).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim()
+            val resp0 = JSONObject(raw)
+            // Meal estimates now count towards the daily spend cap like every other call.
+            prefs?.let { it.spentTodayCents = it.spentTodayCents + Llm.cents(resp0) }
+            var c = Llm.content(resp0.getJSONArray("choices").getJSONObject(0).getJSONObject("message")).trim()
+            if (c.isBlank()) throw AnalystError("The model ran out of room before answering. Try again.")
             if (c.startsWith("```")) c = c.removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
             val o = JSONObject(c)
             if (!o.optBoolean("is_food", true)) throw NotFood()

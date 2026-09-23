@@ -59,6 +59,8 @@ class ChatRepo private constructor(ctx: Context) {
             _messages.value = (0 until arr.length()).map { ChatMessage.from(arr.getJSONObject(it)).copy(chat = id) }
             _chats.value = listOf(Chat(id, "Earlier chat", _messages.value.firstOrNull()?.at ?: 0, _messages.value.lastOrNull()?.at ?: 0)); current.value = id; persist()
         }
+        // Unreadable and not the old format: set it aside rather than overwrite it with an empty history on the next message.
+        if (it.isFailure && _messages.value.isEmpty() && file.exists() && !file.readText().trimStart().startsWith("[")) Store.quarantine(file)
         if (current.value.isBlank() || _chats.value.none { it.id == current.value }) current.value = _chats.value.firstOrNull()?.id ?: ""
     }
 

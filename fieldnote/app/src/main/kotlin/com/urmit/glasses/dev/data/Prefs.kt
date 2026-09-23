@@ -9,9 +9,14 @@ class Prefs(ctx: Context) {
     private fun touch() { version.value = version.value + 1 }
     private fun str(k: String, d: String = "") = sp.getString(k, d) ?: d
 
+    /** The API key lives in its own file so backup can leave out exactly the key (res/xml/backup_rules.xml). */
+    private val secret = ctx.applicationContext.getSharedPreferences("fieldnote_secret", Context.MODE_PRIVATE).also { s ->
+        // One-time move from the main file (3.3 and earlier).
+        sp.getString("apiKey", null)?.let { k -> if (s.getString("apiKey", null) == null) s.edit().putString("apiKey", k).commit(); sp.edit().remove("apiKey").apply() }
+    }
     var apiKey: String
-        get() = str("apiKey")
-        set(v) { sp.edit().putString("apiKey", normaliseKey(v)).apply(); touch() }
+        get() = secret.getString("apiKey", "") ?: ""
+        set(v) { secret.edit().putString("apiKey", normaliseKey(v)).apply(); touch() }
     val provider get() = if (apiKey.startsWith("sk-or-") || apiKey.startsWith("or-v1-")) "openrouter" else "openai"
     val models get() = if (provider == "openrouter") OPENROUTER_MODELS else OPENAI_MODELS
 
@@ -45,7 +50,8 @@ class Prefs(ctx: Context) {
         set(v) { sp.edit().putString("doubleTapLens", v).apply(); touch() }
     /** Seconds to keep the camera session live after a capture; 0 = cold every time (brief default). */
     var warmSeconds: Int
-        get() = sp.getInt("warmSeconds", 0)
+        // 3.1 offered 30 and 90 s; 3.3 offers 45 s and 2 min. Map old choices so a chip is highlighted and the window matches it.
+        get() = sp.getInt("warmSeconds", 0).let { when (it) { 30 -> 45; 90 -> 120; else -> it } }
         set(v) { sp.edit().putInt("warmSeconds", v).apply(); touch() }
     /** Orchestrator ("brain") model: routes chat and voice requests to tools. */
     var agentModel: String
@@ -71,6 +77,42 @@ class Prefs(ctx: Context) {
     var wakeWordEnabled: Boolean
         get() = sp.getBoolean("wakeWord", false)
         set(v) { sp.edit().putBoolean("wakeWord", v).apply(); touch() }
+
+    /* ---- Traveller profile (travel plan §3). Stays on this phone; a short summary goes into prompts. ---- */
+    var homeCurrency: String
+        get() = str("homeCurrency", "INR").ifBlank { "INR" }
+        set(v) { sp.edit().putString("homeCurrency", v.trim().uppercase().take(3)).apply(); touch() }
+    var languagesSpoken: String
+        get() = str("languagesSpoken", "English, Hindi")
+        set(v) { sp.edit().putString("languagesSpoken", v).apply(); touch() }
+    var diet: String
+        get() = str("diet")
+        set(v) { sp.edit().putString("diet", v).apply(); touch() }
+    var allergies: String
+        get() = str("allergies")
+        set(v) { sp.edit().putString("allergies", v).apply(); touch() }
+    /** Rough daily spend target in the home currency; 0 = none. */
+    var dailyBudget: Int
+        get() = sp.getInt("dailyBudget", 0)
+        set(v) { sp.edit().putInt("dailyBudget", v).apply(); touch() }
+    var interests: String
+        get() = str("interests")
+        set(v) { sp.edit().putString("interests", v).apply(); touch() }
+    var walkingPace: String
+        get() = str("walkingPace")
+        set(v) { sp.edit().putString("walkingPace", v).apply(); touch() }
+    /** "Name +91 98…; Name +44 …". Shown on the emergency card; nothing is sent automatically in this build. */
+    var emergencyContacts: String
+        get() = str("emergencyContacts")
+        set(v) { sp.edit().putString("emergencyContacts", v).apply(); touch() }
+    /** Trip the wearer pinned in the Trip tab; "" = pick by date. */
+    var activeTripId: String
+        get() = str("activeTripId")
+        set(v) { sp.edit().putString("activeTripId", v).apply(); touch() }
+    /** Tag photos with the place they were taken (phone location + reverse geocoding). */
+    var autoTag: Boolean
+        get() = sp.getBoolean("autoTag", true)
+        set(v) { sp.edit().putBoolean("autoTag", v).apply(); touch() }
 
     /** Self-test results, as "pass|fail|notrun:numbers". */
     fun testResult(id: String) = str("test.$id", "notrun:")

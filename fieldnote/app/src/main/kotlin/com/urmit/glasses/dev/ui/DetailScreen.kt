@@ -1,8 +1,11 @@
 package com.urmit.glasses.dev.ui
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -36,6 +39,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,16 +55,19 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.urmit.glasses.dev.data.AnalysisState
 import com.urmit.glasses.dev.data.Lenses
+import com.urmit.glasses.dev.data.Money
 import com.urmit.glasses.dev.data.Source
 import com.urmit.glasses.dev.service.Bus
 import com.urmit.glasses.dev.service.SessionState
 
 @Composable
-fun DetailScreen(state: AppState, key: String, onOpenMeal: (String) -> Unit = {}, onBack: () -> Unit) {
+fun DetailScreen(state: AppState, key: String, onOpenMeal: (String) -> Unit = {}, onOpenTrip: () -> Unit = {}, onBack: () -> Unit) {
     val all by state.items.collectAsState(emptyList())
     val item = all.firstOrNull { it.key == key }
-    if (item == null) { LaunchedEffect(Unit) { onBack() }; return }
     val ctx = LocalContext.current
+    val reader = remember { ReadAloud(ctx.applicationContext) { state.toast.value = "Text to speech isn't working on this phone" } }
+    DisposableEffect(reader) { onDispose { reader.release() } }
+    if (item == null) { LaunchedEffect(Unit) { onBack() }; return }
     val note = item.note
     var lens by remember(key) { mutableStateOf(note.lens) }
     var question by remember { mutableStateOf("") }
@@ -73,17 +80,17 @@ fun DetailScreen(state: AppState, key: String, onOpenMeal: (String) -> Unit = {}
         if (r.resultCode == Activity.RESULT_OK) r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { if (it.isNotBlank()) state.ask(item, lens, it, byVoice = true) }
     }
     fun send(q: String) { if (q.isBlank() && note.thread.isNotEmpty()) return; state.ask(item, lens, q); question = "" }
-    fun readAloud() { val t = note.lastAnswer; if (t.isNotBlank()) android.speech.tts.TextToSpeech(ctx, null).let { tts -> Thread { Thread.sleep(500); tts.speak(t, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "d") }.start() } }
+    fun readAloud() { val t = note.lastAnswer; if (t.isNotBlank()) reader.say(t) }
     fun share() {
         val i = Intent(Intent.ACTION_SEND).setType(if (item.isVideo) "video/*" else "image/*").putExtra(Intent.EXTRA_STREAM, item.uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         if (note.lastAnswer.isNotBlank()) i.putExtra(Intent.EXTRA_TEXT, note.lastAnswer)
-        ctx.startActivity(Intent.createChooser(i, "Share"))
+        try { ctx.startActivity(Intent.createChooser(i, "Share")) } catch (_: ActivityNotFoundException) { state.toast.value = "No app on this phone can share this" }
     }
     LaunchedEffect(note.thread.size) { if (note.thread.isNotEmpty()) listState.animateScrollToItem(note.thread.size) }
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().height(340.dp).background(F.Tile).clickable {
-            if (item.isVideo) ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(item.uri, "video/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            if (item.isVideo) try { ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(item.uri, "video/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) } catch (_: ActivityNotFoundException) { state.toast.value = "No app on this phone can play this video" }
         }) {
             AsyncImage(model = item.uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             RoundButton("‹", Modifier.align(Alignment.TopStart).padding(16.dp), onBack)
@@ -96,6 +103,7 @@ fun DetailScreen(state: AppState, key: String, onOpenMeal: (String) -> Unit = {}
             Row(Modifier.align(Alignment.BottomStart).padding(16.dp, 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Tag(if (item.source == Source.FIELDNOTE) "Fieldnote" else "Glasses", strong = true)
                 Tag("${dayLabel(item.takenAt)} ${timeLabel(item.takenAt)}")
+                if (note.place.isNotBlank()) Tag("📍 " + note.place, Modifier.weight(1f, fill = false))
             }
         }
         Column(Modifier.fillMaxSize().padding(top = 0.dp).background(F.Bar, RoundedCornerShape(22.dp, 22.dp, 0.dp, 0.dp)).padding(16.dp, 12.dp, 16.dp, 0.dp)) {
@@ -105,6 +113,8 @@ fun DetailScreen(state: AppState, key: String, onOpenMeal: (String) -> Unit = {}
                 Lenses.ALL.forEach { l -> LensChip(l.label, lens == l.id) { lens = l.id; state.setLens(key, l.id) } }
                 val logged = state.food.meals.collectAsState().value.firstOrNull { it.photoKey == key }
                 LensChip(if (logged != null) "Logged · ${logged.kcalMid} kcal" else "＋ Log as meal", logged != null) { if (logged != null) onOpenMeal(logged.id) else if (!busy) state.logMeal(item) }
+                val spent = state.expenses.collectAsState().value.firstOrNull { it.photoKey == key }
+                LensChip(if (spent != null) "Spent · ${Money.fmt(spent.amount, spent.currency)}" else "＋ Log as expense", spent != null) { if (spent != null) onOpenTrip() else if (!busy && !item.isVideo) state.logReceipt(item) }
             }
             if (note.thread.isNotEmpty() && lens != note.thread.last().lens) Text("Changing the lens sends another request.", style = MaterialTheme.typography.bodySmall, color = F.Muted, modifier = Modifier.padding(top = 6.dp))
             Spacer(Modifier.height(12.dp))
@@ -165,14 +175,39 @@ fun DetailScreen(state: AppState, key: String, onOpenMeal: (String) -> Unit = {}
         dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = F.Muted) } })
 }
 
+/** One engine per screen: bound on the first tap, speaks once it is up, stopped and released when the screen closes. */
+private class ReadAloud(private val ctx: Context, private val onFail: () -> Unit) {
+    @Volatile private var tts: TextToSpeech? = null
+    @Volatile private var ready = false
+    @Volatile private var failed = false
+    @Volatile private var waiting: String? = null
+    fun say(text: String) {
+        when {
+            failed -> onFail()
+            tts == null -> {
+                waiting = text
+                tts = TextToSpeech(ctx) { s ->
+                    ready = s == TextToSpeech.SUCCESS; failed = !ready
+                    val w = waiting; waiting = null
+                    if (w != null) { if (ready) speak(w) else onFail() }
+                }
+            }
+            ready -> speak(text)
+            else -> waiting = text
+        }
+    }
+    private fun speak(text: String) { runCatching { tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "d") } }
+    fun release() { val t = tts; tts = null; waiting = null; runCatching { t?.stop(); t?.shutdown() } }
+}
+
 @Composable
 private fun RoundButton(glyph: String, modifier: Modifier = Modifier, onClick: () -> Unit, tint: Color = F.Ink) {
     Box(modifier.size(44.dp).background(Color(0xBF141416), CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) { Text(glyph, color = tint, style = MaterialTheme.typography.titleLarge) }
 }
 
 @Composable
-private fun Tag(text: String, strong: Boolean = false) {
-    Box(Modifier.background(Color(0xBF141416), RoundedCornerShape(8.dp)).padding(8.dp, 4.dp)) { Text(text, style = MaterialTheme.typography.bodySmall.copy(fontWeight = if (strong) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal), color = if (strong) F.Ink else F.Ink2) }
+private fun Tag(text: String, modifier: Modifier = Modifier, strong: Boolean = false) {
+    Box(modifier.background(Color(0xBF141416), RoundedCornerShape(8.dp)).padding(8.dp, 4.dp)) { Text(text, style = MaterialTheme.typography.bodySmall.copy(fontWeight = if (strong) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal), color = if (strong) F.Ink else F.Ink2, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
 }
 
 @Composable

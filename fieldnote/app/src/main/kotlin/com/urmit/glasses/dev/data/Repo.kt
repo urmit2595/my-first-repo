@@ -17,7 +17,7 @@ class Repo private constructor(ctx: Context) {
         if (!file.exists()) return emptyMap()
         val arr = JSONArray(file.readText())
         (0 until arr.length()).map { Note.from(arr.getJSONObject(it)) }.associateBy { it.key }
-    }.getOrDefault(emptyMap())
+    }.getOrElse { Store.quarantine(file); emptyMap() }
 
     private fun persist(m: Map<String, Note>) {
         val tmp = File(file.parentFile, "notes.tmp")
@@ -32,11 +32,18 @@ class Repo private constructor(ctx: Context) {
         persist(m); _notes.value = m
     }
 
-    fun update(key: String, f: (Note) -> Note) = put(f(get(key)))
+    /** Read-modify-write under the lock: the analysis queue and the place tagger update the same note concurrently. */
+    fun update(key: String, f: (Note) -> Note) = synchronized(lock) {
+        val m = _notes.value + (key to f(_notes.value[key] ?: Note(key)))
+        persist(m); _notes.value = m
+    }
 
-    /** Anything left mid-flight by a killed process goes back to QUEUED. */
+    /**
+     * Anything left mid-flight by a killed process is marked failed with Retry offered. (It used to go back to QUEUED, but
+     * nothing drains QUEUED, so those photos showed "queued" for ever.)
+     */
     fun recoverInterrupted() = synchronized(lock) {
-        val m = _notes.value.mapValues { (_, n) -> if (n.state == AnalysisState.ANALYSING) n.copy(state = AnalysisState.QUEUED) else n }
+        val m = _notes.value.mapValues { (_, n) -> if (n.state == AnalysisState.ANALYSING || n.state == AnalysisState.QUEUED) n.copy(state = AnalysisState.FAILED, error = "Interrupted when the app closed") else n }
         persist(m); _notes.value = m
     }
 
@@ -44,4 +51,13 @@ class Repo private constructor(ctx: Context) {
         @Volatile private var inst: Repo? = null
         fun get(ctx: Context) = inst ?: synchronized(this) { inst ?: Repo(ctx.applicationContext).also { inst = it } }
     }
+}
+
+/** Shared file safety for the JSON stores. */
+object Store {
+    /**
+     * Moves an unreadable store file aside (name.corrupt-<time>.json) instead of letting the next save overwrite it with an
+     * empty list, so a bad write never silently wipes notes, chats, meals, trips or spends.
+     */
+    fun quarantine(f: File) { if (f.exists()) runCatching { f.renameTo(File(f.parentFile, "${f.nameWithoutExtension}.corrupt-${System.currentTimeMillis()}.json")) } }
 }

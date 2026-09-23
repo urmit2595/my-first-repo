@@ -111,7 +111,14 @@ class Media(private val ctx: Context) {
         var bmp = ctx.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return null
         val scale = maxPx.toFloat() / maxOf(bmp.width, bmp.height)
         if (scale < 1f) bmp = Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true)
-        val f = File(ctx.cacheDir, "a_${uri.lastPathSegment}.jpg")
+        // BitmapFactory ignores EXIF orientation and the re-encoded JPEG carries none, so a sideways photo reached the model
+        // (and the offline reader) sideways. Bake the rotation into the pixels.
+        val deg = runCatching {
+            ctx.contentResolver.openInputStream(uri)?.use { android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL) }
+        }.getOrNull().let { when (it) { android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f; android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f; android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f; else -> 0f } }
+        if (deg != 0f) bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, android.graphics.Matrix().apply { postRotate(deg) }, true)
+        // Named by a hash of the whole uri: lastPathSegment of a shared or picked uri can contain "/" or clash across apps.
+        val f = File(ctx.cacheDir, "a_${Integer.toHexString(uri.toString().hashCode())}_$maxPx.jpg")
         f.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 82, it) }
         f
     }.getOrNull()

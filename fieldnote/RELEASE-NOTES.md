@@ -1,3 +1,122 @@
+# Fieldnote 3.4 — travel core (23 September 2026)
+
+Built from the recovered 3.3 source. Package, signing key and data files are unchanged, so it installs over 3.3 and keeps
+photos, chats, meals and settings. versionCode 340.
+
+This is phase 1 of the "Fieldnote travel feature plan" — its "if only five things get built first" list — built on the
+3.0 brain-and-tools design rather than a server:
+
+1. **Trip brain and traveller profile.** Share booking emails, PDFs or screenshots into Fieldnote ("Add to trip" in the
+   share sheet), or paste them on the new Trip tab. The model extracts flights, stays, trains, tickets and tables with
+   local times and time zones, addresses, phone numbers and booking references, and files them into the current trip or
+   a new one. The traveller profile (home currency, languages, diet, allergies, daily budget, interests, walking pace,
+   emergency contacts) goes into every answer. The brain gains `trip_info` and `add_booking`.
+2. **One reading pipeline.** New lenses: Translate, Menu (dishes explained, allergens flagged against your profile, two or
+   three picks, prices in rupees), Price (tags and bills read as numbers; the phone converts), Receipt and Flight board
+   (finds your own flight or train from the trip). Reading lenses always take the glasses' full photo and send it at
+   high detail; a quick 504×896 stream frame is too coarse for small print. Exchange rates come from open.er-api.com
+   (Frankfurter as fallback) and are cached, so conversions work offline on the last saved rate.
+3. **Receipt to ledger.** The Receipt lens, "log this receipt", or a spoken spend ("taxi 2400 yen") adds an entry with the
+   amount in rupees. The Trip tab shows today and trip totals by category and exports CSV. The brain gains `log_expense`,
+   `spend_summary` and `convert_currency`.
+4. **Auto-tagging and voice notes.** Fieldnote captures are tagged with the place they were taken (phone location plus
+   reverse geocoding). While a session runs, a light location track (one fix every ~2 minutes or 50 m) lets Meta AI album
+   photos be placed later. "Note: …" saves a voice note pinned to where you are; "remember this" / "remember where I
+   parked" adds a photo. "Where did I …" searches notes, photo places, spends and bookings offline.
+5. **Take me home, driver card, offline pack.** "Take me home" gives direction, distance and walking time to your stay,
+   its front-desk number, and opens the driver card: the address in the local script, large, with a spoken request.
+   The offline pack (Trip tab, once on Wi-Fi) saves exchange rates, places stays on the map, writes quick phrases for
+   taxi, hotel, restaurant, pharmacy, shop and help, an allergy card in the local language, and local-script addresses,
+   and downloads ML Kit's on-device translation and text-reading models. With no data, the Read, Translate, Menu and
+   Flight board lenses fall back to on-device reading and translation. Emergency numbers for ~70 countries are built in.
+
+Instant voice commands (no brain, no data needed): "note …", "remember this", "take me home", "where am I", "driver
+card", "allergy card", "emergency numbers". They also appear in Chat. "Hand off to Meta" releases the glasses for Meta's
+live translation.
+
+## Fixes to inherited 3.3 behaviour
+A six-area code review of the recovered 3.3 code (plus the new travel code), with every finding checked by a second,
+sceptical reviewer, found these; all are fixed in 3.4. None of them has been seen on hardware yet.
+
+**Glasses session**
+- Quick photos (3.3): the colour-layout test was the wrong way round, so quick-photo JPEGs very likely had scrambled
+  colours; the layout is now measured by vertical smoothness (works on grey scenes too) and logged as `layout` on each
+  `capture_ok`. A quick photo that failed after the frame arrived left the camera session open on the glasses; it is now
+  always released. Fallback timings and the `heic-fallback` label were wrong.
+- Photo retries: when the stream is paused, the second `capturePhoto` 600 ms later always failed ("Can only capture photos
+  while streaming video" in 3.2 telemetry); it now skips straight to a fresh session.
+- Wake word: after a session ended in wake-word mode, the next session ignored every tap; and each wake-word command left
+  the state on "Answering", so the wake word worked once per session. Commands now go through the trigger queue, the mode
+  resets every session, and only one listening loop runs.
+- A tap during the brain's last answer before "end session" could reopen the glasses from a stopped service and crash the
+  app. Nothing runs after End now.
+- The service could wait for ever on text-to-speech that never reported back (engine restarted, utterance flushed), and
+  End then queued behind it. Speech waits are bounded and every utterance outcome is handled.
+- Android 13+ showed the media session's play/pause/skip in the shade and on the lock screen instead of Photo / Ask /
+  End, so there was no End on the lock screen. The buttons are back. (If taps ever stop reaching Fieldnote, this is the
+  first change to suspect; Test A should be re-run.)
+- "Tell me more about the fort" and anything containing "continue" were treated as "more" and never reached the brain.
+- Spoken answers were split at decimal points ("12." … "50 euros") and could lose their place after a line break.
+- "End session" by voice is now said in full; the "started without microphone access" warning is no longer wiped at once;
+  a restart Android refuses no longer crashes the app; one SDK coroutine leaked per session attempt; the speech recogniser
+  leaked on a listen timeout.
+
+**Brain, lenses and money**
+- OpenAI keys: every brain turn failed with HTTP 400 (and GPT-5 lens or food models), because requests used OpenRouter's
+  parameter names. Requests now use each endpoint's own (`max_completion_tokens` and `reasoning_effort` for OpenAI).
+- Reasoning models picked as "eyes" could return an empty answer, spoken as "That's all."; they now get low effort and
+  room to think, and an empty reply is reported instead of stored. Claude no longer gets extended thinking requested.
+- The daily spend cap now stops brain turns too, and meal estimates count towards it. A cap of 0 means no cap (it used to
+  block every lens answer).
+- "Log a meal" in Chat hours later could re-estimate, and overwrite, the meal from an old photo. Only a photo attached,
+  taken this turn, or taken in the last 20 minutes counts now.
+- `new_chat` left the question behind in the old chat; the out-of-steps reply now summarises what was done.
+
+**Data**
+- Photos interrupted mid-analysis when the app closed showed "queued" for ever; they now show Retry.
+- Two writers to the same photo note could erase an answer (now atomic).
+- Telemetry: overlapping uploads dropped events; one upload at a time now, removing only what was sent.
+- An unreadable data file is set aside as `name.corrupt-<time>.json` instead of being overwritten with an empty one.
+- Android backup no longer includes the API key or the location track.
+- Photos sent for answers keep their EXIF rotation.
+
+**Screens**
+- Each rotation or re-open created another copy of the app's state that never stopped (with a second place tagger and
+  media watcher). There is now one per process.
+- On Android 12 the permission list included Android 13-only permissions, so Setup never passed and a session could not
+  start. Permissions now follow the Android version, and a permanently refused one opens Settings instead of dead-ending.
+- Read aloud on a photo and the sound previews leaked a speech engine each time; the Glasses tab's album check ran a full
+  photo query on the main thread.
+
+## Not verified on hardware
+Nothing in 3.4 has run on the phone or the glasses. Untested and therefore unmet until run: every travel feature above,
+the quick-photo colour fix (check that a double-tap photo has natural colours; telemetry now logs `layout` on each
+`capture_ok`), location while the phone is locked, the card notifications, ML Kit downloads and offline reading, and the
+share-sheet import from Gmail and PDF viewers.
+
+Device tests still open from the build brief: Test B fails (cold capture median ~11 s against 4 s, 3.2 telemetry),
+Tests C and D have no recorded runs, and the 30-minute locked-phone walk (definition of done) has not been done.
+
+## Suggested first run
+1. Install over 3.3. Allow location when asked (optional; everything else works without it).
+2. Trip tab → share one real booking email or PDF to Fieldnote → check the times (they are shown in the place's own zone).
+3. Trip tab → Prepare offline pack on Wi-Fi → check the driver card and phrases.
+4. Start a session. Double-tap at something (quick photo: check colours), then Translate a sign or menu (full photo).
+5. Say "note the café on the corner does good dosa", then "where did I note dosa?" in Chat.
+6. Airplane mode → Translate lens on a printed sign → you should hear "Offline reading…".
+
+## Known limits and costs
+- APK grows from 11.7 MB to 29.8 MB: ML Kit's translation engine (16 MB of native code). Text-reading models live in
+  Google Play services and are fetched by the offline pack; translation models (~30 MB per language) too.
+- ML Kit sends anonymous usage logs to Google (its standard data-transport component). Photos and text never leave the
+  phone for on-device reading.
+- Location is foreground-only (no background permission). Allowing location during a session takes effect from the
+  next session.
+- Emergency numbers are a built-in table (September 2026); the card says to confirm locally.
+- Phase 2+ of the travel plan (flight watch, proactive nudges, SOS, daily recap, interpreter mode) is not started.
+
+---
+
 # Fieldnote 2.1 — release notes (20 September 2026)
 
 ## 2.1 changes
