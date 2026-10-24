@@ -1,0 +1,7 @@
+# Captured network sessions contain live secrets (cookies, tokens, passwords).
+# Never commit them. Redact first; keep raw captures local.
+*.har
+captures/*.har
+
+# Keep the empty folders tracked.
+!.gitkeep
