@@ -1066,6 +1066,7 @@
     off();
     return { ok: ok, ms: Math.round(performance.now() - t0), why: why };
   };
+  Game._internals = function () { return { scene: scene, levelRoot: levelRoot, heroPivot: heroPivot, fxRoot: fxRoot, renderer: renderer, composer: composer, camera: camera, sceneStats: sceneStats }; };
   Game.handleScreen = function (id) { var g = Game.groups[id]; if (!g || !g.handle) return null; var o = [0, 0, 0]; handleRefWorld(g, g.cur, o); return worldToScreen(o, {}); };
   Game.heroScreen = function () { return worldToScreen([heroW.pos.x, heroW.pos.y + 0.4, heroW.pos.z], {}); };
   Game.debug = function () {

@@ -6,7 +6,7 @@
     opts = opts || {};
     var low = opts.quality === "low", high = opts.quality === "high";
     var radial = low ? 12 : (high ? 28 : 22);
-    var geometries = [], materials = [], textures = [], batches = [], disposed = false;
+    var geometries = [], materials = [], textures = [], batches = [], skinned = [], disposed = false;
     var root = new THREE.Group(); root.name = "Wick";
     function geo(g) { geometries.push(g); return g; }
     function mat(m) { materials.push(m); return m; }
@@ -90,7 +90,7 @@
     var torus = geo(new THREE.TorusGeometry(1, 0.12, low ? 5 : 8, radial));
     var transform = new THREE.Object3D();
     function group(parent, name, px, py, pz) {
-      var g = new THREE.Group(); g.name = name; g.position.set(px || 0, py || 0, pz || 0); parent.add(g); return g;
+      var g = new THREE.Bone(); g.name = name; g.position.set(px || 0, py || 0, pz || 0); parent.add(g); return g;
     }
     // Merge all static fittings sharing a joint/material, without BufferGeometryUtils.
     function part(parent, g, material, px, py, pz, sx, sy, sz, rx, ry, rz) {
@@ -99,6 +99,7 @@
       transform.scale.set(sx === undefined ? 1 : sx, sy === undefined ? 1 : sy, sz === undefined ? 1 : sz);
       transform.updateMatrix();
       var copy = g.index ? g.toNonIndexed() : g.clone(); copy.applyMatrix4(transform.matrix);
+      if (material === brass || material === dark || material === patina) { skinned.push({ bone: parent, geometry: copy, material: material }); return; }
       var batch = null;
       for (var k = 0; k < batches.length; k++) if (batches[k].parent === parent && batches[k].material === material) batch = batches[k];
       if (!batch) { batch = { parent: parent, material: material, parts: [] }; batches.push(batch); }
@@ -113,7 +114,7 @@
     }
     function lathe(points) { return geo(new THREE.LatheGeometry(points.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), radial)); }
     // Keep the fuller lantern silhouette within the 0.85-unit game scale.
-    var assembly = group(root, "assembly"); assembly.scale.setScalar(0.82);
+    var assembly = new THREE.Group(); assembly.name = "assembly"; root.add(assembly); assembly.scale.setScalar(0.82);
     var hips = group(assembly, "hips", 0, 0.222, 0);
     var torso = group(hips, "torso");
     var egg = lathe([[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],
@@ -261,6 +262,40 @@
       part(ankle, geo(new THREE.TorusGeometry(1, 0.045, 5, radial)), brass, 0, -0.052, 0.025, 0.052, 0.075, 0.052, Math.PI / 2);
       ring(ankle, 0, -0.014, 0, 0.023, Math.PI / 2);
     }
+    // All brass/verdigris fittings become ONE skinned mesh (one draw call, one shadow draw), rigidly
+    // weighted to the joint bones; material variation lives in vertex colours.
+    (function () {
+      assembly.updateMatrixWorld(true);
+      var bones = [], rel = new THREE.Matrix4(), inv = new THREE.Matrix4().copy(assembly.matrixWorld).invert();
+      assembly.traverse(function (o) { if (o.isBone) bones.push(o); });
+      var bc = brass.color, ratio = {};
+      ratio.brass = new THREE.Color(1, 1, 1);
+      ratio.dark = new THREE.Color(dark.color.r / bc.r, dark.color.g / bc.g, dark.color.b / bc.b);
+      ratio.patina = new THREE.Color(patina.color.r / bc.r, patina.color.g / bc.g, patina.color.b / bc.b);
+      var total = 0; skinned.forEach(function (e) { total += e.geometry.attributes.position.count; });
+      var pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uvs = new Float32Array(total * 2), col = new Float32Array(total * 3);
+      var si = new Uint16Array(total * 4), sw = new Float32Array(total * 4), o3 = 0, o2 = 0, o4 = 0, vc = 0;
+      skinned.forEach(function (e) {
+        rel.multiplyMatrices(inv, e.bone.matrixWorld); e.geometry.applyMatrix4(rel);
+        var a = e.geometry.attributes, n = a.position.count, c = ratio[e.material === dark ? "dark" : e.material === patina ? "patina" : "brass"];
+        pos.set(a.position.array, o3); nor.set(a.normal.array, o3); uvs.set(a.uv.array, o2);
+        var bi = Math.max(0, bones.indexOf(e.bone));
+        for (var v = 0; v < n; v++) {
+          col[o3 + v * 3] = c.r; col[o3 + v * 3 + 1] = c.g; col[o3 + v * 3 + 2] = c.b;
+          si[o4 + v * 4] = bi; sw[o4 + v * 4] = 1;
+        }
+        o3 += n * 3; o2 += n * 2; o4 += n * 4; vc += n; e.geometry.dispose();
+      });
+      var sg = geo(new THREE.BufferGeometry());
+      sg.setAttribute("position", new THREE.BufferAttribute(pos, 3)); sg.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+      sg.setAttribute("uv", new THREE.BufferAttribute(uvs, 2)); sg.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      sg.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(si, 4)); sg.setAttribute("skinWeight", new THREE.BufferAttribute(sw, 4));
+      brass.vertexColors = true; brass.skinning = true; brass.needsUpdate = true;
+      var sm = new THREE.SkinnedMesh(sg, brass); sm.name = "Wick brass";
+      sm.frustumCulled = false; sm.castShadow = true; sm.receiveShadow = false;
+      assembly.add(sm); sm.updateMatrixWorld(true); sm.bind(new THREE.Skeleton(bones), sm.matrixWorld);
+      skinned.length = 0;
+    })();
     batches.forEach(function (b) {
       var count = 0; b.parts.forEach(function (g) { count += g.attributes.position.count; });
       var geometry = geo(new THREE.BufferGeometry());
@@ -270,7 +305,7 @@
         geometry.setAttribute(name, new THREE.BufferAttribute(data, size));
       });
       geometry.computeBoundingSphere();
-      var mesh = new THREE.Mesh(geometry, b.material); mesh.castShadow = b.material !== eyeMat; mesh.receiveShadow = false;
+      var mesh = new THREE.Mesh(geometry, b.material); mesh.castShadow = false; mesh.receiveShadow = false;
       b.parent.add(mesh); b.parts.forEach(function (g) { g.dispose(); });
     });
     batches.length = 0;
@@ -293,7 +328,7 @@
       ribbon.setAttribute("position", new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
       ribbon.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(nodes * 6 + 72), 3).setUsage(THREE.DynamicDrawUsage));
       ribbon.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); ribbon.setIndex(indices);
-      var tailMesh = new THREE.Mesh(ribbon, scarfMat); tailMesh.name = "scarf tail " + i; tailMesh.castShadow = true; tailMesh.frustumCulled = false; root.add(tailMesh);
+      var tailMesh = new THREE.Mesh(ribbon, scarfMat); tailMesh.name = "scarf tail " + i; tailMesh.castShadow = false; tailMesh.frustumCulled = false; root.add(tailMesh);
       var current = [], previous = [];
       for (j = 0; j < nodes; j++) { current.push(new THREE.Vector3()); previous.push(new THREE.Vector3()); }
       tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.116 - i * 0.032, 0.25, 0.13 - i * 0.035),
@@ -433,6 +468,7 @@
           currentAnim = name; animTime = 0;
         }
       },
+      teleport: function () { scarfInitialized = false; },
       setGlow: function (k) { if (Number.isFinite(k)) requestedGlow = Math.max(0, Math.min(2, k)); },
       update: function (dt, t, state) {
         if (disposed) return;
