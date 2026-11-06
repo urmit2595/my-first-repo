@@ -1595,7 +1595,7 @@
     env.root.position.set(at[0] + w / 2, at[1], at[2] + dd / 2);
     const b = new Builder({ ao: 0.0 });
     const hx0 = Math.max(0.3, w / 2 - 0.15), hz0 = Math.max(0.3, dd / 2 - 0.15);       // inset: never wider than the footprint
-    const mn = Math.min(hx0, hz0), tipY = -Math.min(depth * 0.62, Math.max(1.0, mn * 1.7)), n = 5, rh = -tipY * 0.13, tip = Math.max(0.06, mn * 0.2);
+    const mn = Math.min(hx0, hz0), tipY = -Math.min(depth * 0.8, Math.max(1.0, mn * 1.7, Math.max(hx0, hz0) * 0.55)), n = 5, rh = -tipY * 0.13, tip = Math.max(0.06, mn * 0.2);
     const hxAt = (y) => lerp(hx0, tip, Math.min(1, y / tipY)), hzAt = (y) => lerp(hz0, tip, Math.min(1, y / tipY));
     // frustum with independent half-extents at the top and the bottom (open top: nothing horizontal shows from above)
     const frus = (key, ty, by, y0, c, grow) => {
