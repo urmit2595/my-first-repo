@@ -1596,3 +1596,118 @@ Call log:
 codex
 The module and test page are written. Screenshot testing is blocked by the sandbox: it denies both the test server’s local socket and Chromium startup. I’ll check the animation API, geometry budget, transforms, and scarf simulation with three.js directly; visual verification remains outstanding.
 
+exec
+/bin/bash -lc "ls /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build; node -e \"for(const x of ['canvas','@napi-rs/canvas','three','playwright']) {try{console.log(x,require.resolve(x))}catch(_){}}\"; git diff --stat" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+three.js
+three.min.js
+three.module.js
+playwright /opt/node-tools/node_modules/playwright/index.js
+
+exec
+/bin/bash -lc "node <<'NODE'
+const fs=require('fs'),vm=require('vm'),THREE=require(require('./tools/harness').VENDOR+'/three/build/three.js');
+const ctx=new Proxy({createLinearGradient:()=>({addColorStop(){}}),createRadialGradient:()=>({addColorStop(){}})}, {get:(o,k)=>k in o?o[k]:()=>{}});
+const box={window:{},document:{createElement:()=>({getContext:()=>ctx})},console};vm.createContext(box);vm.runInContext(fs.readFileSync('js/hero.js','utf8'),box);
+for(const quality of ['low','med','high']){
+ const h=box.window.Hero.create(THREE,{quality});let calls=0,tris=0;h.object3D.traverse(o=>{if(o.isMesh){calls++;tris+=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;}if(o.isSprite)calls++;});
+ let bounds=new THREE.Box3().setFromObject(h.object3D);console.log(quality,{calls,tris,bounds:bounds.min.toArray().concat(bounds.max.toArray())});
+ h.dispose();
+}
+const h=box.window.Hero.create(THREE,{quality:'med'}),s={speed:1.4,grounded:true};
+for(const anim of ['idle','walk','climb','celebrate','bump','ride','wave']){
+ h.setAnim(anim); let feet=[];h.onStep=e=>feet.push(e.foot);
+ for(let f=0;f<300;f++){h.object3D.position.x=Math.sin(f/60)*.4;h.object3D.rotation.y=f/60;h.update(1/60,f/60,s);}
+ let finite=true,tailLengths=[];h.object3D.traverse(o=>{if(o.isMesh){for(const v of o.geometry.attributes.position.array)if("'!Number.isFinite(v))finite=false;}if(o.name.startsWith('"'scarf tail')){const a=o.geometry.attributes.position.array;let total=0;for(let n=6;n<a.length;n+=6){let sq=0;for(let d=0;d<3;d++)sq+=((a[n+d]+a[n+3+d]-a[n-6+d]-a[n-3+d])/2)**2;total+=Math.sqrt(sq);}tailLengths.push(total);}});
+ console.log(anim,{finite,footfalls:feet,light:h.light.intensity,tailLengths});
+}
+NODE" in /home/user/my-first-repo/spirelight
+ succeeded in 811ms:
+low {
+  calls: 25,
+  tris: 17160,
+  bounds: [
+    -0.17462988197803497,
+    0.0030000054836273327,
+    -0.19800000101327897,
+    0.1647040253095205,
+    0.8718399913311005,
+    0.1420000046491623
+  ]
+}
+med {
+  calls: 26,
+  tris: 52562,
+  bounds: [
+    -0.235,
+    0.0030000054836273327,
+    -0.19800000101327897,
+    0.235,
+    0.8714752109050751,
+    0.1420000046491623
+  ]
+}
+high {
+  calls: 26,
+  tris: 66524,
+  bounds: [
+    -0.235,
+    0.0030000054836273327,
+    -0.19800000101327897,
+    0.235,
+    0.8718399913311005,
+    0.1420000046491623
+  ]
+}
+idle {
+  finite: true,
+  footfalls: [],
+  light: 1.225708959109933,
+  tailLengths: [ 0.21016225982046272, 0.18291197269074344 ]
+}
+walk {
+  finite: true,
+  footfalls: [
+    'L', 'R', 'L', 'R',
+    'L', 'R', 'L', 'R',
+    'L', 'R', 'L', 'R',
+    'L', 'R'
+  ],
+  light: 1.225708959109933,
+  tailLengths: [ 0.2100373256053787, 0.18276395669127868 ]
+}
+climb {
+  finite: true,
+  footfalls: [
+    'L', 'R', 'L', 'R',
+    'L', 'R', 'L', 'R',
+    'L', 'R', 'L', 'R'
+  ],
+  light: 1.225708959109933,
+  tailLengths: [ 0.21021249932837455, 0.18296748329396406 ]
+}
+celebrate {
+  finite: true,
+  footfalls: [],
+  light: 2.4514179182198648,
+  tailLengths: [ 0.21015789830003245, 0.18290909502096306 ]
+}
+bump {
+  finite: true,
+  footfalls: [],
+  light: 1.2426445395271442,
+  tailLengths: [ 0.21016225965091456, 0.18291197269074344 ]
+}
+ride {
+  finite: true,
+  footfalls: [],
+  light: 1.2257089591099342,
+  tailLengths: [ 0.21011285742007446, 0.18286494354923816 ]
+}
+wave {
+  finite: true,
+  footfalls: [],
+  light: 1.2257089591099342,
+  tailLengths: [ 0.21012354353195056, 0.18286927517329366 ]
+}
+
