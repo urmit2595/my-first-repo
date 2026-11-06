@@ -329,6 +329,10 @@
       scene.traverse(function (o) { if (o.material) { var m = o.material; (Array.isArray(m) ? m : [m]).forEach(function (mm) { mm.needsUpdate = true; }); } });
     }
     fpsReset();
+    if (changed && !silent && Game.level && Game.geom) safe(function () { // decor caps / shadow proxies depend on the tier: rebuild if nothing has been played yet
+      var fresh = Game.state === "title" || (Game.state === "play" && heroW.tile === Game.geom.startId && !heroBusy() && Object.keys(Game.groups).every(function (id) { var g = Game.groups[id]; return g.state === "idle" && g.value === (g.def.rotor ? g.def.rotor.start : g.def.slider ? g.def.slider.start : 0) || g.kind === "static"; }));
+      if (fresh) loadLevel(Game.level);
+    }, "tier reload");
     if (changed && !silent) emit("quality", { level: eff });
   }
   function fpsReset() { fpsAcc = 0; fpsN = 0; fpsT = 0; lastGood = Game.time; }
@@ -736,6 +740,13 @@
     Object.keys(Game.groups).forEach(function (id) { applyGroup(Game.groups[id]); });
     levelRoot.updateMatrixWorld(true);
     safe(function () { mergeDecor(def, theme); }, "mergeDecor");
+    if (Game.quality !== "high") safe(function () { // sprites (halos, rays, mist) cannot batch: thin them out on weaker tiers
+      Game.decor.forEach(function (e) {
+        var keep = (e.item.type === "glimmer" || e.item.type === "beacon") ? (Game.quality === "medium" ? 2 : 1) : 0, n = 0, rm = [];
+        e.object3D.traverse(function (o) { if (o.isSprite && ++n > keep) rm.push(o); });
+        rm.forEach(function (o) { if (o.parent) o.parent.remove(o); });
+      });
+    }, "sprite cap");
 
     // world / camera
     if (window.World && mods.world) {
