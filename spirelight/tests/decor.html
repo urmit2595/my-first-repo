@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>SPIRELIGHT · Decor shelf</title>
+<style>
+html,body{margin:0;overflow:hidden;background:#1b1830}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:2}
+.l{position:absolute;transform:translate(-50%,0);font:10px system-ui,sans-serif;letter-spacing:.08em;color:#e9dcc3;text-shadow:0 1px 2px #000,0 0 4px #000;white-space:nowrap}
+#stats{position:fixed;left:8px;top:6px;z-index:3;font:11px system-ui,sans-serif;color:#cdbfa8;text-shadow:0 1px 2px #000}
+</style>
+</head>
+<body>
+<div id="labels"></div><div id="stats"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="testbed.js"></script>
+<script src="../js/decor.js"></script>
+<script>
+(function () {
+  "use strict";
+  var q = new URLSearchParams(location.search);
+  var num = function (k, d) { var v = q.get(k); return v === null || v === "" || !isFinite(+v) ? d : +v; };
+  var H = num("h", 14), center = [num("cx", 8), num("cy", 2), num("cz", 2)];
+  var startT = num("t", 0), showLabels = q.get("labels") !== "0" && !q.has("phone");
+  var ups = [], items = [], labelEls = [];
+
+  Testbed.start({ height: H, center: center, bg: 0x2a2146, exposure: 1.0, shadows: true }, function (tb) {
+    var THREE = tb.THREE, scene = tb.scene;
+    // warm key, closer to the game's dusk look
+    tb.key.intensity = 1.9; tb.key.shadow.camera.left = -16; tb.key.shadow.camera.right = 16; tb.key.shadow.camera.top = 12; tb.key.shadow.camera.bottom = -12;
+    tb.key.position.set(center[0] - 12, center[1] + 20, center[2] + 14); tb.key.target.position.set(center[0], center[1], center[2]);
+    // screen-space-ish gradient backdrop (a big plane doesn't matter: scene.background is a flat colour, so paint a canvas)
+    var bgc = document.createElement("canvas"); bgc.width = 4; bgc.height = 256; var g = bgc.getContext("2d");
+    var gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, "#1d1b45"); gr.addColorStop(0.55, "#6a4585"); gr.addColorStop(1, "#ff9a6a");
+    g.fillStyle = gr; g.fillRect(0, 0, 4, 256); var bt = new THREE.CanvasTexture(bgc); bt.encoding = THREE.sRGBEncoding; scene.background = bt;
+
+    // --- the shelf: cream-paved platform + sandstone back wall
+    var cream = new THREE.MeshStandardMaterial({ color: 0xefe2c6, roughness: 0.8 }), sand = new THREE.MeshStandardMaterial({ color: 0xd9a46a, roughness: 0.9 }), dark = new THREE.MeshStandardMaterial({ color: 0x8a5a48, roughness: 0.95 });
+    var box = new THREE.BoxGeometry(1, 1, 1);
+    function cell(x, y, z, m, jit) { var k = new THREE.Mesh(box, m); k.position.set(x + 0.5, y + 0.5, z + 0.5); k.castShadow = k.receiveShadow = true; scene.add(k); if (jit) k.material = m.clone(), k.material.color.offsetHSL(0, 0, (Math.sin(x * 7.1 + y * 3.3 + z * 5.7)) * 0.025); return k; }
+    for (var x = 0; x < 17; x++) {
+      for (var z = 0; z < 3; z++) { cell(x, -1, z, dark, true); cell(x, 0, z, cream, true); }
+      for (var y = -1; y < 4; y++) cell(x, y, -1, sand, true);
+    }
+
+    return Decor.init(THREE, tb.renderer).then(function () {
+      var A = [];
+      function add(label, item, o) { item.face = item.face || "+y"; var obj = Decor.build(item, { theme: "dusk", quality: q.get("quality") || "high", seed: 1 }); if (!obj) { console.warn("null build", item.type); return null; } scene.add(obj); A.push({ label: label, obj: obj, item: item }); if (obj.userData.update) ups.push(obj.userData.update); return obj; }
+      // floor row, against the wall (z = 0)
+      add("crank", { type: "crank", at: [0, 0, 0] });
+      add("wheel", { type: "wheel", at: [1, 0, 0] });
+      add("lever", { type: "lever", at: [2, 0, 0] });
+      add("plate", { type: "plate", at: [3, 0, 0] });
+      var pr = add("plate pressed", { type: "plate", at: [4, 0, 0] }); pr.userData.press(true, true);
+      add("glimmer", { type: "glimmer", at: [5, 0, 0] });
+      var gl2 = add("glimmer (collect)", { type: "glimmer", at: [6, 0, 0] });
+      add("beacon", { type: "beacon", at: [8, 0, 0] });
+      add("beacon ignited", { type: "beacon", at: [10, 0, 0], lit: true });
+      add("streetlamp", { type: "streetlamp", at: [12, 0, 0] });
+      add("streetlamp lit", { type: "streetlamp", at: [13, 0, 0], lit: true, light: true });
+      add("chimney", { type: "chimney", at: [14, 0, 0] });
+      add("bell", { type: "bell", at: [15, 0, 0] });
+      // second row (z = 1)
+      add("rail + knob", { type: "rail", at: [0, 0, 1], dir: "+x", len: 3 }); add("", { type: "knob", at: [0, 0, 1] });
+      add("gear", { type: "gear", at: [3, 0, 1], r: 0.5, idle: 0.6 });
+      add("gear iron", { type: "gear", at: [4, 0, 1], r: 0.42, tint: "iron", idle: -0.8 });
+      add("pipe", { type: "pipe", at: [5, 0, 1], dir: "+x", len: 1 }); add("", { type: "pipe", at: [6, 0, 1], dir: "+x", len: 1 });
+      add("lantern", { type: "lantern", at: [7, 0, 1] });
+      add("lantern lit", { type: "lantern", at: [8, 0, 1], lit: true });
+      add("railing", { type: "railing", at: [9, 0, 1], side: "+z" }); add("", { type: "railing", at: [10, 0, 1], side: "+z" });
+      add("flowers", { type: "flowers", at: [11, 0, 1] });
+      add("plant", { type: "plant", at: [12, 0, 1], variant: "fern" }); add("plant", { type: "plant", at: [13, 0, 1], variant: "succ" });
+      add("tree", { type: "tree", at: [14, 0, 1] });
+      add("dome", { type: "dome", at: [15, 0, 1] });
+      add("finial", { type: "finial", at: [16, 0, 1] });
+      // third row (z = 2): arches, clock, plants
+      add("arch", { type: "arch", at: [1, 0, 2] }); add("flowers", { type: "flowers", at: [1, 1, 2] });
+      add("arch + ivy", { type: "arch", at: [3, 0, 2] });
+      add("plant herb", { type: "plant", at: [5, 0, 2], variant: "herb" }); add("shrub", { type: "plant", at: [6, 0, 2], variant: "shrub" }); add("tuft", { type: "plant", at: [7, 0, 2], variant: "tuft" });
+      add("clock", { type: "clock", at: [9, 0, 2] });
+      // wall row (face +z of the back wall cells, y = 1..3)
+      add("window", { type: "window", at: [0, 1, -1], face: "+z" }); add("window lit", { type: "window", at: [1, 1, -1], face: "+z", lit: true });
+      add("window", { type: "window", at: [0, 2, -1], face: "+z" }); add("window lit", { type: "window", at: [1, 2, -1], face: "+z", lit: true });
+      add("lantern", { type: "lantern", at: [2, 2, -1], face: "+z" }); add("lantern lit", { type: "lantern", at: [3, 2, -1], face: "+z", lit: true, light: true });
+      add("banner", { type: "banner", at: [4, 2, -1], face: "+z", color: "crimson" }); add("banner", { type: "banner", at: [5, 2, -1], face: "+z", color: "teal" });
+      add("clock", { type: "clock", at: [6, 2, -1], face: "+z" });
+      add("gear", { type: "gear", at: [7, 2, -1], face: "+z", r: 0.5, idle: 0.5 });
+      add("ivy", { type: "ivy", at: [8, 1, -1], face: "+z" }); add("ivy", { type: "ivy", at: [8, 2, -1], face: "+z", h: 1, bloom: 0.5 }); add("ivy", { type: "ivy", at: [9, 2, -1], face: "+z", density: 1.3 });
+      add("vines", { type: "vines", at: [10, 2, -1], face: "+z" }); add("vines", { type: "vines", at: [11, 2, -1], face: "+z", len: 1.1, count: 4 });
+      add("window", { type: "window", at: [12, 1, -1], face: "+z", lit: true }); add("lantern", { type: "lantern", at: [13, 2, -1], face: "+z", lit: true });
+      add("pipe", { type: "pipe", at: [14, 2, -1], face: "+z", dir: "+x", len: 2 }); add("", { type: "pipe", at: [15, 2, -1], face: "+z", dir: "+x", len: 1 });
+      add("ivy", { type: "ivy", at: [15, 1, -1], face: "+z", density: 0.8 });
+      // waterfall off the right-hand end of the platform; beacon cage close-up is the ignited one
+      add("waterfall", { type: "waterfall", at: [16, 0, 0], face: "+x", len: 5 });
+      // hanging items on the platform's underside
+      add("vines (hang)", { type: "vines", at: [2, -1, 1], face: "-y", len: 1.5 });
+      add("lantern (hang)", { type: "lantern", at: [4, -1, 1], face: "-y", lit: true });
+      add("lantern (hang)", { type: "lantern", at: [6, -1, 1], face: "-y" });
+
+      items = A;
+      var crank = A[0].obj, wheel = A[1].obj, lever = A[2].obj, knob = A.filter(function (a) { return a.item.type === "knob"; })[0].obj;
+      var collected = false;
+      // advance the clock for still shots
+      for (var i = 0; i < startT * 20; i++) ups.forEach(function (u) { u(0.05, i * 0.05); });
+      tb.onFrame(function (dt, t) {
+        t += startT;
+        crank.userData.spin(t * 40); wheel.userData.spin(t * 30); lever.userData.spin((Math.sin(t * 0.8) * 0.5 + 0.5) * 90); knob.userData.spin(t * 40);
+        crank.userData.setHint(true);
+        if (!collected && t > num("collect", 2.0)) { collected = true; gl2.userData.collect(); }
+        if (num("ignite", 0) > 0 && t > num("ignite", 0)) A.filter(function (a) { return a.label === "beacon"; }).forEach(function (a) { a.obj.userData.ignite(); });
+        Decor.update(dt, t);
+        for (var j = 0; j < ups.length; j++) ups[j](dt, t);
+        if (showLabels) {
+          if (!labelEls.length) A.forEach(function (a) { if (!a.label) return; var d = document.createElement("div"); d.className = "l"; d.textContent = a.label; document.getElementById("labels").appendChild(d); labelEls.push({ d: d, a: a }); });
+          var v = new THREE.Vector3(), w = innerWidth, h = innerHeight;
+          labelEls.forEach(function (l) { var p = l.a.obj.position; v.set(p.x, p.y - 0.75, p.z).project(tb.camera); l.d.style.left = ((v.x + 1) / 2 * w) + "px"; l.d.style.top = ((1 - v.y) / 2 * h) + "px"; });
+        }
+        document.getElementById("stats").textContent = q.has("stats") ? "draw calls " + tb.renderer.info.render.calls + " · tris " + tb.renderer.info.render.triangles + " · props " + A.length : "";
+      });
+      window.__decorItems = A;
+    });
+  });
+})();
+</script>
+</body>
+</html>

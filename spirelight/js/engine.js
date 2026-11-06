@@ -762,7 +762,7 @@
       safe(function () { ge.object3D.userData.collect && ge.object3D.userData.collect(); });
       emit("glimmer", { tile: tile, count: lock.glimmers, total: w.glimmers.length, pos: ge.worldPos().toArray() });
     }
-    if (tile === w.goalId && Game.state === "play") { startGoal(); return true; }
+    if (tile === w.goalId && Game.state === "play" && !heroW.moves.length) { startGoal(); return true; }
     var p = plateDef(tile);
     if (p) {
       var e = Game.plateOf[tile]; if (e && e.object3D.userData.press) safe(function () { e.object3D.userData.press(true); });

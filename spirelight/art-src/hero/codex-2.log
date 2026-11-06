@@ -2026,3 +2026,6 @@ eyeR [
   { parent: 'living flame', distance: 10.019062574087046 }
 ]
 
+codex
+The model checks caught two problems: the iso camera still had the flame tip behind the cap, and the old knee motion left both boots at nearly the same height. I’m correcting both. The revised hero is currently at 30 visible draw calls and about 56.7k triangles, within budget.
+
