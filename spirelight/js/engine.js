@@ -9,7 +9,7 @@
 
   var Game = { ready: false, state: "loading", levels: [], levelIndex: -1, level: null, geom: null, groups: {}, decor: [],
     hero: null, time: 0, dt: 0, reducedMotion: false, quality: "high", THREE: null,
-    insets: { top: 72, bottom: 96, side: 14 }, test: TEST, paused: false, timeScale: TEST ? 3 : 1 };
+    insets: { top: 64, bottom: 72, side: 10 }, test: TEST, paused: false, manual: false, manualFrames: 0, manualDt: 0.04, timeScale: TEST ? 3 : 1 };
   window.Game = Game;
 
   // ------------------------------------------------------------------ bus
@@ -250,7 +250,7 @@
 
   // ------------------------------------------------------------------ post-processing
   var GradeShader = {
-    uniforms: { tDiffuse: { value: null }, time: { value: 0 }, vig: { value: 0.34 }, grain: { value: 0.03 }, res: { value: null } },
+    uniforms: { tDiffuse: { value: null }, time: { value: 0 }, vig: { value: 0.45 }, grain: { value: 0.03 }, res: { value: null } },
     vertexShader: "varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
     fragmentShader: [
       "uniform sampler2D tDiffuse; uniform float time, vig, grain; uniform vec2 res; varying vec2 vUv;",
@@ -260,9 +260,9 @@
       " vec3 c=texture2D(tDiffuse,vUv).rgb;",
       " float l=dot(c,vec3(.2126,.7152,.0722));",
       " c*=mix(vec3(.93,.98,1.08), vec3(1.07,1.0,.90), smoothstep(.04,.65,l));",
-      " c=mix(vec3(l),c,1.1);",
+      " c=mix(vec3(l),c,1.2);",
       " vec2 d=(vUv-.5)*vec2(res.x/res.y,1.)*.78; float v=1.-vig*smoothstep(.28,.95,length(d)*1.2); c*=v;",
-      " c=enc(c);",
+      " c=enc(c);\n c=mix(c, c*c*(3.-2.*c), .42);",
       " c+=(hash(vUv*res+fract(time)*37.)-.5)*grain;",
       " gl_FragColor=vec4(c,1.); }"
     ].join("\n")
@@ -382,7 +382,7 @@
     var landscape = cam.a >= 1;
     var top = ins.top, bot = ins.bottom, side = ins.side;
     var availW = Math.max(60, cam.w - 2 * side), availH = Math.max(60, cam.h - top - bot);
-    var s = Math.max(bw * 1.1 / availW, bh * 1.1 / availH); // world units per px
+    var s = Math.max(bw * 1.04 / availW, bh * 1.04 / availH); // world units per px
     var H = Math.max(s * cam.h, 6);
     var cx = (fitBox.minX + fitBox.maxX) / 2, cy = (fitBox.minY + fitBox.maxY) / 2 + (top - bot) / 2 * (H / cam.h);
     if (L.view && L.view.center) {
@@ -1077,6 +1077,7 @@
   // ------------------------------------------------------------------ debug overlay
   function setupDebug() {
     debugCv = document.createElement("canvas"); debugCv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5";
+    debugCv.width = cam.w; debugCv.height = cam.h;
     root.insertBefore(debugCv, Game.ui || null);
   }
   function refStand(wk) { return wk.kind === "stair" ? [wk.ref[0] + 0.5, wk.ref[1] + 0.5, wk.ref[2] + 0.5] : [wk.ref[0] + 0.5, wk.ref[1] + 1, wk.ref[2] + 0.5]; }
@@ -1225,6 +1226,7 @@
     if (!Game.ready) return;
     var rdt = lastT ? Math.min(TEST ? 0.1 : 0.05, (ms - lastT) / 1000) : 0.016; lastT = ms;
     var dt = rdt * Game.timeScale;
+    if (Game.manual) { if (Game.manualFrames > 0) { dt = Game.manualDt; Game.manualFrames--; } else dt = 0; }
     Game.dt = rdt; Game.time += rdt;
     // fps tracking
     if (ms && rdt > 0) { fpsAvg += (Math.min(120, 1 / rdt) - fpsAvg) * 0.05; }
