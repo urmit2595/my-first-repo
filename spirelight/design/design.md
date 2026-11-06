@@ -459,6 +459,18 @@ Required types:
 | Architecture | `railing`, `arch`, `dome`, `finial`, `chimney`, `bell`, `banner`, `waterfall` |
 | Plants | `ivy`, `flowers`, `vines`, `plant`, `tree` |
 
+Added after the review (`design/review.md`):
+
+| Type | Params | What it is |
+|---|---|---|
+| `keel` | `at` (cell it hangs under), `w`, `d` (cells), `depth` (cells) | The spire's underside: stepped corbel rings, a gear cluster and a long brass pendant hanging below `at` |
+| `strut` | `from`, `to` (world points, reference coords, may be fractional) | A brass truss or stone arch-strut tying floating parts to the spine |
+| `hinge` | `at`, `face`, `axis` (`"x"`/`"z"`) | Hinge barrel for an x/z rotor's pivot; the engine adds one automatically when the type exists |
+| `chain` | `from`, `to` | A hanging iron chain (drawbridges, lifts) |
+| `corbel` | `at`, `face` | A carved bracket under an overhang |
+
+Decor never takes part in ray casting, so these can never break an illusion.
+
 The engine calls `spin(value)` on a mechanism's handle and gears every frame while the mechanism moves. FX calls
 `setLit` on lanterns and windows for the cascade.
 
@@ -549,7 +561,7 @@ All positions in event payloads are world coordinates as `[x, y, z]` arrays.
 | `mechTick` | `{ id, pos }` | every 15° (rotor) or 0.25 units (slider) passed (pos = handle world position) |
 | `mechSnap` | `{ id, value, pos }` | settled on an allowed value (pos = handle world position) |
 | `mechLocked` | `{ id }` | the move was refused (Wick on an x/z rotor) |
-| `plate` | `{ tile, group, pos }` | a plate was pressed (pos = plate world position) |
+| `plate` | `{ tile, group, pos, target }` | a plate was pressed (pos = plate world position, target = world centre of the group it moves) |
 | `glimmer` | `{ tile, count, total, pos }` | a glimmer was collected (pos = its world position) |
 | `goal` | `{ index }` | Wick reached the goal |
 | `beacon` | `{ index, pos }` | the beacon ignites: the engine has just called the beacon decor's `ignite()`; FX runs the cascade (`setLit` on the other decor) and the particles. pos = world [x,y,z] of the beacon flame |

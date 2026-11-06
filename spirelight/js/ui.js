@@ -66,17 +66,17 @@ var UI = (function () {
     ".spark{width:1em;height:1em;fill:currentColor;display:inline-block;vertical-align:-.12em}",
     /* title */
     ".sl-title{background:radial-gradient(ellipse 120% 70% at 50% 40%,transparent 30%,#0b0818aa 100%),linear-gradient(180deg,#0b0818dd 0%,#0b081899 22%,transparent 40%,transparent 62%,#0b0818e6 100%)}",
-    ".sl-title .col{position:absolute;inset:0;padding:calc(var(--sat) + 4vh) calc(var(--sar) + 20px) calc(var(--sab) + 4vh) calc(var(--sal) + 20px);display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center}",
+    ".sl-title .col{position:absolute;inset:0;padding:calc(var(--sat) + 2vh) calc(var(--sar) + 20px) calc(var(--sab) + 4vh) calc(var(--sal) + 20px);display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center}",
     ".sl-title .head{display:flex;flex-direction:column;align-items:center}",
-    ".sl-title .emblem{width:min(34vw,36vh,150px);aspect-ratio:1;background:center/contain no-repeat;filter:drop-shadow(0 0 22px #ffb35aaa) drop-shadow(0 0 60px #ff8a3a66);animation:slFloat 6s ease-in-out infinite}",
-    ".sl-title h1{margin:2px 0 0;font-family:'Sl Display',Georgia,serif;font-weight:700;font-size:clamp(30px,10.4vw,60px);letter-spacing:.12em;line-height:1.05;padding-left:.12em;color:#ffe9bd;background:linear-gradient(180deg,#fff6d8 0%,#ffd27a 45%,#d98c36 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 14px #ffb35a99) drop-shadow(0 3px 2px #000a);animation:slWord 5s ease-in-out infinite}",
-    ".sl-title .tag{margin:6px 0 0;font-style:italic;font-size:15px;letter-spacing:.08em;color:#f3d9ab;text-shadow:0 1px 6px #000c}",
+    ".sl-title .emblem{width:min(24vw,16vh,100px);aspect-ratio:1;background:center/contain no-repeat;filter:drop-shadow(0 0 22px #ffb35aaa) drop-shadow(0 0 60px #ff8a3a66);animation:slFloat 6s ease-in-out infinite}",
+    ".sl-title h1{margin:2px 0 0;font-family:'Sl Display',Georgia,serif;font-weight:700;font-size:clamp(26px,8.6vw,48px);letter-spacing:.12em;line-height:1.05;padding-left:.12em;color:#ffe9bd;background:linear-gradient(180deg,#fff6d8 0%,#ffd27a 45%,#d98c36 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 14px #ffb35a99) drop-shadow(0 3px 2px #000a);animation:slWord 5s ease-in-out infinite}",
+    ".sl-title .tag{margin:6px 0 0;font-style:italic;font-size:13px;letter-spacing:.06em;color:#f3d9ab;text-shadow:0 1px 6px #000c}",
     ".sl-title .menu{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%}",
     ".sl-title .menu .btn.pri{min-width:min(260px,72vw);min-height:54px;font-size:17px}",
     ".sl-title .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}",
     ".sl-title .tally{margin-top:4px;color:#ffd98a;font-size:14px;letter-spacing:.12em;text-shadow:0 1px 6px #000c;display:flex;align-items:center;gap:8px}",
     ".sl-title .tally .spark{color:#ffc86a;filter:drop-shadow(0 0 6px #ffb35a)}",
-    "@media (min-aspect-ratio:11/10) and (min-width:700px){.sl-title{background:linear-gradient(90deg,#0b0818ee 0%,#0b0818a8 30%,transparent 55%),radial-gradient(ellipse 120% 90% at 60% 50%,transparent 50%,#0b081899 100%)}.sl-title .col{align-items:flex-start;text-align:left;justify-content:center;gap:5vh;padding-left:calc(var(--sal) + 7vw)}.sl-title .head,.sl-title .menu{align-items:flex-start}.sl-title .row{justify-content:flex-start}.sl-title .emblem{width:min(11vw,22vh,150px)}.sl-title h1{font-size:clamp(34px,4.1vw,64px)}.sl-title .menu .btn.pri{min-width:260px}}",
+    "@media (min-aspect-ratio:11/10) and (min-width:700px){.sl-title{background:linear-gradient(90deg,#0b0818ee 0%,#0b0818a8 30%,transparent 55%),radial-gradient(ellipse 120% 90% at 60% 50%,transparent 50%,#0b081899 100%)}.sl-title .col{align-items:flex-start;text-align:left;justify-content:center;gap:5vh;padding-left:calc(var(--sal) + 4vw)}.sl-title .head,.sl-title .menu{align-items:flex-start}.sl-title .row{justify-content:flex-start}.sl-title .emblem{width:min(9vw,20vh,120px)}.sl-title h1{font-size:clamp(30px,3.4vw,54px)}.sl-title .menu .btn.pri{min-width:260px}}",
     /* map */
     ".sl-map{background:radial-gradient(ellipse at 50% 0%,#3a2450f5,#0e0a1cfa 70%)}",
     ".sl-map .bar{position:absolute;left:0;right:0;top:0;padding:calc(var(--sat) + 10px) calc(var(--sar) + 14px) 10px calc(var(--sal) + 14px);display:flex;align-items:center;gap:12px;z-index:2;background:linear-gradient(180deg,#0e0a1c,#0e0a1ccc 70%,transparent)}",
@@ -127,7 +127,7 @@ var UI = (function () {
     ".bubble:before{content:'';position:absolute;top:-6px;left:50%;margin-left:-6px;width:12px;height:12px;transform:rotate(45deg);background:#f6ead0;border-left:1px solid #b78a4a88;border-top:1px solid #b78a4a88}",
     ".bubble.on{opacity:1;transform:translate(-50%,0)}",
     /* intro */
-    ".sl-intro{display:flex;flex-direction:column;align-items:center;text-align:center;padding:calc(var(--sat) + 13vh) 24px 0;pointer-events:none!important;background:linear-gradient(180deg,#0b081888 0%,transparent 40%)}",
+    ".sl-intro{display:flex;flex-direction:column;align-items:center;text-align:center;padding:calc(var(--sat) + 13vh) 24px 0;pointer-events:none!important}",
     ".sl-intro.vis{opacity:1}",
     ".sl-intro>*{opacity:0;transform:translateY(8px);transition:opacity .9s ease,transform .9s ease}",
     ".sl-intro.vis>*{opacity:1;transform:none}",
@@ -173,7 +173,7 @@ var UI = (function () {
     ".gl .spark.got{fill:#ffd27a;stroke:#fff1b8;filter:drop-shadow(0 0 10px #ffb35a);opacity:.0}",
     ".sl-done.vis .gl .spark.miss{animation:none;opacity:1}",
     ".gcap{font-size:14px;letter-spacing:.14em;color:#f3d9ab;text-transform:uppercase;margin-bottom:4px}",
-    ".sl-done .btns{opacity:0;transition:opacity .6s 1.8s}",
+    ".sl-done{background:linear-gradient(0deg,#0b0818cc 0%,#0b081855 28%,transparent 48%)}.sl-done .rays{display:none}.sl-done .modal{place-items:end center;padding-bottom:calc(var(--sab) + 12px)}.sl-done .card{width:min(100%,420px);padding:16px 22px 14px;border-radius:16px}.sl-done .card .rule,.sl-done .lvname{display:none}.sl-done .card .btns{margin-top:4px;gap:6px}.sl-done .gl{font-size:28px;margin:2px 0}.sl-done .gcap{margin-bottom:2px;font-size:12px}.sl-done .card .eyebrow{font-size:11px}.sl-done .card h2.h2.big{font-size:clamp(24px,7vw,32px)}.sl-done .lnks{display:flex;gap:26px;justify-content:center}.lnk{min-height:44px;padding:0 12px;background:none;border:0;color:#e8b86a;font-size:13px;letter-spacing:.18em;text-transform:uppercase;text-decoration:underline;text-underline-offset:5px;text-decoration-color:#c8963e88}.lnk:hover{color:#ffe3a3}@media (min-aspect-ratio:11/10) and (min-width:700px){.sl-done .modal{place-items:end end;padding-right:calc(var(--sar) + 4vw)}.sl-done .card{width:360px}}.sl-done .btns{opacity:0;transition:opacity .6s 1.4s}",
     ".sl-done.vis .btns{opacity:1}",
     ".sl-done .card{box-shadow:inset 0 0 0 1px #ffd27a1c,inset 0 0 80px #ffb35a22,0 20px 60px #000a,0 0 90px #ffb35a44}",
     /* ending */
@@ -339,7 +339,9 @@ var UI = (function () {
     /* ---------- intro card ---------- */
     var it = mk("intro", "sl-intro");
     it.innerHTML = '<div class="eyebrow"></div><h2></h2><div class="rule"><i></i></div><p></p>';
-    var introT = 0;
+    var introT = 0, introTok = 0;
+    document.addEventListener("pointerdown", function () { if (it.classList.contains("vis") && Date.now() - introAt > 500) hideIntro(); }, true);
+    var introAt = 0;
     function showIntro(level, index) {
       var ch = CHAPTERS[(level.chapter || 1) - 1] || CHAPTERS[0];
       it.querySelector(".eyebrow").textContent = "Spire " + ROMAN[index + 1] + " · " + ch.name;
@@ -348,9 +350,9 @@ var UI = (function () {
       it.setAttribute("aria-hidden", "false");
       it.classList.add("on"); void it.offsetWidth; it.classList.add("vis");
       clearTimeout(introT);
-      introT = setTimeout(hideIntro, 3800);
+      introAt = Date.now(); introT = setTimeout(hideIntro, 3800);
     }
-    function hideIntro() { clearTimeout(introT); it.classList.remove("vis"); setTimeout(function () { if (!it.classList.contains("vis")) it.classList.remove("on"); }, 1000); }
+    function hideIntro() { introTok++; clearTimeout(introT); it.classList.remove("vis"); setTimeout(function () { if (!it.classList.contains("vis")) it.classList.remove("on"); }, 1000); }
 
     /* ---------- pause ---------- */
     var p = mk("pause", "scrim");
@@ -379,7 +381,7 @@ var UI = (function () {
     /* ---------- complete ---------- */
     var c = mk("complete", "sl-done");
     c.innerHTML = '<div class="rays"></div><div class="modal"><div class="panel card pop-in" role="dialog" aria-modal="true" aria-label="Spire lit"><div class="eyebrow ce"></div><h2 class="h2 big">Spire lit</h2><div class="rule"><i></i></div><div class="lvname"></div>' +
-      '<div class="gl"></div><div class="gcap"></div><div class="btns"><button class="btn pri" data-act="next" data-focus>Next spire</button><div class="row"><button class="btn sm" data-act="replay">Replay</button><button class="btn sm" data-act="map-c">Map</button></div></div></div></div>';
+      '<div class="gl"></div><div class="gcap"></div><div class="btns"><button class="btn pri" data-act="next" data-focus>Next spire</button><div class="lnks"><button class="lnk" data-act="replay">Replay</button><button class="lnk" data-act="map-c">Map</button></div></div></div></div>';
     var lastComplete = null;
     function showComplete(d) {
       lastComplete = d;
@@ -468,21 +470,31 @@ var UI = (function () {
     /* ---------- bus ---------- */
     var bus = Game.bus;
     function on(ev, fn) { if (bus && bus.on) bus.on(ev, guard(fn)); }
-    on("title", function () { clearTimers(); hideIntro(); hideAllModals(); cur = null; stack = []; open("title"); });
-    on("levelStart", function (d) {
+    on("title", function () { if (pendingC) { clearTimeout(pendingC.t); pendingC = 0; } clearTimers(); hideIntro(); hideAllModals(); cur = null; stack = []; open("title"); });
+    on("levelStart", function (d) { if (pendingC) { clearTimeout(pendingC.t); pendingC = 0; }
       hideAllModals(); cur = null; stack = [];
       var lv = d.level || levels()[d.index] || {};
       setGlimmers(0, (lv.glimmers || []).length);
       hideBubble(); setHud(true);
-      if (!testMode) showIntro(lv, d.index); else hideIntro();
+      hideIntro(); if (!testMode) { var tk = ++introTok; requestAnimationFrame(function () { requestAnimationFrame(function () { if (tk === introTok && Game.state === "play") showIntro(lv, d.index); }); }); }
     });
     on("glimmer", function (d) { setGlimmers(d.count, d.total); gcount.classList.remove("bump"); void gcount.offsetWidth; gcount.classList.add("bump"); });
-    on("restart", function (d) { hideAllModals(); cur = null; stack = []; hideBubble(); var lv = Game.level || {}; setGlimmers(0, (lv.glimmers || []).length); setHud(true); hideIntro(); });
+    on("restart", function (d) { if (pendingC) { clearTimeout(pendingC.t); pendingC = 0; } hideAllModals(); cur = null; stack = []; hideBubble(); var lv = Game.level || {}; setGlimmers(0, (lv.glimmers || []).length); setHud(true); hideIntro(); });
     on("pause", function (d) {
       if (d.paused) { open("pause"); } else { if (cur === "pause" || cur === "settings" || cur === "map") { hide(cur); cur = null; stack = []; } setHud(true); }
     });
     on("goal", function () { hideBubble(); hideIntro(); });
-    on("levelComplete", function (d) { hideIntro(); setHud(false); showComplete(d); });
+    on("beacon", function () { beaconAt = Date.now(); });
+    var beaconAt = 0, pendingC = 0;
+    function flushComplete() { if (pendingC) { clearTimeout(pendingC.t); var d = pendingC.d; pendingC = 0; hideIntro(); setHud(false); showComplete(d); } }
+    document.addEventListener("pointerdown", function () { if (pendingC && Date.now() - pendingC.at > 400) flushComplete(); }, true);
+    on("levelComplete", function (d) {
+      hideIntro(); hideBubble();
+      var wait = testMode ? 0 : beaconAt ? Math.max(0, 2500 - (Date.now() - beaconAt)) : 2600;
+      beaconAt = 0; clearTimeout(pendingC && pendingC.t);
+      pendingC = { d: d, at: Date.now(), t: setTimeout(flushComplete, wait) };
+      if (!wait) flushComplete();
+    });
     on("quality", function (d) { if (d && d.level && cur === "settings") refreshSettings(); });
 
     // initial state

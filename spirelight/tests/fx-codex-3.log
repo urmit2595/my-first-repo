@@ -1,0 +1,1979 @@
+OpenAI Codex v0.167.0
+--------
+workdir: /home/user/my-first-repo/spirelight
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a1b2cd-b077-7ae1-9d50-03d37d7fef21
+--------
+user
+# Brief 3: SPIRELIGHT FX round (`js/fx.js`, `tests/fx.html`)
+
+Continue from the current `js/fx.js` and `tests/fx.html`. Do not start over. Keep what works.
+Write only `js/fx.js` and `tests/fx.html`. Do not edit `design/*`, `js/engine.js`, `js/world.js`, `js/ui.js`,
+`index.html`, `levels/`, or other agents' files. Do not git commit. Do not install packages.
+
+Read first: `design/design.md` section 8 (the payloads, especially `plate` and `heroStep`), `design/review.md` items
+P1-8, P2-4 and P1-1 (the theme table), and `tests/fx-brief-2.md` as the last brief (keep its rules).
+
+## 1. Plate: a spark trail to the target (review P1-8)
+
+`plate` now carries `{ tile, group, pos, target }`. `pos` is the plate's world position. `target` is the world centre of
+the group the plate moves.
+
+- On `plate`, send a **0.6 s spark trail** along a straight line from `pos` to `target`. Spawn about 14 small warm sparks
+  spaced evenly along the segment, and each one travels toward `target` over 0.6 s, fading near the end. Keep the
+  existing ring at `pos`.
+- Interpolate in world space. Orthographic projection is linear, so a world line projects to a straight screen line.
+- If `target` is missing, skip the trail and keep only the ring.
+- If `pos` and `target` are equal, skip the trail.
+
+## 2. Path preview and heroStep sparkle (review P2-4)
+
+- **`path`:** the dotted route preview must be **faint and short-lived**. Make the whole preview last about **0.4 s**
+  from the moment it starts, at about 45% of the current dot alpha. Dot spacing stays at 0.3 units.
+- Draw the preview **straight between consecutive points, including across impossible joins**. A join is where
+  `points[i]` and `points[i+1]` differ by `k(1,1,1)`. Draw one straight dotted segment across the jump, and make the dots
+  on that segment a little brighter, so the line visibly jumps. Do not smooth or re-route the points.
+- **`heroStep` with `k ≠ 0`:** a small sparkle at `d.at` (world, the junction). Use about 10 particles, teal-white, over
+  about 0.4 s. Keep the existing shimmer if it is still useful, but `d.at` is the source of truth. If `at` is missing,
+  fall back to the midpoint of the two stand points.
+
+## 3. Light shafts per theme (review P1-1, night and aurora)
+
+World is removing the sun rays at night, so the CSS shafts must follow the theme:
+
+- **`dusk`:** unchanged (`opacity .09`).
+- **`dawn`:** halve them (`opacity .045`).
+- **`night` and `aurora`:** off. Remove the shaft layer, or set its `display: none`.
+- Get the theme from `levelStart` (`data.level.theme`), and from `Game.level.theme` if present. The title screen uses
+  `dusk`. Apply it immediately on `levelStart` and `title`. Do not depend on any World event.
+- The beacon flash and the ambient motes keep working on every theme.
+
+## 4. Night beacon cascade: the lanterns are the brightest things (review P1-1)
+
+The night key line in the review: "The lantern cascade should be the brightest thing on screen."
+
+On `beacon` at `night` (and generally, but most strongly at night):
+- **Do not** wash the whole screen. Replace the full-screen flash with a **small radial glow centred on the beacon's
+  screen position** (`Game.worldToScreen(pos)`, falling back to the screen centre), of about 0.35 of the viewport height,
+  fading in 0.2 s and out over 1.4 s. Use `mix-blend-mode: screen`. Keep the colours warm.
+- On each lantern as it lights (during the 2 s cascade): a **bright gold-white spark burst** of about 8 particles, and a
+  short gold ring at the lantern. These sparks should be the brightest particles on the screen at night, so make them
+  the brightest colour and largest size in the pool.
+- During the cascade (about 3 s from `beacon`), **dim the ambient motes and fireflies to about 40%** on night and aurora.
+  Restore them afterwards.
+- On other themes keep the current behaviour, with the flash at a moderate strength. Dawn uses the smaller glow too.
+
+## 5. Test
+
+Run these after the changes:
+
+1. `node --check js/fx.js`.
+2. Harness: `node tools/shot.js "tests/fx.html?only=plate" design/qa/fx/r3-plate.png --wait 600`, then the same for
+   `path`, `heroStep` (`k: 1`), and `beacon` with a night theme (`__fxFire('levelStart', {level:{theme:'night'}})`
+   first). Add `?theme=night` or similar if it helps. Save each shot to `design/qa/fx/`.
+3. Check the console output of each run: no errors, no page errors.
+4. Real game, phone size: `node tools/shot.js "index.html?test&level=5" design/qa/fx/l5.png --w 390 --h 844 --dpr 2 --wait 4000`.
+   If the engine fails to boot, say so and stop. Do not fix the engine.
+
+## 6. Report back
+
+End with a short summary, under 120 words: what changed, the shot paths, the console result, and anything you could not
+verify. Do not paste code into the summary.
+
+warning: Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.
+codex
+I’ll read the current FX code and the referenced briefs, update the two allowed files, then run the requested checks and screenshots.
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'fx.js' -g 'fx.html' -g 'fx-brief-2.md' -g 'design.md' -g 'review.md' -g 'shot.js'" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+/home/user/my-first-repo/spirelight
+js/fx.js
+design/review.md
+tools/shot.js
+tests/fx-brief-2.md
+tests/fx.html
+design/design.md
+
+exec
+/bin/bash -lc "cat /home/user/my-first-repo/AGENTS.md /home/user/my-first-repo/spirelight/AGENTS.md 2>/dev/null; rg -n '"'^##|P1-8|P2-4|P1-1|heroStep|plate'"' design/design.md design/review.md; cat tests/fx-brief-2.md" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+design/design.md:6:## 0. Ground rules
+design/design.md:21:## 1. Pitch
+design/design.md:29:plates. Paths join when they *look* joined, so a rotated bridge can link two walkways that are really far apart. When
+design/design.md:47:## 2. Look (art direction)
+design/design.md:94:## 3. Player-facing mechanics
+design/design.md:102:4. **Pressure plate:** when Wick steps onto a plate, he stops there and a mechanism moves by itself.
+design/design.md:111:## 4. Geometry (the core of the game)
+design/design.md:113:### 4.1 Space, camera and projection
+design/design.md:128:### 4.2 Solids and ray casting
+design/design.md:148:### 4.3 Groups, reference pose and transforms
+design/design.md:176:### 4.4 Walkables
+design/design.md:205:### 4.5 Connections (the rule)
+design/design.md:238:### 4.6 Picking (tap to walk)
+design/design.md:245:### 4.7 Paths
+design/design.md:252:## 5. Level format (`levels/levels.js`)
+design/design.md:283:  plates: [ { tile: "p1", group: "bridge", to: 90 } ],   // or { tile, group, step: 1 } (next allowed value); once: true
+design/design.md:301:  initial value, and `handle` is optional (a group can be plate-only).
+design/design.md:308:  - `["walk", tile]` walks to that tile. The walk stops early at a plate; that is part of the plan.
+design/design.md:312:## 6. Engine behaviour
+design/design.md:322:- **Plates** truncate a path: Wick stops on the plate, the action plays, then the player continues.
+design/design.md:362:## 7. Module contracts
+design/design.md:380:### 7.1 SpireGeom (`js/geom.js`): pure logic, no three.js
+design/design.md:405:- A state is the mechanism values, Wick's tile, and the used once-plates.
+design/design.md:407:  - walk to any tile reachable in the current configuration (plate tiles end a walk and apply their action)
+design/design.md:422:### 7.2 Blocks (`js/blocks.js`): how blocks look
+design/design.md:440:### 7.3 Decor (`js/decor.js`): props and mechanism parts
+design/design.md:457:| Level parts | `plate` (`press`), `glimmer` (`collect`), `beacon` (`ignite`), `lantern` (`setLit`), `streetlamp`, `window` (`setLit`) |
+design/design.md:477:### 7.4 World (`js/world.js`): sky, clouds, light rig
+design/design.md:491:### 7.5 Hero (`js/hero.js`): Wick
+design/design.md:503:### 7.6 Game (`js/engine.js`)
+design/design.md:534:### 7.7 FX (`js/fx.js`) and UI (`js/ui.js`)
+design/design.md:547:## 8. Events (`Game.bus`)
+design/design.md:557:| `heroStep` | `{ from, to, k, at }` | each tile transition: from/to are walkable ids, k ≠ 0 means an impossible join, at = world [x,y,z] of the junction on the `from` side |
+design/design.md:564:| `plate` | `{ tile, group, pos, target }` | a plate was pressed (pos = plate world position, target = world centre of the group it moves) |
+design/design.md:573:## 9. Assets
+design/design.md:593:## 10. Testing
+design/design.md:608:## 11. Ownership and coordination
+design/review.md:18:## Top 5 changes that would most improve the game
+design/review.md:24:5. **Restore the key art's lighting (P1-1, P1-2).** Dusk and dawn read as pale pastel and night reads as bright royal blue. Ambient and environment fill flatten every face, and pavers, sandstone, marble and Wick all sit at nearly the same brightness. This is both the biggest "super detailed" gap and an originality risk, because pastel is the look we were told to avoid.
+design/review.md:28:## P0: must fix before release
+design/review.md:44:  - far walkway (1..3,1,-2), plate p1 (1,1,-2), plate-lift (0,0,-2)
+design/review.md:47:  - **Level 8 (Greenhouse):** make the veil a **hedge** (`style:"hedge", kind:"veil"`) on a y-rotor planter, so one mechanism plays two roles: at 90 its bridge arm meets a far walkway by looks, and at 180 its hedge hides a broken stair. Drop the copied tower, plate and lift.
+design/review.md:97:## P1: should fix
+design/review.md:99:### Puzzle and level design
+design/review.md:115:  - Make p2 a counting plate: `{tile:"p2", group:"arm", step:1}` with arm angles [0,90,270]. The player re-steps onto it to "ring" the arm round, which fits "Chime".
+design/review.md:117:- **levels/decor:** the hint says "Orange rings are pressure plates", but the plates render as bronze discs on brass grating. Either change the hint or add the orange ring (P1-12).
+design/review.md:140:- **Current shape:** 1 trivial → 2 → 3 (illusion and plate at once) → 4 (lift, easier than 3) → 5 linear → 6 shallow → **7, the hardest and best** → 8, 9, 10 repeat level 3.
+design/review.md:146:**P1-8. levels: plates do not telegraph what they move.** After a plate fires on L3, L5, L8, L9 or L10, the moving part is often off in another corner.
+design/review.md:148:- **levels:** run a `pipe` or `chain` decor along the base from each plate toward its target group.
+design/review.md:149:- **fx:** on the `plate` event, send a 0.6 s spark along a straight screen-space line from the plate's `pos` to the target group's centre (it is in the `plate` payload's `group`).
+design/review.md:163:### Visual quality
+design/review.md:165:**P1-1. world: exposure, fill and sky per theme.** The key art is deep teal/violet over saturated orange; ours is pale cyan-pink (dusk) and white-peach (dawn). The fill is too strong: hemisphere 0.85–1.0 plus a PMREM sky environment on every block, against a key light of only 1.4. As a result every face has nearly the same brightness, and cast shadows barely show (`l1-intro-p.png`, `l9-p.png`). Starting values in `DATA`:
+design/review.md:187:**P1-10. blocks/decor: hedge and wood.**
+design/review.md:192:**P1-11. hero: Wick is gold on cream and disappears.**
+design/review.md:203:**P1-12. decor: interactive things need one consistent language.**
+design/review.md:205:- **Problem:** plates, the walkable brass hub and lift tops all use the same brass grating, so plates and walkable machinery look the same.
+design/review.md:211:**P1-13. decor + levels: detail density is below the key art.** Large sandstone walls are bare planes with one tiny window. Per level:
+design/review.md:218:- **Target density:** about 40–60 decor items per level, against 14–35 today. Lean on instanced and shared geometry (see P1-14).
+design/review.md:220:### Interaction and UX
+design/review.md:222:**P1-14. engine: draw calls.**
+design/review.md:225:- **Status:** the engine agent is on this. Keep the draw-call budget in mind before adding the P1-13 decor:
+design/review.md:229:**P1-15. ui: the level-complete card hides the payoff.**
+design/review.md:237:**P1-16. engine: tap feedback during motion.** `onDown` silently drops taps while any mechanism moves (`if (anyMoving()) return`). Queue the tap and walk once the mechanism settles (`pending` exists for mechanisms), or at least show the "can't" ripple.
+design/review.md:241:## P2: nice to have
+design/review.md:252:**P2-4. fx/engine: path preview.** On a walk tap, draw a faint dotted line of the route for 0.4 s. This works with the `path` event points and sells impossible joins, because the line visibly "jumps". Hide the join with a sparkle at `heroStep` when `k ≠ 0`.
+design/review.md:258:- L10: the hint is a checklist ("drawbridge, lift, bridge, plate, pillar"). After P0-2, rewrite it as a nudge.
+design/review.md:281:## Originality check
+design/review.md:288:  1. **The skies drift pastel.** Dusk and dawn are the soft cyan, pink and peach of the very style section 0 forbids. Fixing P1-1 also fixes this.
+design/review.md:290:  3. **Round pressure discs and teal onion domes** echo the genre's iconography. Prefer chime-stone plates (P1-12) and copper or verdigris lantern-domes in line with the key art's brass cage.
+design/review.md:294:## Report
+design/review.md:304:- **Lighting:** heavy fill, high exposure and a pastel sky flatten everything away from the key art. This also moves toward the forbidden pastel look (P1-1, P1-2).
+design/review.md:306:  - Wick blends into the pavers (P1-11).
+design/review.md:307:  - Plates look like walkable brass (P1-12).
+# Brief 2: SPIRELIGHT FX (`js/fx.js`, `tests/fx.html`), continue from the current files
+
+Run 1 was killed by a container restart. Its files on disk are the starting point: `js/fx.js` (about 695 lines, passes
+`node --check`) and `tests/fx.html`. Do not start over. Keep what works, and fix what is listed below.
+Write only `js/fx.js` and `tests/fx.html`. Do not edit `design/design.md`, `js/engine.js`, `js/ui.js`, `index.html`,
+`levels/`, or other agents' files. Do not git commit. Do not install packages.
+
+Read `design/design.md` sections 7.7 and 8 again. Section 8 has been updated. The earlier brief (`tests/fx-brief.md`)
+still holds the full effect and audio list, so use it as the reference for anything not covered here.
+
+## 1. Event payload changes (design.md section 8, now authoritative)
+
+Every event position is a **world** `[x,y,z]` array in `d.pos`. Use it first. Use the tile lookup only as a fallback.
+
+- `tap`: `{ x, y, tile, reachable, pos }`. Ring at `pos` (world). `pos` may be missing on an unreachable tap with no
+  tile. Fall back to the raycast on the plane y = 1.
+- `plate`: `{ tile, group, pos }`. Use `pos`.
+- `glimmer`: `{ tile, count, total, pos }`. Use `pos`.
+- `mechTick`: `{ id, pos }`. Use `pos` for the sparks.
+- `mechSnap`: `{ id, value, pos }`. Use `pos` for the burst and ring. Keep the pivot-node fallback.
+- `beacon`: `{ index, pos }`, world coordinates. This is the cascade origin.
+- `heroStep`: `{ from, to, k, at }`. `from` and `to` are walkable ids (strings). `at` is the world `[x,y,z]` of the
+  junction. Use `at` for the `k ≠ 0` shimmer. Do not use the old "from may be a point" handling.
+- Dust puffs at Wick's feet: `Game.hero.object3D.getWorldPosition(v)`. Do not use the tile.
+- `Game.decor[i].worldPos(target?)` returns a `THREE.Vector3` in world space. If a `target` is passed, fill it and
+  return it. Remove the array-handling branch.
+- `Game.groups[id].handle.object3D` is used for the handle position when it is present. Otherwise use the group's
+  `pivotNode.getWorldPosition`.
+- The **engine calls `ignite()`** on the beacon decor. **FX does not call `ignite`.** FX does the cascade: it calls
+  `setLit(true, false)` on the other lit decor, sorted by distance from `pos`, and spawns the particles. Keep the
+  scheduling on FX's own clock, as before.
+
+## 2. Known problems in the current build (from the screenshot pass)
+
+Screenshots at `design/qa/fx/` (`fx-beacon.png`, `fx-tap.png`, `fx-path.png`, `fx-plate.png`, `fx-glimmer.png`,
+`fx-levelComplete.png`). Harness: `node tools/shot.js "tests/fx.html?script=0" OUT --eval "..."`.
+
+- **Plate and glimmer spawn nothing.** The live count stays at 78 (ambient only). The handlers call
+  `point(d.tile, a)` and the fake Game has no such tile, so they return early. Fix: use `d.pos` first (section 1).
+- **Tap ring works.** `rings` reaches 1. Keep it, but use `pos` first.
+- **`played` counters stay at 0 while audio is locked.** Count every request in `played` even when the context is not
+  running. Then the tests can check that a call happened. Audio itself still needs a gesture.
+- **Audio is locked in headless runs.** `FX.debug().audio` is `"locked"` until `FX.unlock()` runs. Make sure
+  `FX.unlock()` creates and resumes the context, and that after it `audio` reads `"running"`. The music bed should start
+  (`music.running` true) when `Game.save.music !== false` and `Game.state` is `title` or `play`.
+- The light shafts and the ambient motes look right. Do not change them unless a fix is needed.
+- The ambient motes are faint on the warm background. A small brightness bump is fine.
+
+## 3. Harness changes (`tests/fx.html`)
+
+Update the fake `Game` so it matches the real payloads:
+
+- Add real tiles to the fake `geom`: `p1`, `g1`, `start`, `goal`, `bridge_1` and a few more, each with a `stand` point
+  and `group`. `transform(group)` returns identity with the pivot. This makes the tile fallback testable too.
+- `hero.object3D` is a real `Object3D` at a walkable point. `getWorldPosition` works. (It must, since the fx code now
+  depends on it.)
+- `decor[i].worldPos(target)` returns a `THREE.Vector3`. Fill and return `target` when given.
+- Fire the events with the new payloads: `tap` and `plate` and `glimmer` each with `pos`. `heroStep` with
+  `{ from, to, k, at }`, where `from` and `to` are ids and `at` is a world point (test `k: 0` and `k: 1`).
+- Add a `?audio=1` flag (or a visible "Unlock" button) that calls `FX.unlock()` on the first click, so audio can be
+  tested by hand.
+- Keep the URL flags from brief 1: `?only=NAME`, `?script=0`, `?reduced`, `?sound=0`, `?music=0`.
+
+## 4. Acceptance (check before you finish)
+
+- `node --check js/fx.js` passes. Load-time code never throws.
+- `window.FX` exists before setup. `FX.sound("click")` before `FX.unlock()` does nothing and does not throw.
+- After `FX.unlock()` with sound on, `FX.debug().audio === "running"` and `played` increments for each called sound.
+- `FX.debug().live <= 1500`, `drawCalls <= 8`, and `rings <= 24`.
+- With `?reduced` (`Game.reducedMotion = true`), the ambient live count is about half the normal ambient count.
+- Screenshots show every effect: tap ring (gold and red), path dots, heroStep dust, mechSnap burst, plate ring,
+  glimmer burst, beacon cascade (lanterns lit one after another, with sparks), levelComplete embers.
+- The fake `Game` in `tests/fx.html` fires every event without errors, and the console shows no errors and no page
+  errors under `tools/shot.js`.
+- No per-frame allocation: no `new` for vectors, colours or matrices inside the update loop.
+
+## 5. Report back
+
+End with a short summary, under 150 words: what changed, which acceptance items pass, and anything you could not
+verify. Do not paste code into the summary.
+
+exec
+/bin/bash -lc 'cat js/fx.js' in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+(function () {
+  "use strict";
+
+  // The public object is available even without THREE, a scene, or WebAudio.
+  var G = null, T = null, root = null, ready = false, raf = 0, bindings = [];
+  var MAX = 1500, STRIDE = 20, budget = MAX, factor = 1, low = false;
+  var pool = new Float32Array(MAX * STRIDE), kind = new Uint8Array(MAX);
+  var serial = new Float64Array(MAX), sequence = 0, carry = 0;
+  // Record: xyz, velocity xyz, rgb, size, alpha, age, life, delay, base xyz, phase, blend, gravity.
+  var glow, dust, ringMesh, texture, ringData = new Float32Array(24 * 10);
+  var a, b, c, matrix, rotation, scale, colour, ray, ndc, plane;
+  var min = [-3, 0, -3], max = [7, 5, 7], theme = "dusk";
+  var clock = 0, ambientClock = 0, last = 0, gameTime = NaN, poll = 0, step = 0;
+  var paused = false, frameId = 0, moveFrame = -1, petalAt = 7;
+  var shafts = null, flash = null, sway = null, flashAt = -100;
+  var cascade = [], cascadeIndex = 0, cascadeAt = -100, moteNext = 0;
+  var beaconPoint = [0, 0, 0], live = 0, ringCount = 0, ambientCount = 0;
+  var GOLD = 0xffd98a, BRASS = 0xffd27a, TEAL = 0x8ff5ee, SAND = 0xd9b68b;
+  var EMPTY = {};
+  var ctx = null, unlocked = false, sfxBus, musicBus, master, compressor, sfxSend, musicSend;
+  var noiseBuffer, voices = [], bed = false, nextChord = 0, nextNote = 0, chord = 0, note = 2;
+  var audioTheme = "", musicTarget = -1, sfxTarget = -1, dipUntil = 0;
+  var played = { click: 0, footstep: 0, tick: 0, snap: 0, locked: 0, plate: 0,
+    glimmer: 0, tk: 0, beacon: 0, complete: 0 };
+  var lastStep = -100, lastTick = -100;
+  var scales = { dusk: [62, 64, 66, 69, 71], night: [57, 60, 62, 64, 67],
+    aurora: [64, 66, 68, 71, 73], dawn: [67, 69, 71, 74, 76] };
+  var progression = [0, -3, 5, 7], melody = [0, 2, 3, 4, 2, 5];
+
+  function report(e) {
+    // Test pages opt into diagnostics; a broken optional effect stays quiet in the game.
+    try { if (window.__fxReportError) window.__fxReportError(e); } catch (_) {}
+  }
+  function guarded(fn) {
+    return function (data) { try { fn(data || EMPTY); } catch (e) { report(e); } };
+  }
+  function readPoint(p, out) {
+    if (!p) return false;
+    var x = p.x !== undefined ? p.x : p[0];
+    var y = p.y !== undefined ? p.y : p[1];
+    var z = p.z !== undefined ? p.z : p[2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return false;
+    out.set(x, y, z); return true;
+  }
+  function point(value, out) {
+    if (typeof value !== "string") return false;
+    if (!G.geom || typeof G.geom.walkable !== "function") return false;
+    var w = G.geom.walkable(value);
+    if (!w || !readPoint(w.stand, out)) return false;
+    if (typeof G.geom.transform !== "function" || w.group == null) return true;
+    try {
+      var tr = G.geom.transform(w.group), r = tr && tr.R;
+      if (!r || r.length !== 9 || !readPoint(tr.pivot, b) || !readPoint(tr.offset, c)) return true;
+      var x = out.x - b.x, y = out.y - b.y, z = out.z - b.z;
+      out.set(r[0] * x + r[1] * y + r[2] * z + b.x + c.x,
+        r[3] * x + r[4] * y + r[5] * z + b.y + c.y,
+        r[6] * x + r[7] * y + r[8] * z + b.z + c.z);
+    } catch (e) { report(e); }
+    return true;
+  }
+  function decorPoint(d, out) {
+    try {
+      if (d && typeof d.worldPos === "function") {
+        out.copy(d.worldPos(out)); return true;
+      }
+      if (d && d.object3D && d.object3D.getWorldPosition) {
+        d.object3D.getWorldPosition(out); return true;
+      }
+    } catch (e) { report(e); }
+    return false;
+  }
+  function handlePoint(id, out) {
+    var g = G.groups && G.groups[id];
+    var obj = g && ((g.handle && g.handle.object3D) || g.pivotNode);
+    if (!obj || !obj.getWorldPosition) return false;
+    obj.getWorldPosition(out); return true;
+  }
+  function heroPoint(out) {
+    var obj = G.hero && G.hero.object3D;
+    if (!obj || !obj.getWorldPosition) return false;
+    obj.getWorldPosition(out); return true;
+  }
+  function tapPoint(d, out) {
+    if (readPoint(d.pos, out)) return true;
+    if (d.tile != null && point(d.tile, out)) return true;
+    if (!G.camera || !G.root || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return false;
+    // Event coordinates are CSS pixels within root, per the Game contract.
+    var rect = G.root.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    ndc.set(d.x / rect.width * 2 - 1, 1 - d.y / rect.height * 2);
+    ray.setFromCamera(ndc, G.camera);
+    return !!ray.ray.intersectPlane(plane, out);
+  }
+  function scaled(n) {
+    carry += n * factor;
+    var count = Math.floor(carry + 1e-6); carry -= count; return count;
+  }
+  function slot() {
+    var oldest = Infinity, found = -1;
+    for (var i = 0; i < budget; i++) {
+      if (!kind[i]) return i;
+      if (kind[i] === 1 && serial[i] < oldest) { oldest = serial[i]; found = i; }
+    }
+    return found;
+  }
+  function particle(p, rgb, size, opacity, life, vx, vy, vz, blend, delay, type, gravity) {
+    var i = slot(); if (i < 0) return;
+    var j = i * STRIDE;
+    kind[i] = type || 1; serial[i] = ++sequence;
+    pool[j] = pool[j + 14] = p.x; pool[j + 1] = pool[j + 15] = p.y; pool[j + 2] = pool[j + 16] = p.z;
+    pool[j + 3] = vx; pool[j + 4] = vy; pool[j + 5] = vz;
+    pool[j + 6] = ((rgb >> 16) & 255) / 255; pool[j + 7] = ((rgb >> 8) & 255) / 255;
+    pool[j + 8] = (rgb & 255) / 255; pool[j + 9] = size; pool[j + 10] = opacity;
+    pool[j + 11] = 0; pool[j + 12] = life; pool[j + 13] = delay || 0;
+    pool[j + 17] = Math.random() * Math.PI * 2; pool[j + 18] = blend || 0; pool[j + 19] = gravity || 0;
+  }
+  function burst(p, count, rgb, life, speed, blend, size) {
+    count = scaled(count);
+    for (var i = 0; i < count; i++) {
+      var angle = Math.random() * Math.PI * 2, v = speed * (0.3 + Math.random() * 0.7);
+      particle(p, rgb, size || (blend ? 0.027 : 0.018), blend ? 0.32 : 0.85,
+        life * (0.8 + Math.random() * 0.4), Math.cos(angle) * v * 0.7,
+        v, Math.sin(angle) * v * 0.7, blend, 0, 1, blend ? 0.2 : 0.1);
+    }
+  }
+  function ring(p, rgb, end, duration, brightness) {
+    var chosen = 0, oldest = -1;
+    for (var i = 0; i < 24; i++) {
+      var j = i * 10;
+      if (!ringData[j + 4]) { chosen = i; break; }
+      if (ringData[j + 3] > oldest) { oldest = ringData[j + 3]; chosen = i; }
+    }
+    var k = chosen * 10;
+    ringData[k] = p.x; ringData[k + 1] = p.y + 0.02; ringData[k + 2] = p.z;
+    ringData[k + 3] = 0; ringData[k + 4] = duration; ringData[k + 5] = end;
+    ringData[k + 6] = ((rgb >> 16) & 255) / 255; ringData[k + 7] = ((rgb >> 8) & 255) / 255;
+    ringData[k + 8] = (rgb & 255) / 255; ringData[k + 9] = brightness == null ? 0.65 : brightness;
+  }
+  function makePoints(blend) {
+    var geo = new T.BufferGeometry();
+    var data = { position: new Float32Array(MAX * 3), color: new Float32Array(MAX * 3),
+      size: new Float32Array(MAX), alpha: new Float32Array(MAX) };
+    Object.keys(data).forEach(function (key) {
+      geo.setAttribute(key, new T.BufferAttribute(data[key], key === "position" || key === "color" ? 3 : 1)
+        .setUsage(T.DynamicDrawUsage));
+    });
+    geo.setDrawRange(0, 0);
+    var mat = new T.ShaderMaterial({
+      uniforms: { uScale: { value: 360 }, uMap: { value: texture } },
+      vertexShader: "attribute float size; attribute float alpha; varying vec3 vColor; varying float vAlpha; uniform float uScale; void main(){vColor=color;vAlpha=alpha;gl_PointSize=size*uScale;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}",
+      fragmentShader: "uniform sampler2D uMap; varying vec3 vColor; varying float vAlpha; void main(){float a=texture2D(uMap,gl_PointCoord).a*vAlpha;if(a<0.003)discard;gl_FragColor=vec4(vColor,a);}",
+      vertexColors: true, transparent: true, blending: blend, depthWrite: false, depthTest: true,
+      toneMapped: false
+    });
+    var obj = new T.Points(geo, mat); obj.frustumCulled = false; obj.name = "FX particles"; root.add(obj);
+    return { object: obj, geometry: geo, material: mat, data: data, count: 0 };
+  }
+  function resize() {
+    try {
+      if (!glow || !G.renderer || !G.renderer.domElement) return;
+      var s = Math.max(180, Math.min(1400, G.renderer.domElement.height / 2 * (window.devicePixelRatio || 1)));
+      glow.material.uniforms.uScale.value = dust.material.uniforms.uScale.value = s;
+      positionShafts();
+    } catch (e) { report(e); }
+  }
+  function positionShafts() {
+    if (!shafts) return;
+    var light = null;
+    G.scene.traverse(function (obj) { if (!light && obj.isDirectionalLight && obj.castShadow) light = obj; });
+    var x = 10, y = 0;
+    if (light && G.camera) {
+      light.getWorldPosition(a); a.project(G.camera);
+      x = Math.max(0, Math.min(100, (a.x + 1) * 50)); y = Math.max(0, Math.min(30, (1 - a.y) * 50));
+    }
+    var tint = theme === "night" ? "#85baff" : theme === "aurora" ? "#69ffe3" : "#ffd08a";
+    var second = theme === "aurora" ? "#b895ff" : tint;
+    shafts.style.background = "repeating-conic-gradient(from 100deg at " + x + "% " + y + "%,transparent 0deg 13deg," + tint + " 15deg,transparent 19deg 29deg," + second + " 30deg,transparent 33deg 44deg)";
+    shafts.style.opacity = theme === "night" ? "0.06" : "0.09";
+    shafts.style.display = G.reducedMotion || low ? "none" : "block";
+  }
+  function overlay() {
+    if (!G.root || !G.root.appendChild) return;
+    shafts = document.createElement("div"); flash = document.createElement("div");
+    shafts.setAttribute("aria-hidden", "true"); flash.setAttribute("aria-hidden", "true");
+    shafts.className = "fx-shafts"; flash.className = "fx-flash";
+    shafts.style.cssText = "position:absolute;inset:-15%;pointer-events:none;mix-blend-mode:screen;opacity:.09;overflow:hidden";
+    flash.style.cssText = "position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(#fff3c4cc,#ffb35a33 60%,transparent)";
+    var ui = G.ui && G.ui.parentNode === G.root ? G.ui : null;
+    G.root.insertBefore(shafts, ui); G.root.insertBefore(flash, ui);
+    if (shafts.animate) sway = shafts.animate([{ transform: "rotate(-2deg)" }, { transform: "rotate(2deg)" }],
+      { duration: 24000, iterations: Infinity, direction: "alternate", easing: "ease-in-out" });
+    positionShafts();
+  }
+  function clearTransient(all) {
+    for (var i = 0; i < MAX; i++) if (all || kind[i] === 1) kind[i] = 0;
+    ringData.fill(0); cascade.length = 0; cascadeIndex = 0; cascadeAt = flashAt = -100;
+    if (flash) flash.style.opacity = "0";
+    step = 0; moveFrame = -1;
+  }
+  function bounds(defaults) {
+    min[0] = min[2] = -3; min[1] = 0; max[0] = max[2] = 7; max[1] = 5;
+    if (defaults || !G.geom || typeof G.geom.bounds !== "function") return;
+    try {
+      var box = G.geom.bounds();
+      if (box && readPoint(box.min, a) && readPoint(box.max, b)) {
+        min[0] = a.x - 0.5; min[1] = a.y; min[2] = a.z - 0.5;
+        max[0] = Math.max(a.x + 1, b.x + 0.5); max[1] = Math.max(a.y + 2, b.y + 1);
+        max[2] = Math.max(a.z + 1, b.z + 0.5);
+      }
+    } catch (e) { report(e); }
+  }
+  function randomPoint(out) {
+    out.set(min[0] + Math.random() * (max[0] - min[0]), min[1] + Math.random() * (max[1] - min[1]),
+      min[2] + Math.random() * (max[2] - min[2]));
+  }
+  function rebuild(defaults) {
+    clearTransient(true); carry = 0;
+    factor = (G.reducedMotion ? 0.5 : 1) * (low ? 0.5 : 1); budget = Math.floor(MAX * factor);
+    bounds(defaults);
+    for (var i = 0; i < Math.floor(18 * factor); i++) {
+      randomPoint(a); particle(a, i % 3 ? TEAL : GOLD, 0.021, 0.8, 0, 0, 0, 0, 0, 0, 2);
+    }
+    for (var j = 0; j < Math.floor(60 * factor); j++) {
+      randomPoint(a); particle(a, SAND, 0.009, 0.32, 0, 0, 0, 0, 1, 0, 3);
+    }
+    petalAt = ambientClock + 6 + Math.random() * 4;
+    if (root.parent !== G.scene) G.scene.add(root);
+    positionShafts(); resize();
+  }
+  function changeTheme(name) { theme = scales[name] ? name : "dusk"; }
+  function beacon(d) {
+    var found = readPoint(d.pos, a), decor = G.decor || [];
+    if (!found) {
+      for (var i = 0; i < decor.length; i++) {
+        if (decor[i].item && decor[i].item.type === "beacon" && decorPoint(decor[i], a)) { found = true; break; }
+      }
+    }
+    sound("beacon"); if (!found) return;
+    beaconPoint[0] = a.x; beaconPoint[1] = a.y; beaconPoint[2] = a.z;
+    cascade.length = 0;
+    for (var k = 0; k < decor.length; k++) {
+      if (decor[k].item && decor[k].item.type === "beacon") continue;
+      var obj = decor[k].object3D;
+      if (obj && obj.userData && typeof obj.userData.setLit === "function" && decorPoint(decor[k], b)) {
+        cascade.push({ decor: decor[k], distance: b.distanceToSquared(a), at: 0 });
+      }
+    }
+    cascade.sort(function (x, y) { return x.distance - y.distance; });
+    for (var n = 0; n < cascade.length; n++) cascade[n].at = 2 * n / Math.max(1, cascade.length - 1);
+    cascadeIndex = 0; cascadeAt = flashAt = clock; moteNext = 0;
+  }
+  function cascadeFrame() {
+    var elapsed = clock - cascadeAt;
+    while (cascadeIndex < cascade.length && elapsed >= cascade[cascadeIndex].at) {
+      var entry = cascade[cascadeIndex++], obj = entry.decor.object3D;
+      try { obj.userData.setLit(true, false); } catch (e) { report(e); }
+      if (decorPoint(entry.decor, a)) {
+        burst(a, 5, GOLD, 0.8, 0.45, 0);
+        if (cascadeIndex % 3 === 1) ring(a, GOLD, 0.65, 0.55, 0.35);
+      }
+    }
+    if (cascadeAt >= 0 && elapsed <= 1.55) {
+      while (moteNext < 120 && elapsed >= moteNext * 1.5 / 120) {
+        a.set(beaconPoint[0] + (Math.random() - 0.5) * 0.5, beaconPoint[1], beaconPoint[2] + (Math.random() - 0.5) * 0.5);
+        burst(a, 1, moteNext % 3 ? GOLD : BRASS, 2.4, 0.7, 0, 0.02); moteNext++;
+      }
+    }
+    if (flash) {
+      var f = clock - flashAt;
+      flash.style.opacity = f < 0 || f > 1.45 ? "0" : String(f < 0.25 ? f / 0.25 : (1.45 - f) / 1.2);
+    }
+  }
+  function path(d) {
+    var pts = d.points; if (!pts || pts.length < 2) return;
+    var offset = 0, order = 0;
+    for (var i = 1; i < pts.length && order < budget; i++) {
+      if (!readPoint(pts[i - 1], a) || !readPoint(pts[i], b)) continue;
+      var length = a.distanceTo(b); if (!length) continue;
+      for (; offset <= length && order < budget; offset += 0.3) {
+        c.copy(a).lerp(b, offset / length); c.y += 0.035;
+        if (scaled(1)) particle(c, 0xffedc7, 0.014, 0.8, 1.2, 0, 0.025, 0, 0, order * 0.035);
+        order++;
+      }
+      offset -= length;
+    }
+  }
+  function heroStep(d) {
+    sound("footstep"); step++;
+    if (step % 3 === 0 && heroPoint(a)) burst(a, 5, SAND, 0.5, 0.3, 1, 0.03);
+    if (Number.isFinite(d.k) && d.k !== 0) {
+      if (!readPoint(d.at, a) && !point(d.from, a) && !heroPoint(a)) return;
+      burst(a, 8, TEAL, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
+    }
+  }
+  function mechanism(name, d) {
+    if (name === "mechTick") sound("tick");
+    if (name === "mechSnap") sound("snap");
+    if (name === "mechLocked") sound("locked");
+    var positioned = readPoint(d.pos, a);
+    if (!positioned && !handlePoint(d.id, a)) return;
+    if (name === "mechGrab") burst(a, 3, BRASS, 0.45, 0.45, 0);
+    if (name === "mechMove") {
+      if (moveFrame === frameId) return; moveFrame = frameId;
+      burst(a, 1, BRASS, 0.28, 0.3, 0, 0.012); burst(a, 1, SAND, 0.35, 0.2, 1, 0.018);
+    }
+    if (name === "mechTick") { burst(a, 3, SAND, 0.35, 0.25, 1); burst(a, 1, BRASS, 0.3, 0.6, 0); }
+    if (name === "mechSnap") {
+      burst(a, 10, BRASS, 0.65, 0.8, 0); burst(a, 7, SAND, 0.6, 0.4, 1);
+      var g = G.groups && G.groups[d.id];
+      if (!positioned && g && g.pivotNode && g.pivotNode.getWorldPosition) g.pivotNode.getWorldPosition(a);
+      ring(a, GOLD, 1, 0.65, 0.5);
+    }
+    if (name === "mechLocked") burst(a, 4, 0xa38e7b, 0.4, 0.2, 1);
+  }
+  function plate(d) {
+    sound("plate"); if (!readPoint(d.pos, a) && !point(d.tile, a)) return;
+    ring(a, 0xffbd68, 1.5, 0.8, 0.6);
+    var count = scaled(16);
+    for (var i = 0; i < count; i++) {
+      var angle = i / count * Math.PI * 2;
+      c.set(a.x + Math.cos(angle) * 0.25, a.y + 0.025, a.z + Math.sin(angle) * 0.25);
+      particle(c, SAND, 0.025, 0.35, 0.65, Math.cos(angle) * 0.5, 0.12, Math.sin(angle) * 0.5, 1);
+    }
+  }
+  function complete() {
+    sound("complete");
+    for (var i = 0, n = scaled(60); i < n; i++) {
+      randomPoint(a); particle(a, i % 3 ? BRASS : GOLD, 0.016, 0.8, 4,
+        (Math.random() - 0.5) * 0.15, 0.3 + Math.random() * 0.2, (Math.random() - 0.5) * 0.15);
+    }
+  }
+  function bind(name, fn) {
+    if (!G.bus || typeof G.bus.on !== "function") return;
+    var handler = guarded(fn); bindings.push({ name: name, handler: handler }); G.bus.on(name, handler);
+  }
+  function events() {
+    bind("tap", function (d) {
+      if (d.reachable === false) sound("tk");
+      if (tapPoint(d, a)) ring(a, d.reachable === false ? 0xff6b6b : GOLD,
+        d.reachable === false ? 0.8 : 1.1, d.reachable === false ? 0.42 : 0.6, d.reachable === false ? 0.35 : 0.65);
+    });
+    bind("path", path); bind("heroStep", heroStep);
+    ["mechGrab", "mechMove", "mechTick", "mechSnap", "mechLocked"].forEach(function (name) {
+      bind(name, function (d) { mechanism(name, d); });
+    });
+    bind("plate", plate);
+    bind("glimmer", function (d) {
+      sound("glimmer");
+      if (readPoint(d.pos, a) || point(d.tile, a)) burst(a, 20, TEAL, 1.6, 1.4, 0, 0.023);
+    });
+    bind("beacon", beacon); bind("levelComplete", complete);
+    bind("restart", function () { clearTransient(false); });
+    bind("levelStart", function (d) {
+      paused = false; changeTheme(d.level && d.level.theme || G.level && G.level.theme); rebuild(false); resetBed();
+    });
+    bind("title", function () { paused = false; changeTheme("dusk"); rebuild(true); resetBed(); });
+    bind("pause", function (d) { paused = !!d.paused; poll = 0; });
+    bind("quality", function (d) { low = d.level === "low"; rebuild(G.state === "title"); });
+  }
+
+  // Audio sources are tracked in reusable slots; cancellation includes future notes and wind/LFOs.
+  function frequency(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+  function scaleNote(index) {
+    var s = scales[theme], octave = Math.floor(index / 5), n = ((index % 5) + 5) % 5;
+    return frequency(s[n] + octave * 12);
+  }
+  function track(source, nodes, end, music) {
+    for (var i = 0; i < voices.length; i++) {
+      if (!voices[i].source) {
+        voices[i].source = source; voices[i].nodes = nodes; voices[i].end = end; voices[i].music = music; return;
+      }
+    }
+    // This is a hard ceiling, even under hostile event spam.
+    try { source.stop(); source.disconnect(); for (var j = 0; j < nodes.length; j++) nodes[j].disconnect(); } catch (e) { report(e); }
+  }
+  function cleanVoices(musicOnly, all) {
+    if (!ctx) return;
+    for (var i = 0; i < voices.length; i++) {
+      var v = voices[i];
+      if (v.source && (all || musicOnly && v.music || v.end < ctx.currentTime)) {
+        try {
+          v.source.stop(); v.source.disconnect();
+          for (var j = 0; j < v.nodes.length; j++) v.nodes[j].disconnect();
+        } catch (e) { report(e); }
+        v.source = null; v.nodes = null;
+      }
+    }
+  }
+  function route(node, music, wet) {
+    node.connect(music ? musicBus : sfxBus);
+    if (wet) node.connect(music ? musicSend : sfxSend);
+  }
+  function tone(hz, at, duration, gain, type, music, wet, endHz, attack, filterHz, detune) {
+    var source = ctx.createOscillator(), env = ctx.createGain(), filter = null;
+    source.type = type || "sine"; source.frequency.setValueAtTime(hz, at);
+    if (endHz) source.frequency.exponentialRampToValueAtTime(endHz, at + duration);
+    source.detune.value = detune || 0;
+    env.gain.setValueAtTime(0.00001, at);
+    env.gain.linearRampToValueAtTime(gain, at + (attack || 0.004));
+    if (attack >= 1) {
+      env.gain.setValueAtTime(gain, at + duration - 3);
+      env.gain.linearRampToValueAtTime(0.00001, at + duration);
+    } else env.gain.exponentialRampToValueAtTime(0.00001, at + duration);
+    source.connect(env);
+    if (filterHz) {
+      filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = filterHz;
+      env.connect(filter); route(filter, music, wet);
+    } else route(env, music, wet);
+    source.start(at); source.stop(at + duration + 0.03);
+    track(source, filter ? [env, filter] : [env], at + duration + 0.05, music);
+  }
+  function noise(at, duration, gain, hz, endHz) {
+    var src = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), env = ctx.createGain();
+    src.buffer = noiseBuffer; filter.type = "lowpass"; filter.frequency.setValueAtTime(hz, at);
+    if (endHz) filter.frequency.exponentialRampToValueAtTime(endHz, at + duration);
+    env.gain.setValueAtTime(0.00001, at); env.gain.linearRampToValueAtTime(gain, at + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.00001, at + duration);
+    src.connect(filter); filter.connect(env); route(env, false, false);
+    src.start(at); src.stop(at + duration + 0.02); track(src, [filter, env], at + duration + 0.03, false);
+  }
+  function boxNote(hz, at, gain, music) {
+    tone(hz, at, 2.5, gain, "sine", music, true);
+    tone(hz * 4, at, 1.7, gain * 0.075, "sine", music, true);
+  }
+  function bell(hz, at) {
+    var carrier = ctx.createOscillator(), mod = ctx.createOscillator(), index = ctx.createGain(), env = ctx.createGain();
+    carrier.frequency.value = hz * 3.5; mod.frequency.value = hz;
+    index.gain.setValueAtTime(hz * 4, at); index.gain.linearRampToValueAtTime(0, at + 0.9);
+    env.gain.setValueAtTime(0.00001, at); env.gain.linearRampToValueAtTime(0.09, at + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.00001, at + 1.3);
+    mod.connect(index); index.connect(carrier.frequency); carrier.connect(env); route(env, false, true);
+    mod.start(at); carrier.start(at); mod.stop(at + 0.92); carrier.stop(at + 1.32);
+    track(mod, [index], at + 0.94, false); track(carrier, [env], at + 1.34, false);
+  }
+  function sound(name) {
+    try {
+      if (!Object.prototype.hasOwnProperty.call(played, name)) return;
+      // Count requests, including locked, muted and rate-limited calls; playback still needs a gesture.
+      played[name]++;
+      if (!G || !unlocked || !ctx || ctx.state !== "running" || G.save && G.save.sound === false) return;
+      var now = ctx.currentTime;
+      if (name === "footstep" && now - lastStep < 0.08 || name === "tick" && now - lastTick < 0.03) return;
+      if (name === "footstep") lastStep = now;
+      if (name === "tick") lastTick = now;
+      var at = now + 0.005;
+      if (name === "click") tone(1600, at, 0.025, 0.08);
+      else if (name === "footstep") {
+        tone(1800 * (0.94 + Math.random() * 0.12), at, 0.025, 0.065); noise(at, 0.012, 0.022, 3500);
+      } else if (name === "tick") { tone(2500, at, 0.015, 0.07); noise(at, 0.012, 0.025, 5000); }
+      else if (name === "snap") { tone(90, at, 0.2, 0.2, "sine", false, false, 48); noise(at, 0.16, 0.1, 600); }
+      else if (name === "locked") noise(at, 0.12, 0.22, 200);
+      else if (name === "plate") { noise(at, 0.13, 0.12, 280); tone(180, at, 0.24, 0.13); tone(270, at + 0.025, 0.5, 0.075, "sine", false, true); }
+      else if (name === "tk") tone(900, at, 0.04, 0.065, "sine", false, false, 380);
+      else if (name === "glimmer") { bell(scaleNote(0), at); bell(scaleNote(2), at + 0.18); }
+      else if (name === "beacon") {
+        for (var i = 0; i < 4; i++) {
+          var hz = scaleNote(i);
+          tone(hz / 2, at + i * 0.16, 3.5, 0.065, "triangle", false, true, hz * 0.505, 1.2, 1000);
+          boxNote(hz * 4, at + 0.9 + i * 0.19, 0.018, false);
+        }
+        noise(at, 2, 0.06, 250, 4000); boxNote(scaleNote(0), at + 1.9, 0.12, false);
+      } else if (name === "complete") {
+        dipUntil = now + 4.5; poll = 0;
+        for (var k = 0; k < melody.length; k++) boxNote(scaleNote(melody[k]), at + k * 0.65, 0.12, false);
+      }
+    } catch (e) { report(e); }
+  }
+  function makeAudio() {
+    var Audio = window.AudioContext || window.webkitAudioContext; if (!Audio) return;
+    ctx = new Audio();
+    sfxBus = ctx.createGain(); musicBus = ctx.createGain(); master = ctx.createGain(); compressor = ctx.createDynamicsCompressor();
+    master.gain.value = 0.2; sfxBus.gain.value = G.save && G.save.sound === false ? 0 : 1;
+    musicBus.gain.value = 0;
+    compressor.threshold.value = -20; compressor.knee.value = 18; compressor.ratio.value = 3;
+    compressor.attack.value = 0.008; compressor.release.value = 0.25;
+    sfxBus.connect(compressor); musicBus.connect(compressor); compressor.connect(master); master.connect(ctx.destination);
+    var impulse = ctx.createBuffer(2, Math.floor(ctx.sampleRate * 2.5), ctx.sampleRate);
+    for (var channel = 0; channel < 2; channel++) {
+      var data = impulse.getChannelData(channel), tail = 0;
+      for (var i = 0; i < data.length; i++) {
+        var t = i / data.length;
+        tail += ((Math.random() * 2 - 1) - tail) * (0.32 * (1 - t) + 0.015);
+        data[i] = tail * Math.pow(1 - t, 3) * 0.7;
+      }
+    }
+    var sfxVerb = ctx.createConvolver(), musicVerb = ctx.createConvolver();
+    sfxVerb.buffer = musicVerb.buffer = impulse;
+    sfxSend = ctx.createGain(); musicSend = ctx.createGain(); sfxSend.gain.value = 0.2; musicSend.gain.value = 0.35;
+    sfxSend.connect(sfxVerb); sfxVerb.connect(sfxBus); musicSend.connect(musicVerb); musicVerb.connect(musicBus);
+    noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
+    var noiseData = noiseBuffer.getChannelData(0);
+    for (var n = 0; n < noiseData.length; n++) noiseData[n] = Math.random() * 2 - 1;
+    for (var v = 0; v < 256; v++) voices.push({ source: null, nodes: null, end: 0, music: false });
+  }
+  function unlock() {
+    try {
+      if (!G) return;
+      unlocked = true; if (!ctx) makeAudio();
+      poll = 0;
+      if (ctx && ctx.state === "suspended") {
+        return ctx.resume().then(function () { audioFrame(); }, report);
+      }
+      audioFrame();
+    } catch (e) { report(e); }
+  }
+  function wind() {
+    var source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), env = ctx.createGain();
+    var lfo = ctx.createOscillator(), depth = ctx.createGain();
+    source.buffer = noiseBuffer; source.loop = true; filter.type = "bandpass"; filter.frequency.value = 400; filter.Q.value = 0.7;
+    env.gain.value = 0.035; lfo.frequency.value = 0.055; depth.gain.value = 0.015;
+    lfo.connect(depth); depth.connect(env.gain); source.connect(filter); filter.connect(env); route(env, true, false);
+    source.start(); lfo.start(); track(source, [filter, env], Infinity, true); track(lfo, [depth], Infinity, true);
+  }
+  function fade(param, value, duration) {
+    var now = ctx.currentTime;
+    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(now);
+    else { var current = param.value; param.cancelScheduledValues(now); param.setValueAtTime(current, now); }
+    param.linearRampToValueAtTime(value, now + duration);
+  }
+  function resetBed() {
+    try { cleanVoices(true, false); bed = false; audioTheme = ""; poll = 0; } catch (e) { report(e); }
+  }
+  function audioFrame() {
+    try {
+      if (!ctx || ctx.state !== "running") return;
+      cleanVoices(false, false);
+      var now = ctx.currentTime, save = G.save || EMPTY;
+      var active = G.state === "title" || G.state === "play" || G.state === "paused";
+      var enabled = save.music !== false;
+      if (!active || audioTheme && audioTheme !== theme) resetBed();
+      var target = active && enabled ? (G.state === "paused" || paused ? 0.14 : now < dipUntil ? 0.15 : 0.5) : 0;
+      if (target !== musicTarget) { fade(musicBus.gain, target, 0.8); musicTarget = target; }
+      var sfx = save.sound === false ? 0 : 1;
+      if (sfx !== sfxTarget) { fade(sfxBus.gain, sfx, 0.025); sfxTarget = sfx; }
+      if (!active) return;
+      if (!enabled) {
+        // Let the 0.8 s bus fade finish before cancelling the sustained sources.
+        if (musicBus.gain.value < 0.0001) resetBed();
+        return;
+      }
+      if (!bed) { bed = true; audioTheme = theme; chord = 0; nextChord = now; nextNote = now + 4; wind(); }
+      if (now >= nextChord) {
+        var base = scales[theme][0] - 24 + progression[chord % 4], minor = theme === "night";
+        for (var i = 0; i < 3; i++) {
+          var interval = i === 0 ? 0 : i === 1 ? (chord % 4 === 1 || minor && chord % 4 === 0 ? 3 : 4) : 7;
+          tone(frequency(base + interval), now + 0.01, 15, 0.14, "triangle", true, true, 0, 2, 900, (i - 1) * 5);
+        }
+        chord++; nextChord = now + 12;
+      }
+      if (now >= nextNote) {
+        var next = note + (Math.random() < 0.5 ? -1 : 1) * (Math.random() < 0.85 ? 1 : 2);
+        if (next < 0 || next > 9) next = note + (next < 0 ? 1 : -1);
+        note = next; boxNote(scaleNote(note), now + 0.01, 0.18, true); nextNote = now + 4 + Math.random() * 3;
+      }
+    } catch (e) { report(e); }
+  }
+
+  function particlesFrame(dt, ambientDt, active) {
+    glow.count = dust.count = live = ambientCount = 0;
+    for (var i = 0; i < budget; i++) {
+      var type = kind[i]; if (!type) continue;
+      var j = i * STRIDE, alpha = pool[j + 10], age;
+      if (type === 1) {
+        if (pool[j + 13] > 0) { pool[j + 13] -= dt; live++; continue; }
+        pool[j + 11] += dt; age = pool[j + 11];
+        if (age >= pool[j + 12]) { kind[i] = 0; continue; }
+        pool[j] += pool[j + 3] * dt; pool[j + 1] += pool[j + 4] * dt; pool[j + 2] += pool[j + 5] * dt;
+        pool[j + 4] -= pool[j + 19] * dt;
+        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - age / pool[j + 12], 1.3);
+      } else {
+        ambientCount++;
+        var phase = pool[j + 17], t = ambientClock;
+        if (type === 2) {
+          pool[j] = pool[j + 14] + Math.sin(t * 0.22 + phase) * 0.5;
+          pool[j + 1] = pool[j + 15] + Math.sin(t * 0.29 + phase * 2) * 0.3;
+          pool[j + 2] = pool[j + 16] + Math.cos(t * 0.17 + phase) * 0.5;
+          alpha *= 0.12 + 0.88 * Math.pow((Math.sin(t * 0.85 + phase) + 1) / 2, 2);
+        } else {
+          pool[j] = pool[j + 14] + Math.sin(t * 0.09 + phase) * 0.35;
+          pool[j + 1] += ambientDt * 0.045;
+          if (pool[j + 1] > max[1]) pool[j + 1] = min[1];
+        }
+        if (!active) alpha = 0;
+      }
+      live++;
+      var batch = pool[j + 18] ? dust : glow, k = batch.count++, out = batch.data, q = k * 3;
+      out.position[q] = pool[j]; out.position[q + 1] = pool[j + 1]; out.position[q + 2] = pool[j + 2];
+      out.color[q] = pool[j + 6]; out.color[q + 1] = pool[j + 7]; out.color[q + 2] = pool[j + 8];
+      out.size[k] = pool[j + 9]; out.alpha[k] = alpha;
+    }
+    upload(glow); upload(dust);
+  }
+  function upload(batch) {
+    batch.geometry.setDrawRange(0, batch.count);
+    var attrs = batch.geometry.attributes;
+    attrs.position.needsUpdate = attrs.color.needsUpdate = attrs.size.needsUpdate = attrs.alpha.needsUpdate = true;
+  }
+  function ringsFrame(dt) {
+    ringCount = 0;
+    for (var i = 0; i < 24; i++) {
+      var j = i * 10, duration = ringData[j + 4];
+      if (!duration) continue;
+      ringData[j + 3] += dt;
+      var progress = ringData[j + 3] / duration;
+      if (progress >= 1) { ringData[j + 4] = 0; continue; }
+      // RingGeometry has radius one; the requested tile sizes are diameters.
+      var radius = (0.3 + (ringData[j + 5] - 0.3) * progress) * 0.5;
+      a.set(ringData[j], ringData[j + 1], ringData[j + 2]); scale.set(radius, radius, radius);
+      matrix.compose(a, rotation, scale); ringMesh.setMatrixAt(ringCount, matrix);
+      var fadeOut = (1 - progress) * ringData[j + 9];
+      colour.setRGB(ringData[j + 6] * fadeOut, ringData[j + 7] * fadeOut * (1 - progress * 0.15),
+        ringData[j + 8] * fadeOut * (1 - progress * 0.5));
+      ringMesh.setColorAt(ringCount++, colour);
+    }
+    ringMesh.count = ringCount; ringMesh.instanceMatrix.needsUpdate = true;
+    if (ringMesh.instanceColor) ringMesh.instanceColor.needsUpdate = true;
+  }
+  function frame(now) {
+    try {
+      var dt = last ? Math.max(0, Math.min(0.05, (now - last) / 1000)) : 0; last = now;
+      if (Number.isFinite(G.time)) {
+        var delta = G.time - gameTime;
+        if (Number.isFinite(delta) && delta > 0) dt = Math.min(0.05, delta);
+        gameTime = G.time;
+      }
+      var freeze = paused || G.state === "paused", transientDt = freeze ? 0 : dt;
+      var ambientDt = dt * (freeze ? 0.2 : 1), active = G.state === "title" || G.state === "play" || freeze;
+      clock += transientDt; ambientClock += ambientDt; frameId++;
+      if (sway) sway.playbackRate = freeze ? 0.2 : 1;
+      if (active && ambientClock >= petalAt) {
+        randomPoint(a); a.y = max[1];
+        for (var i = 0, n = scaled(1); i < n; i++) particle(a, 0xf3c9d6, 0.017, 0.25, 8, 0.06, -0.2, 0.03, 1);
+        petalAt = ambientClock + 6 + Math.random() * 4;
+      }
+      if (transientDt > 0) cascadeFrame();
+      particlesFrame(transientDt, ambientDt, active); ringsFrame(transientDt);
+      poll -= dt;
+      if (poll <= 0) {
+        poll = 0.25;
+        var wantedFactor = (G.reducedMotion ? 0.5 : 1) * (low ? 0.5 : 1);
+        if (wantedFactor !== factor) rebuild(G.state === "title");
+        audioFrame();
+      }
+    } catch (e) { report(e); }
+    try { raf = window.requestAnimationFrame(frame); } catch (e) { report(e); }
+  }
+  function detach() {
+    if (!G) return;
+    if (G.bus && G.bus.off) for (var i = 0; i < bindings.length; i++) G.bus.off(bindings[i].name, bindings[i].handler);
+    bindings.length = 0;
+    window.removeEventListener("resize", resize);
+    window.removeEventListener("pointerdown", unlock, true); window.removeEventListener("keydown", unlock, true);
+    window.removeEventListener("touchend", unlock, true);
+    if (raf) window.cancelAnimationFrame(raf);
+    if (root) {
+      if (root.parent) root.parent.remove(root);
+      if (glow) { glow.geometry.dispose(); glow.material.dispose(); }
+      if (dust) { dust.geometry.dispose(); dust.material.dispose(); }
+      if (ringMesh) { ringMesh.geometry.dispose(); ringMesh.material.dispose(); }
+      if (texture) texture.dispose();
+    }
+    if (sway) sway.cancel();
+    if (shafts) shafts.remove(); if (flash) flash.remove();
+    resetBed(); ready = false;
+  }
+  function setup(game) {
+    try {
+      if (!game || ready && G === game) return;
+      if (G) detach(); G = game; T = G.THREE || window.THREE;
+      // Audio and event safety do not depend on the optional visual layer.
+      window.addEventListener("pointerdown", unlock, true); window.addEventListener("keydown", unlock, true);
+      window.addEventListener("touchend", unlock, true);
+      if (!T || !G.scene) return;
+      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); scale = new T.Vector3();
+      matrix = new T.Matrix4(); rotation = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -Math.PI / 2);
+      colour = new T.Color(); ray = new T.Raycaster(); ndc = new T.Vector2(); plane = new T.Plane(new T.Vector3(0, 1, 0), -1);
+      root = new T.Group(); root.name = "Spirelight FX"; G.scene.add(root);
+      var canvas = document.createElement("canvas"); canvas.width = canvas.height = 64;
+      var draw = canvas.getContext("2d"), gradient = draw.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gradient.addColorStop(0, "rgba(255,255,255,1)"); gradient.addColorStop(0.18, "rgba(255,255,255,.85)");
+      gradient.addColorStop(0.5, "rgba(255,255,255,.2)"); gradient.addColorStop(1, "rgba(255,255,255,0)");
+      draw.fillStyle = gradient; draw.fillRect(0, 0, 64, 64); texture = new T.CanvasTexture(canvas);
+      glow = makePoints(T.AdditiveBlending); dust = makePoints(T.NormalBlending);
+      ringMesh = new T.InstancedMesh(new T.RingGeometry(0.91, 1, 48), new T.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, blending: T.AdditiveBlending, depthTest: true, depthWrite: false,
+        side: T.DoubleSide, toneMapped: false }), 24);
+      ringMesh.instanceMatrix.setUsage(T.DynamicDrawUsage); ringMesh.count = 0; ringMesh.frustumCulled = false;
+      ringMesh.name = "FX ripples"; root.add(ringMesh);
+      low = G.quality === "low"; changeTheme(G.state === "title" ? "dusk" : G.level && G.level.theme);
+      overlay(); rebuild(G.state === "title"); events(); window.addEventListener("resize", resize);
+      clock = ambientClock = last = 0; gameTime = NaN; ready = true;
+      raf = window.requestAnimationFrame(frame);
+    } catch (e) { report(e); }
+  }
+  function debug() {
+    var count = 0, ambient = 0, rings = 0;
+    for (var i = 0; i < budget; i++) { if (kind[i]) count++; if (kind[i] > 1) ambient++; }
+    for (var j = 0; j < 24; j++) if (ringData[j * 10 + 4]) rings++;
+    return { live: count, poolSize: budget, drawCalls: ready ? 3 : 0, rings: rings,
+      audio: ctx ? ctx.state : "locked", played: Object.assign({}, played),
+      music: { running: bed, theme: theme, gain: ctx ? musicBus.gain.value : 0 }, ambient: ambient };
+  }
+  window.FX = { setup: setup, sound: sound, unlock: unlock, debug: debug };
+})();
+
+exec
+/bin/bash -lc "cat tests/fx.html; cat tools/shot.js; cat tests/fx-brief.md; sed -n '534,572p' design/design.md; sed -n '146,181p' design/review.md; sed -n '246,254p' design/review.md; git status --short; for p in /AGENTS.md /home/AGENTS.md /home/user/AGENTS.md; do if [ -f \""'$p" ]; then cat "$p"; fi; done; rg --files -g '"'AGENTS.md' -g '"'!node_modules'"' -g '"'!vendor'"' . .agents .codex 2>/dev/null" in /home/user/my-first-repo/spirelight
+ exited 1 in 0ms:
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Spirelight FX test</title>
+<style>
+html,body{margin:0;overflow:hidden}#fx-test-root{position:fixed;inset:0;overflow:hidden;pointer-events:none}
+#fx-test-ui{position:absolute;inset:0;pointer-events:none;color:#efe2c6;font:12px monospace}
+#status{position:absolute;left:16px;bottom:16px;white-space:pre-line;opacity:.7}
+#unlock{position:absolute;right:16px;bottom:16px;min-height:44px;pointer-events:auto}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="testbed.js"></script>
+<script>
+window.__fxErrors = [];
+window.__fxReportError = function (e) { window.__fxErrors.push(String(e && e.stack || e)); console.error(e); };
+window.addEventListener("error", function (e) { console.error(e.error || e.message); });
+window.addEventListener("unhandledrejection", function (e) { console.error(e.reason); });
+</script>
+<script src="../js/fx.js"></script>
+</head>
+<body>
+<script>
+(function () {
+  "use strict";
+  // Verify the public no-op before setup or a gesture.
+  FX.sound("click");
+  window.__fxBeforeSetup = FX.debug();
+  Testbed.start({ height: 12, center: [3, 1, 3], bg: 0x241a3a, lights: true }, function (tb) {
+    var T = tb.THREE, query = new URLSearchParams(location.search);
+    var root = document.createElement("div"), ui = document.createElement("div"), status = document.createElement("div");
+    root.id = "fx-test-root"; ui.id = "fx-test-ui"; status.id = "status";
+    ui.appendChild(status); root.appendChild(ui); document.body.appendChild(root);
+    var unlock = document.createElement("button"); unlock.id = "unlock"; unlock.textContent = "Unlock audio";
+    unlock.addEventListener("click", function () {
+      Promise.resolve(FX.unlock()).then(function () {
+        unlock.textContent = "Audio: " + FX.debug().audio;
+      }).catch(window.__fxReportError);
+    });
+    ui.appendChild(unlock);
+    var listeners = Object.create(null);
+    var bus = {
+      on: function (name, fn) { (listeners[name] || (listeners[name] = [])).push(fn); },
+      off: function (name, fn) { var list = listeners[name] || [], i = list.indexOf(fn); if (i >= 0) list.splice(i, 1); },
+      emit: function (name, data) {
+        var list = listeners[name] || [];
+        for (var i = 0; i < list.length; i++) {
+          try { list[i](data || {}); } catch (e) { window.__fxReportError(e); }
+        }
+      }
+    };
+    var cube = new T.BoxGeometry(1, 1, 1);
+    var stone = new T.MeshStandardMaterial({ color: 0xb99376, roughness: 0.9 });
+    var paver = new T.MeshStandardMaterial({ color: 0xefe2c6, roughness: 0.85 });
+    var brass = new T.MeshStandardMaterial({ color: 0xc8963e, metalness: 0.6, roughness: 0.4 });
+    function box(x, y, z, sx, sy, sz, material, shadow) {
+      var mesh = new T.Mesh(cube, material); mesh.position.set(x, y, z); mesh.scale.set(sx, sy, sz);
+      mesh.castShadow = !!shadow; mesh.receiveShadow = true; tb.scene.add(mesh); return mesh;
+    }
+    box(3, 0, 3, 6, 1, 4, stone, true);
+    box(3, 0.54, 3, 5.9, 0.08, 3.9, paver);
+    box(2, 0.83, 2, 1, 0.5, 1, stone, true);
+    box(2, 1.32, 1, 1, 1.5, 1, stone, true);
+    box(4.5, 1.5, 1.5, 1.5, 3, 1.5, stone, true);
+    box(4.5, 3.06, 1.5, 1.7, 0.12, 1.7, paver);
+    var beaconMat = new T.MeshStandardMaterial({ color: 0xc8963e, emissive: 0xffb35a, emissiveIntensity: 0.12 });
+    var beacon = box(4.5, 3.55, 1.5, 0.55, 0.8, 0.55, beaconMat);
+    var tiles = {
+      start: { stand: [1.5, 0.58, 3.5], group: "base", ref: [1, 0, 3] },
+      middle: { stand: [3, 0.58, 3.5], group: "base", ref: [3, 0, 3] },
+      plate: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+      p1: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+      g1: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+      bridge_1: { stand: [5, 0.58, 3], group: "bridge", ref: [5, 0, 3] },
+      stair: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+      goal: { stand: [4.5, 3.12, 1.5], group: "bridge", ref: [4, 3, 1] }
+    };
+    var pivot = new T.Object3D(); pivot.position.set(5, 0.58, 3); tb.scene.add(pivot);
+    var handle = new T.Object3D(); handle.position.set(0, 0.5, 0); pivot.add(handle);
+    var knob = new T.Mesh(cube, brass); knob.scale.set(0.28, 0.28, 0.65); handle.add(knob);
+    var hero = new T.Object3D(); hero.position.fromArray(tiles.start.stand); tb.scene.add(hero);
+    var wick = new T.Mesh(cube, brass); wick.position.y = 0.22; wick.scale.set(0.22, 0.44, 0.22); hero.add(wick);
+    var identity = { R: [1, 0, 0, 0, 1, 0, 0, 0, 1], pivot: [5, 0.58, 3], offset: [0, 0, 0] };
+    var levelBounds = { min: [0, 0, 1], max: [6, 4, 5] }, screenVector = new T.Vector3();
+    var Game = window.Game = {
+      THREE: T, scene: tb.scene, camera: tb.camera, renderer: tb.renderer, root: root, ui: ui, bus: bus,
+      state: "title", time: 0, dt: 0, quality: query.get("quality") || "high",
+      reducedMotion: query.has("reduced") || matchMedia("(prefers-reduced-motion: reduce)").matches,
+      save: { sound: query.get("sound") !== "0", music: query.get("music") !== "0", quality: "auto" },
+      saveNow: function () {},
+      worldToScreen: function (p) {
+        screenVector.fromArray(p).project(tb.camera);
+        return { x: (screenVector.x + 1) * root.clientWidth / 2, y: (1 - screenVector.y) * root.clientHeight / 2 };
+      },
+      geom: { walkable: function (id) { return tiles[id] || null; }, transform: function () { return identity; },
+        bounds: function () { return levelBounds; } },
+      groups: { bridge: { id: "bridge", pivotNode: pivot, handle: { object3D: handle } } },
+      hero: { object3D: hero }, decor: [], level: { theme: "dusk" }
+    };
+    window.__fxLit = [];
+    var lanterns = [[4.9, 2.6, 2.3], [3.4, 1.5, 2.2], [5.5, 0.85, 3.9],
+      [3.7, 0.85, 4.5], [2.3, 0.85, 4.4], [0.6, 0.85, 4.3]];
+    lanterns.forEach(function (pos, i) {
+      var mat = new T.MeshStandardMaterial({ color: 0x9c783d, emissive: 0xffb35a, emissiveIntensity: 0.02, roughness: 0.5 });
+      var obj = box(pos[0], pos[1], pos[2], 0.19, 0.32, 0.19, mat), world = new T.Vector3();
+      obj.userData.target = 0.02;
+      obj.userData.setLit = function (on, instant) {
+        obj.userData.target = on ? 3 : 0.02;
+        if (instant) mat.emissiveIntensity = obj.userData.target;
+        if (on) window.__fxLit.push({ index: i, time: Game.time, instant: !!instant });
+      };
+      Game.decor.push({ item: { type: "lantern" }, object3D: obj, worldPos: function (target) {
+        return obj.getWorldPosition(target || world);
+      } });
+    });
+    var beaconWorld = new T.Vector3();
+    Game.decor.push({ item: { type: "beacon" }, object3D: beacon,
+      worldPos: function (target) { return beacon.getWorldPosition(target || beaconWorld); } });
+    FX.setup(Game); FX.setup(Game); // Repeated boot must not duplicate roots, listeners, or ambient particles.
+    var defaults = {
+      tap: { x: 0, y: 0, tile: "middle", reachable: true, pos: tiles.middle.stand },
+      tapUnreachable: { x: 0, y: 0, tile: "p1", reachable: false, pos: tiles.p1.stand },
+      path: { points: [tiles.start.stand, tiles.middle.stand, tiles.plate.stand] },
+      heroStep: { from: "start", to: "middle", k: 0, at: tiles.start.stand },
+      junction: { from: "middle", to: "bridge_1", k: 1, at: tiles.middle.stand },
+      mechGrab: { id: "bridge" }, mechMove: { id: "bridge", value: 15, delta: 1 },
+      mechTick: { id: "bridge", pos: [5, 1.08, 3] }, mechSnap: { id: "bridge", value: 90, pos: [5, 1.08, 3] },
+      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "base", pos: tiles.p1.stand },
+      glimmer: { tile: "g1", count: 1, total: 3, pos: tiles.g1.stand }, beacon: { index: 0, pos: [4.5, 3.95, 1.5] },
+      levelComplete: { index: 0 }, levelStart: { index: 0, level: Game.level }, pause: { paused: true },
+      quality: { level: "low" }
+    };
+    var beaconOn = false;
+    window.__fxIgnitions = 0;
+    beacon.userData.ignite = function () { beaconOn = true; window.__fxIgnitions++; };
+    window.__fxFire = function (name, data) {
+      try {
+        var payload = Object.assign({}, defaults[name] || {}, data || {}), event = name;
+        if (name === "tapUnreachable") event = "tap";
+        if (name === "junction") event = "heroStep";
+        if (event === "levelStart" || event === "restart") {
+          Game.state = "play"; Game.level = payload.level || Game.level; beaconOn = false; window.__fxLit.length = 0;
+          for (var i = 0; i < 6; i++) Game.decor[i].object3D.userData.setLit(false, true);
+        }
+        if (event === "title") Game.state = "title";
+        if (event === "pause") Game.state = payload.paused ? "paused" : "play";
+        if (event === "quality") Game.quality = payload.level;
+        if (event === "levelComplete") Game.state = "complete";
+        if (event === "beacon") beacon.userData.ignite(); // Fake engine owns the beacon's ignition.
+        status.textContent = "FX test · " + name + "\n__fxFire(name, data) · FX.debug()";
+        bus.emit(event, payload); return FX.debug();
+      } catch (e) { window.__fxReportError(e); throw e; }
+    };
+    var schedule = [[0.4, "tap"], [1.2, "tapUnreachable"], [2, "path"], [2.4, "heroStep"],
+      [2.6, "heroStep"], [2.8, "heroStep"], [3.5, "junction"], [4.2, "mechGrab"],
+      [5, "mechTick"], [5.5, "mechSnap"], [6.3, "mechLocked"], [7, "plate"], [8.3, "glimmer"],
+      [10, "beacon"], [14, "levelComplete"]];
+    var only = query.get("only"), scripted = query.get("script") !== "0", cursor = 0;
+    if (only) schedule = [[0.4, only]];
+    if (only === "heroStep") schedule = [[0.4, only], [0.5, only], [0.6, only]];
+    if (scripted && only !== "title") window.__fxFire("levelStart");
+    status.textContent = "FX test · " + (only || (scripted ? "sequence" : "manual")) + "\nClick or press a key to unlock audio";
+    tb.onFrame(function (dt, t) {
+      try {
+        Game.time = t; Game.dt = dt;
+        for (var i = 0; i < 6; i++) {
+          var obj = Game.decor[i].object3D;
+          obj.material.emissiveIntensity += (obj.userData.target - obj.material.emissiveIntensity) * (1 - Math.exp(-dt * 5));
+        }
+        beaconMat.emissiveIntensity += ((beaconOn ? 3 : 0.12) - beaconMat.emissiveIntensity) * (1 - Math.exp(-dt * 3));
+        if (scripted) {
+          while (cursor < schedule.length && t >= schedule[cursor][0]) window.__fxFire(schedule[cursor++][1]);
+          if (!only && t > 4.4 && t < 5.4 || only === "mechMove" && t > 0.4 && t < 1.4) {
+            bus.emit("mechMove", defaults.mechMove);
+          }
+        }
+      } catch (e) { window.__fxReportError(e); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
+#!/usr/bin/env node
+// Screenshot any Spirelight page headlessly and print errors.
+//
+//   node tools/shot.js PAGE OUT.png [--w 1280] [--h 720] [--dpr 1] [--wait 1500] [--until "window.__ready"]
+//                      [--eval "js expression (awaited), result printed as JSON"] [--mobile] [--reduced] [--log]
+//
+// PAGE is relative to spirelight/, e.g. "index.html?test" or "tests/hero.html". --until waits (up to 60 s) for an
+// expression to be truthy before the --wait delay; it defaults to "window.__ready || (window.Game && Game.ready)".
+const path = require("path");
+const { open, ROOT } = require("./harness");
+const argv = process.argv.slice(2), pos = [], opt = {};
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i].startsWith("--")) { const k = argv[i].slice(2), v = argv[i + 1]; if (v === undefined || v.startsWith("--")) opt[k] = "1"; else { opt[k] = v; i++; } }
+  else pos.push(argv[i]);
+}
+const [page = "index.html?test", out = "design/qa/shot.png"] = pos;
+(async () => {
+  const h = await open(page, { w: +(opt.w || 1280), h: +(opt.h || 720), dpr: +(opt.dpr || 1), mobile: !!opt.mobile, reducedMotion: !!opt.reduced, log: !!opt.log });
+  const until = opt.until || "window.__ready || (window.Game && Game.ready)";
+  await h.page.waitForFunction(until, null, { timeout: 60000 }).catch(() => h.errors.push("timeout waiting for: " + until));
+  if (opt.eval) {
+    const r = await h.page.evaluate(`(async () => (${opt.eval}))()`).catch(e => "EVAL ERROR " + e.message);
+    console.log(JSON.stringify(r));
+  }
+  await h.page.waitForTimeout(+(opt.wait || 1500));
+  const file = path.resolve(ROOT, out);
+  await h.page.screenshot({ path: file });
+  console.log("saved " + path.relative(ROOT, file));
+  console.log(h.errors.length ? "ERRORS:\n" + [...new Set(h.errors)].slice(0, 30).join("\n") : "errors: none");
+  await h.close();
+})().catch(e => { console.error("FAIL", e.message); process.exit(1); });
+# Brief: SPIRELIGHT FX and audio (`js/fx.js`, `tests/fx.html`)
+
+You are writing two files in `/home/user/my-first-repo/spirelight/`. Write nothing else. Do not edit `design/design.md`,
+`js/engine.js`, `js/ui.js`, `index.html`, `levels/`, or any other file. Do not git commit. Do not install packages.
+
+## Read first
+
+1. `design/design.md` in full. It is the contract. Sections 0, 1, 2 (look and palette), 4.1 (projection), 7.7 (your
+   API), 8 (events), 10 (testing) and 11 matter most.
+2. `js/geom.js` and `js/blocks.js`, `js/decor.js` if they exist. They may be stubs or missing. Do not depend on their
+   internals beyond the contract in design.md section 7.
+3. `tests/testbed.js` (the isometric testbed you will use in `tests/fx.html`).
+4. `tools/shot.js` and `tools/harness.js` to see how pages are served and tested. The CDN scripts are swapped for local
+   copies in tests, so use the same CDN URLs as `index.html`.
+
+The mood reference is `art-src/style/style-1.png`: warm amber lanterns, teal-cyan glow flowers, dusk sky, drifting
+light. Effects should feel calm, wondrous and tactile, never busy.
+
+## Module shape
+
+- `js/fx.js` is one IIFE, `"use strict"`, that defines `window.FX`. It never throws at load time. Every event handler,
+  frame update and audio call is wrapped in try/catch. If anything is missing (Game.decor, Game.geom, Game.hero, a
+  group), skip that effect quietly. The game must still run.
+- Define `window.FX` at load time with a working `FX.sound` that does nothing until setup. The boot script calls
+  `FX.setup(Game)` after `Game.init`. Setup must be idempotent.
+- Public API:
+  - `FX.setup(Game)`
+  - `FX.sound(name)`: plays a named sound, respecting `Game.save.sound`. Names: `click`, `footstep`, `tick`, `snap`,
+    `locked`, `plate`, `glimmer`, `tk`, `beacon`, `complete`. Unknown names do nothing.
+  - `FX.unlock()`: starts audio if allowed. Gesture listeners call it. Tests call it too.
+  - `FX.debug()` returns `{ live, poolSize, drawCalls, rings, audio, played: {name: count}, music, ambient }` for tests.
+- Use `Game.bus.on(ev, fn)` for the events in design.md section 8. Keep the references so `Game.bus.off` could remove
+  them. Do not use other engine internals.
+
+## Gestures and audio
+
+- Create the `AudioContext` lazily, on the first `pointerdown`, `keydown` or `touchend` on `window` (capture phase).
+  Call `resume()` on that gesture if the context is suspended. Before a gesture, every sound call is a no-op.
+- Signal chain: `sfxBus` and `musicBus` feed a `DynamicsCompressor`, then `master`, then destination. Master gain is
+  -14 dB, which is `0.2` linear. Keep the buses at sensible relative levels: music about 0.5 of sfx.
+- Reverb: a short synthesized convolver. Make the impulse from decaying noise (2.5 s, low-passed tail). No files.
+- Respect the settings. `Game.save.sound === false` silences sfx. `Game.save.music === false` silences the bed. Treat
+  `undefined` as on. The UI changes these flags on `Game.save` and calls `Game.saveNow()`, so poll the flags about four
+  times per second in the frame loop. Fade the bed in and out over 0.8 s. Do not wait for a bus event.
+- Stop the bed and cancel scheduled notes when `Game.state` is `loading` or `complete`. Duck the bed while
+  `Game.state === "paused"`.
+- The music is generative and calm. It runs during `title` and `play`.
+  - Key depends on the theme: `dusk` uses D pentatonic, `night` uses A minor pentatonic, `aurora` uses E pentatonic,
+    `dawn` uses G major pentatonic. Get the theme from `Game.level.theme` when present (on `levelStart`, `data.level`).
+    The title screen uses `dusk`.
+  - Pad: two or three detuned triangle voices through a low-pass around 900 Hz. Chord changes every 12 s
+    (I, vi, IV, V in that key). Attack 2 s, release 3 s.
+  - Music-box arpeggios: a random note every 4 to 7 s, mostly stepwise, never twice in a row. Each note is a sine plus
+    a quiet 4th partial, with a 2.5 s decay and a reverb send.
+  - Wind: looped white noise through a band-pass around 400 Hz, Q about 0.7. An LFO modulates the gain between about
+    0.02 and 0.05. Very quiet.
+- Sound effects (all short, synthesized, and quiet enough to sit under the music):
+  - `footstep`: soft brass tick, a 1800 Hz sine tick of about 25 ms with a tiny noise click. Vary pitch a little on each
+    step.
+  - `tick` (mechTick): a brighter ratchet click, about 2500 Hz, 15 ms.
+  - `snap` (mechSnap): a low clunk (sine around 90 Hz, fast decay) plus a filtered noise thump.
+  - `locked` (mechLocked): a dull thud. Low-passed noise around 200 Hz, 120 ms.
+  - `plate` (press): a low thud plus a soft bright tone a fifth above.
+  - `glimmer`: an FM bell. Carrier ratio 3.5, modulation index decaying from 4 to 0 over 0.9 s. Play a rising pair of
+    pentatonic notes.
+  - `tk` (unreachable tap): a tiny sine at 900 Hz with a fast pitch drop, 40 ms.
+  - `beacon` (ignition swell): a rising chord (four voices) over 2 s, a filtered noise sweep, and a shimmer of high
+    sparkly partials. Ends in a warm bloom.
+  - `complete`: the level complete motif, a 6-note music-box melody in the theme key, over about 4 s, with the bed
+    dipping under it.
+  - `click` (UI): a soft sine at 1600 Hz, 25 ms, with a small decay.
+- Per-sound rate limit: at most one footstep every 80 ms and one tick every 30 ms, so fast drags do not spam.
+
+## Visual system (three.js r128, one frame loop)
+
+Use one FX root `THREE.Group` attached to `Game.scene`. Re-attach it if the engine removed it, on `levelStart`.
+
+Drive everything from your own `requestAnimationFrame` loop. Clamp `dt` to 0.05 and use `Game.time` only if it exists.
+The loop must be allocation-free. Reuse vectors, colours and matrices. Use typed arrays for pools.
+
+**Draw-call budget: at most 8 total, and aim for 3 or 4.** Plan for:
+1. One `THREE.Points` for additive glow particles (sparks, fireflies, glimmer bursts, embers, light dots, beacon motes).
+   Use a `ShaderMaterial` with per-vertex `position`, `color`, `size` (device pixels, not attenuated) and `alpha`. Use
+   `AdditiveBlending`, `depthWrite: false` and `depthTest: true`, so particles hide behind blocks. Give the particles a
+   soft radial texture drawn once on a canvas (no image file).
+2. One `THREE.Points` for normal-blended dust (dust motes, dust puffs, sand-coloured puffs). Same shader, normal
+   blending.
+3. One `THREE.InstancedMesh` of a flat `RingGeometry` for ring ripples, laid on the horizontal top surface of a tile
+   (rotate by −π/2 about X, lift 0.02). Use per-instance colour (`setColorAt`) and additive blending, so fading is a
+   colour scale toward black. Pool of 24 instances. The unreachable ripple is dim, faintly red (`#ff6b6b` at about 35%
+   brightness). The reachable ripple is soft gold-white (`#ffd98a`), then amber.
+
+**Pool capacity:** the particle pool holds at most 1500 live particles. When it is full, recycle the oldest transient
+one. Under `Game.reducedMotion`, halve every spawn count and the pool size. On `quality` events with
+`level === "low"`, halve again.
+
+**Particle shader:** keep it tiny. The point size should be `size * uScale`. Set `uScale` from the renderer's
+`domElement.height / 2 * devicePixelRatio`, clamped to a sensible range. Update the uniform on resize.
+
+**Screen-space light shafts** are not in the scene. Make them a DOM overlay: a `div` with `pointer-events: none` and
+`mix-blend-mode: screen`, inserted into `Game.root` below `Game.ui` (place it before `Game.ui` if that is a child of
+`Game.root`). Draw the rays with a `conic-gradient` or repeating linear gradients, low opacity (0.06 to 0.12), slowly
+rotating or swaying. Origin is the sun side: project the first `DirectionalLight` with `castShadow` from the scene
+against the screen. If it is not available, use the upper-left. Themes: `dusk` and `dawn` warm amber, `aurora` teal
+and violet, `night` cool blue at lower strength. Hide shafts under reduced motion, and on `quality` `low`.
+
+**Positions:**
+- A tile's world point: `Game.geom.walkable(tileId).stand`, with `group` and `ref` from the walkable. Stand points are
+  in reference coordinates. Apply the group's transform: `Game.geom.transform(groupId)` returns
+  `{ R (9 numbers, row-major), pivot, offset }`, so `p' = R·(s − pivot) + pivot + offset`. If anything is missing, use
+  the stand point as-is.
+- `tap` event: if `tile` is given, use its tile point. Otherwise use a `THREE.Raycaster` from the CSS `x,y` (converted to
+  NDC against `Game.root`'s size) to the plane `y = 1`.
+- `path` event: `points` are world stand points. Lay light dots along each segment every 0.3 units.
+- `heroStep` event: `from` and `to` may be walkable ids (strings) or `[x,y,z]` points. Handle both defensively. Wick's
+  feet are `Game.hero.object3D.position` (the origin is at his feet). Use that for dust puffs. For the junction shimmer
+  on `k ≠ 0`, use the midpoint of the two stand points, or Wick's position if those are missing.
+- Mechanism handle: `Game.groups[id].handle` may have an `object3D`. If it does, use its world position. Otherwise use
+  the group's `pivotNode.getWorldPosition`.
+- Decor: `Game.decor[i].object3D` is the decor root. `Game.decor[i].worldPos()` returns the world position, possibly as
+  a vector or an array. Handle both. `object3D.userData.setLit`, `press`, `collect`, `ignite`, `spin` are the decor
+  hooks (design.md section 7.3). FX calls `setLit` for the cascade. FX does **not** call `ignite` (the engine owns that).
+
+## Effects, by event
+
+- **Ambient (title and play, always on):**
+  - Fireflies: about 18 teal-gold glow particles, drifting in slow Lissajous paths over the level bounds (from
+    `Game.geom.bounds()`, or a default box around the origin). Each blinks slowly.
+  - Dust motes: about 60 small warm particles, slowly rising and drifting with the same bounds.
+  - Petals: occasionally, a faint pale-pink petal drifts down (a small rare spawn, one every 6 to 10 s).
+  - Light shafts: the DOM overlay described above.
+- **tap:**
+  - Reachable: a soft gold-white ring ripple on the tile. It expands from 0.3 to 1.1 tile units and fades over 0.6 s.
+    Play nothing extra.
+  - Unreachable (`reachable === false`): a dim, faintly red ring, slightly smaller and quicker. Play `tk`.
+- **path:** a trail of small light dots along the route. Each dot appears in sequence, one every 35 ms, fades over
+  1.2 s, and is pooled. Use the tile colour (warm white).
+- **heroStep:**
+  - A tiny dust puff at Wick's feet every 3rd step (keep a counter). Puffs are sand-coloured, 4 to 5 particles,
+    expanding and fading over 0.5 s. Play `footstep` every step (rate-limited).
+  - When `k ≠ 0` (an impossible join): a brief shimmer at the junction. A teal-white flicker of 8 particles and a short
+    ring of 0.6 units, over 0.4 s. Quiet, no extra sound.
+- **heroStop:** nothing.
+- **mechGrab:** a few brass sparks at the handle (three particles, warm highlight `#ffd27a`).
+- **mechMove:** dust and tiny brass sparks at the handle, one or two per frame, at most. Sparks are short-lived. Keep it
+  light.
+- **mechTick:** a brief dust puff and a bright brass spark at the handle. Play `tick`.
+- **mechSnap:** a burst of brass sparks and dust at the handle, plus a ring of light on the handle's base. Play `snap`.
+- **mechLocked:** a small dull dust puff at the handle. Play `locked`.
+- **plate:** a ring of light (warm amber, larger than the tap ring) and a dust ring on the tile. Play `plate`.
+- **glimmer:** a sparkle burst of about 20 particles, flying up from the tile at about 1 unit per second, drifting
+  outward and fading over 1.6 s. Play `glimmer`.
+- **beacon:** the light cascade.
+  1. Take `Game.decor` items whose `object3D.userData.setLit` is a function. Get their world positions. Sort them by
+     distance from the beacon position (`data.pos`, or the beacon's world position if `pos` is missing).
+  2. Light them one after another over about 2 s. Item `i` of `N` is lit at `t = 2.0 * i / max(1, N−1)`, using
+     `setLit(true, false)` (not instant). At each lit item, spawn 4 to 6 little sparks at its world position, and
+     occasionally a short gold ring.
+  3. Add a burst of rising warm motes (about 120 across the first 1.5 s) from the beacon.
+  4. A warm flash: a full-screen DOM overlay, `background: radial-gradient(#fff3c4cc, #ffb35a33 60%, transparent)`,
+     with `mix-blend-mode: screen`, that fades in 0.25 s and out over 1.2 s.
+  5. Play `beacon`.
+  Schedule these with FX's own clock in the frame loop, not `setTimeout`, so pausing works.
+- **goal:** nothing extra. The engine handles the celebration.
+- **levelComplete:** drifting embers rise: about 60 warm embers from random points within the level bounds, rising slowly
+  over 4 s and fading. Play `complete`.
+- **restart:** clear all transient particles, rings and scheduled cascade work. Keep the ambient motes.
+- **levelStart:** clear everything and rebuild the ambient layer over the new level's bounds. Read `data.level.theme`.
+- **title:** rebuild the ambient layer over the default bounds.
+- **pause:** freeze transient motion (dt = 0 for transient effects). Keep the ambient motes slow. Duck the bed.
+- **quality:** adjust the particle budget as above.
+
+## Testing harness: `tests/fx.html`
+
+Build `tests/fx.html` on `tests/testbed.js`:
+
+- Load the same three r128 script from cdnjs (the same URL as `index.html`), then `tests/testbed.js`, then
+  `js/fx.js`. Do not load `js/engine.js`, `js/ui.js` or any other game module.
+- Use `Testbed.start({ height: 12, center: [3, 1, 3], bg: 0x241a3a, lights: true }, tb => { ... })`.
+  Add a simple diorama for scale: a few stone-coloured cubes (a platform with a few walkable tops, a stair, a tower with
+  a beacon-like box). Use plain `MeshStandardMaterial`, no textures. Keep it under 30 draw calls.
+- Build a **fake `Game`** object on `window.Game`, before `FX.setup(Game)`:
+  - `THREE`, `scene` (tb.scene), `camera` (tb.camera), `renderer` (tb.renderer), `root` (a `div` covering the viewport
+    with `position:fixed; inset:0`), `ui` (a `div` inside root).
+  - `bus`: a small emitter with `on`, `off`, `emit`.
+  - `state: "title"`, `time`, `dt`, `reducedMotion` (read from `?reduced` or `matchMedia`), `quality: "high"`.
+  - `save`: `{ sound: true, music: true, quality: "auto" }`. Read the test's `?sound=0` / `?music=0` flags.
+  - `saveNow()`.
+  - `worldToScreen([x,y,z])`: project with tb.camera, then map to CSS px in root.
+  - `geom`: `walkable(id)` returns `{ stand, group, ref }` for a few fake tiles; `transform(groupId)` returns identity
+    with the pivot; `bounds()` returns the diorama bounds.
+  - `groups`: one fake group `{ id: "bridge", pivotNode: Object3D, handle: { object3D: Object3D } }`.
+  - `hero`: `{ object3D: Object3D at a walkable point }`.
+  - `decor`: about 6 lanterns. Each is `{ item: { type: "lantern" }, object3D, worldPos() }`. Each object3D is a small
+    box with an emissive material and `userData.setLit = function (on, instant) { ... }` that lerps the emissive
+    intensity. Place the lanterns at different distances from the beacon.
+  - `level`: `{ theme: "dusk" }`.
+- Fire the events on a timer, so every effect can be screenshot. Use a script in the page that runs through them:
+  `tap` (reachable), `tap` (unreachable), `path`, `heroStep` (k = 0, then k = 1), `mechGrab`, `mechMove` each frame
+  for a while, `mechTick`, `mechSnap`, `plate`, `glimmer`, `beacon` (then `levelComplete` some seconds later).
+- Make the schedule controllable from the URL and the console:
+  - `window.__fxFire(name, data)` fires one event by name.
+  - `?script=0` turns off the timer script.
+  - `?only=beacon` runs one scenario and holds still for the screenshot.
+- Set `window.__ready = true` after the testbed is ready (Testbed does this).
+- Log every FX error to `console.error`. Never swallow errors silently in the harness.
+- Keep the harness small. It is a test page, not a showcase.
+
+## Acceptance (self-check before you finish)
+
+- `node --check js/fx.js` passes.
+- `window.FX` exists at load, before setup, and `FX.sound("click")` does not throw before a gesture.
+- After `FX.setup(Game)`, `FX.debug().live` is at most 1500, and `drawCalls` is at most 8.
+- Reduced motion halves the ambient counts (check `FX.debug().poolSize` or the live counts).
+- `tests/fx.html` opens with no console errors and no page errors, under `tools/shot.js`. Use `--eval` to call
+  `__fxFire` and `FX.debug()`.
+- Every effect in the list visibly appears in at least one screenshot, and the beacon cascade lights the lanterns in
+  order.
+
+## Report back
+
+End with a short summary (under 200 words): the files you wrote, which events and sounds are implemented, anything you
+could not do, and any assumption you made about `from`/`to` in `heroStep`, `pos` in `beacon`, or the decor `worldPos()`
+return type. Do not paste code into the summary.
+### 7.7 FX (`js/fx.js`) and UI (`js/ui.js`)
+
+- `FX.setup(Game)`:
+  - Particles: ≤ 1500 live, ≤ 8 draw calls, pooled.
+  - Synthesized WebAudio: no files, started on the first gesture, respecting `Game.save.sound` and `Game.save.music`.
+  - `FX.sound(name)` for UI clicks.
+  - Under `prefers-reduced-motion`, use half the particles and no camera motion.
+- `UI.setup(Game)`:
+  - DOM only, inside `Game.ui`.
+  - Screens: title, spires map (level select), HUD (pause, restart, hint, glimmers), intro card, pause, settings,
+    level-complete card, ending.
+  - Touch-friendly (≥ 44 px targets), keyboard-usable and responsive (portrait and landscape).
+
+## 8. Events (`Game.bus`)
+
+All positions in event payloads are world coordinates as `[x, y, z]` arrays.
+
+| event | data | when |
+|---|---|---|
+| `title` | `{}` | title screen shown |
+| `levelStart` | `{ index, level }` | level built, intro card time |
+| `tap` | `{ x, y, tile, reachable, pos }` | a walk tap (x, y in CSS px; tile = walkable id or null; pos = its world stand point or null) |
+| `path` | `{ points: [[x,y,z]...] }` | a walk begins (world stand points) |
+| `heroStep` | `{ from, to, k, at }` | each tile transition: from/to are walkable ids, k ≠ 0 means an impossible join, at = world [x,y,z] of the junction on the `from` side |
+| `heroStop` | `{ tile }` | the walk ended |
+| `mechGrab` | `{ id, kind }` | a handle was grabbed |
+| `mechMove` | `{ id, value, delta }` | every frame while a mechanism moves |
+| `mechTick` | `{ id, pos }` | every 15° (rotor) or 0.25 units (slider) passed (pos = handle world position) |
+| `mechSnap` | `{ id, value, pos }` | settled on an allowed value (pos = handle world position) |
+| `mechLocked` | `{ id }` | the move was refused (Wick on an x/z rotor) |
+| `plate` | `{ tile, group, pos, target }` | a plate was pressed (pos = plate world position, target = world centre of the group it moves) |
+| `glimmer` | `{ tile, count, total, pos }` | a glimmer was collected (pos = its world position) |
+| `goal` | `{ index }` | Wick reached the goal |
+| `beacon` | `{ index, pos }` | the beacon ignites: the engine has just called the beacon decor's `ignite()`; FX runs the cascade (`setLit` on the other decor) and the particles. pos = world [x,y,z] of the beacon flame |
+| `levelComplete` | `{ index, glimmers, total, next }` | show the complete card |
+| `restart` | `{ index }` | the level restarted |
+| `pause` | `{ paused }` | the game was paused or resumed |
+| `quality` | `{ level }` | the quality tier changed |
+
+**P1-8. levels: plates do not telegraph what they move.** After a plate fires on L3, L5, L8, L9 or L10, the moving part is often off in another corner.
+
+- **levels:** run a `pipe` or `chain` decor along the base from each plate toward its target group.
+- **fx:** on the `plate` event, send a 0.6 s spark along a straight screen-space line from the plate's `pos` to the target group's centre (it is in the `plate` payload's `group`).
+
+**P1-9. levels + decor: compositions are scattered chunks, not spires.**
+
+- **Spire-shaped:** L4, L7 and the title read as spires.
+- **Not spire-shaped:**
+  - L3, L5, L6, L9 and L10 are 2–3 separate slabs at different heights.
+  - L2 is one flat slab.
+- **Fix, without touching the geometry:**
+  - (a) Give every level a central **spine**: a tall non-walkable shaft that rises behind the beacon.
+  - (b) Use one shared **keel** under the whole footprint. Today the underside is a tiny `taper` plus one copper finial; the key art has stepped corbel rings, a gear cluster and a long brass pendant.
+  - (c) Visually tie floating islands to the spine with **decor struts and arches**. Decor never takes part in the raycast, so struts cannot break illusions.
+- **New decor types:** `keel` (params `w`, `d`, `depth`) and `strut` (`from`, `to`).
+
+### Visual quality
+
+**P1-1. world: exposure, fill and sky per theme.** The key art is deep teal/violet over saturated orange; ours is pale cyan-pink (dusk) and white-peach (dawn). The fill is too strong: hemisphere 0.85–1.0 plus a PMREM sky environment on every block, against a key light of only 1.4. As a result every face has nearly the same brightness, and cast shadows barely show (`l1-intro-p.png`, `l9-p.png`). Starting values in `DATA`:
+
+| Theme | Exposure | Key light | Hemisphere | Other |
+|---|---|---|---|---|
+| dusk | 0.95 | 2.1 | 0.45 | Sky gain about −20% at the top, so the zenith reads `#1d1b45`. |
+| night | 0.78 | 0.8 (moon) | 0.4 | Turn `rays` and `glare` off (night currently shows sun rays, `L4-p.png`). Zenith navy `#0d1030`. The lantern cascade should be the brightest thing on screen. |
+| aurora | 0.9 | – | 0.5 | Cloud sea darker (mint is too bright and saturated). |
+| dawn | 0.92 | 2.2, low from the left | 0.5 | Cloud sea at peach mid-tone, not white. Lower the glare. |
+
+- Keep all mist screen-space.
+- Compare every change side by side with `art-src/style/style-1.png` at 390×844.
+
+**P1-2. blocks: the material palette lacks value separation.**
+
+| Material | Current | Fix |
+|---|---|---|
+| sandstone | tint `0xfff2e4` (near white), so its texture reads pale peach, the same as the pavers | Tint about `0xf0c08e` so sides read honey `#d9a46a`→`#b97a4a`, against cream pavers `#efe2c6` |
+- Or move the wordmark up and shrink the diorama. The beacon should be visible.
+
+**P2-2. ui: intro card timing.** It is a fixed 3.8 s timer from `levelStart`. Its children fade in over 0.9–1.45 s, so it is fully readable for only about 2.3 s, and on a slow first frame it can vanish before it is seen. (It is not broken: traced, it shows at +3.3 s and hides at +9.1 s in headless.) Start the timer on the first rendered frame after `levelStart`, and dismiss it on the first input.
+
+**P2-3. ui: the HUD backdrop leaves a visible tone seam** about 100 px from the top on night levels (`L4-p.png`, `L5-p.png`, `L6-p.png`). Feather the HUD gradient over 60 px or remove it.
+
+**P2-4. fx/engine: path preview.** On a walk tap, draw a faint dotted line of the route for 0.4 s. This works with the `path` event points and sells impossible joins, because the line visibly "jumps". Hide the join with a sparkle at `heroStep` when `k ≠ 0`.
+
+**P2-5. levels: hint text.**
+ M design/design.md
+ M design/requests.md
+ M js/hero.js
+ M js/ui.js
+?? design/qa/world/before/
+?? tests/fx-brief-3.md
+?? tests/fx-codex-3.log
+
+exec
+/bin/bash -lc "cat tools/shot.js; rg -n 'worldToScreen' js/engine.js; sed -n '1,85p' tests/fx-brief.md; ls -la tests/AGENTS.md js/AGENTS.md /home/user/my-first-repo/AGENTS.md 2>/dev/null" in /home/user/my-first-repo/spirelight
+exec
+/bin/bash -lc "sed -n '545,780p' js/fx.js; cat tests/fx.html" in /home/user/my-first-repo/spirelight
+ exited 2 in 112ms:
+#!/usr/bin/env node
+// Screenshot any Spirelight page headlessly and print errors.
+//
+//   node tools/shot.js PAGE OUT.png [--w 1280] [--h 720] [--dpr 1] [--wait 1500] [--until "window.__ready"]
+//                      [--eval "js expression (awaited), result printed as JSON"] [--mobile] [--reduced] [--log]
+//
+// PAGE is relative to spirelight/, e.g. "index.html?test" or "tests/hero.html". --until waits (up to 60 s) for an
+// expression to be truthy before the --wait delay; it defaults to "window.__ready || (window.Game && Game.ready)".
+const path = require("path");
+const { open, ROOT } = require("./harness");
+const argv = process.argv.slice(2), pos = [], opt = {};
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i].startsWith("--")) { const k = argv[i].slice(2), v = argv[i + 1]; if (v === undefined || v.startsWith("--")) opt[k] = "1"; else { opt[k] = v; i++; } }
+  else pos.push(argv[i]);
+}
+const [page = "index.html?test", out = "design/qa/shot.png"] = pos;
+(async () => {
+  const h = await open(page, { w: +(opt.w || 1280), h: +(opt.h || 720), dpr: +(opt.dpr || 1), mobile: !!opt.mobile, reducedMotion: !!opt.reduced, log: !!opt.log });
+  const until = opt.until || "window.__ready || (window.Game && Game.ready)";
+  await h.page.waitForFunction(until, null, { timeout: 60000 }).catch(() => h.errors.push("timeout waiting for: " + until));
+  if (opt.eval) {
+    const r = await h.page.evaluate(`(async () => (${opt.eval}))()`).catch(e => "EVAL ERROR " + e.message);
+    console.log(JSON.stringify(r));
+  }
+  await h.page.waitForTimeout(+(opt.wait || 1500));
+  const file = path.resolve(ROOT, out);
+  await h.page.screenshot({ path: file });
+  console.log("saved " + path.relative(ROOT, file));
+  console.log(h.errors.length ? "ERRORS:\n" + [...new Set(h.errors)].slice(0, 30).join("\n") : "errors: none");
+  await h.close();
+})().catch(e => { console.error("FAIL", e.message); process.exit(1); });
+63:  function worldToScreen(p, out) {
+70:  Game.worldToScreen = function (p) { return worldToScreen(p, {}); };
+436:    worldToScreen(a, _sc); worldToScreen(b, _sc2);
+1024:      handleRefWorld(g, g.cur, o); worldToScreen(o, _sc);
+1181:  Game.handleScreen = function (id) { var g = Game.groups[id]; if (!g || !g.handle) return null; var o = [0, 0, 0]; handleRefWorld(g, g.cur, o); return worldToScreen(o, {}); };
+1182:  Game.heroScreen = function () { return worldToScreen([heroW.pos.x, heroW.pos.y + 0.4, heroW.pos.z], {}); };
+1214:      dbgPos(e.a, a); dbgPos(e.b, b); worldToScreen(a, s1); worldToScreen(b, s2);
+1220:      dbgPos(wk.id, a); worldToScreen(a, s1);
+1225:    c.strokeStyle = "#ffb35a"; for (var id in Game.groups) { var g = Game.groups[id]; if (!g.handle) continue; handleRefWorld(g, g.cur, a); worldToScreen(a, s1); c.beginPath(); c.arc(s1.x, s1.y, 36, 0, 7); c.stroke(); }
+# Brief: SPIRELIGHT FX and audio (`js/fx.js`, `tests/fx.html`)
+
+You are writing two files in `/home/user/my-first-repo/spirelight/`. Write nothing else. Do not edit `design/design.md`,
+`js/engine.js`, `js/ui.js`, `index.html`, `levels/`, or any other file. Do not git commit. Do not install packages.
+
+## Read first
+
+1. `design/design.md` in full. It is the contract. Sections 0, 1, 2 (look and palette), 4.1 (projection), 7.7 (your
+   API), 8 (events), 10 (testing) and 11 matter most.
+2. `js/geom.js` and `js/blocks.js`, `js/decor.js` if they exist. They may be stubs or missing. Do not depend on their
+   internals beyond the contract in design.md section 7.
+3. `tests/testbed.js` (the isometric testbed you will use in `tests/fx.html`).
+4. `tools/shot.js` and `tools/harness.js` to see how pages are served and tested. The CDN scripts are swapped for local
+   copies in tests, so use the same CDN URLs as `index.html`.
+
+The mood reference is `art-src/style/style-1.png`: warm amber lanterns, teal-cyan glow flowers, dusk sky, drifting
+light. Effects should feel calm, wondrous and tactile, never busy.
+
+## Module shape
+
+- `js/fx.js` is one IIFE, `"use strict"`, that defines `window.FX`. It never throws at load time. Every event handler,
+  frame update and audio call is wrapped in try/catch. If anything is missing (Game.decor, Game.geom, Game.hero, a
+  group), skip that effect quietly. The game must still run.
+- Define `window.FX` at load time with a working `FX.sound` that does nothing until setup. The boot script calls
+  `FX.setup(Game)` after `Game.init`. Setup must be idempotent.
+- Public API:
+  - `FX.setup(Game)`
+  - `FX.sound(name)`: plays a named sound, respecting `Game.save.sound`. Names: `click`, `footstep`, `tick`, `snap`,
+    `locked`, `plate`, `glimmer`, `tk`, `beacon`, `complete`. Unknown names do nothing.
+  - `FX.unlock()`: starts audio if allowed. Gesture listeners call it. Tests call it too.
+  - `FX.debug()` returns `{ live, poolSize, drawCalls, rings, audio, played: {name: count}, music, ambient }` for tests.
+- Use `Game.bus.on(ev, fn)` for the events in design.md section 8. Keep the references so `Game.bus.off` could remove
+  them. Do not use other engine internals.
+
+## Gestures and audio
+
+- Create the `AudioContext` lazily, on the first `pointerdown`, `keydown` or `touchend` on `window` (capture phase).
+  Call `resume()` on that gesture if the context is suspended. Before a gesture, every sound call is a no-op.
+- Signal chain: `sfxBus` and `musicBus` feed a `DynamicsCompressor`, then `master`, then destination. Master gain is
+  -14 dB, which is `0.2` linear. Keep the buses at sensible relative levels: music about 0.5 of sfx.
+- Reverb: a short synthesized convolver. Make the impulse from decaying noise (2.5 s, low-passed tail). No files.
+- Respect the settings. `Game.save.sound === false` silences sfx. `Game.save.music === false` silences the bed. Treat
+  `undefined` as on. The UI changes these flags on `Game.save` and calls `Game.saveNow()`, so poll the flags about four
+  times per second in the frame loop. Fade the bed in and out over 0.8 s. Do not wait for a bus event.
+- Stop the bed and cancel scheduled notes when `Game.state` is `loading` or `complete`. Duck the bed while
+  `Game.state === "paused"`.
+- The music is generative and calm. It runs during `title` and `play`.
+  - Key depends on the theme: `dusk` uses D pentatonic, `night` uses A minor pentatonic, `aurora` uses E pentatonic,
+    `dawn` uses G major pentatonic. Get the theme from `Game.level.theme` when present (on `levelStart`, `data.level`).
+    The title screen uses `dusk`.
+  - Pad: two or three detuned triangle voices through a low-pass around 900 Hz. Chord changes every 12 s
+    (I, vi, IV, V in that key). Attack 2 s, release 3 s.
+  - Music-box arpeggios: a random note every 4 to 7 s, mostly stepwise, never twice in a row. Each note is a sine plus
+    a quiet 4th partial, with a 2.5 s decay and a reverb send.
+  - Wind: looped white noise through a band-pass around 400 Hz, Q about 0.7. An LFO modulates the gain between about
+    0.02 and 0.05. Very quiet.
+- Sound effects (all short, synthesized, and quiet enough to sit under the music):
+  - `footstep`: soft brass tick, a 1800 Hz sine tick of about 25 ms with a tiny noise click. Vary pitch a little on each
+    step.
+  - `tick` (mechTick): a brighter ratchet click, about 2500 Hz, 15 ms.
+  - `snap` (mechSnap): a low clunk (sine around 90 Hz, fast decay) plus a filtered noise thump.
+  - `locked` (mechLocked): a dull thud. Low-passed noise around 200 Hz, 120 ms.
+  - `plate` (press): a low thud plus a soft bright tone a fifth above.
+  - `glimmer`: an FM bell. Carrier ratio 3.5, modulation index decaying from 4 to 0 over 0.9 s. Play a rising pair of
+    pentatonic notes.
+  - `tk` (unreachable tap): a tiny sine at 900 Hz with a fast pitch drop, 40 ms.
+  - `beacon` (ignition swell): a rising chord (four voices) over 2 s, a filtered noise sweep, and a shimmer of high
+    sparkly partials. Ends in a warm bloom.
+  - `complete`: the level complete motif, a 6-note music-box melody in the theme key, over about 4 s, with the bed
+    dipping under it.
+  - `click` (UI): a soft sine at 1600 Hz, 25 ms, with a small decay.
+- Per-sound rate limit: at most one footstep every 80 ms and one tick every 30 ms, so fast drags do not spam.
+
+## Visual system (three.js r128, one frame loop)
+
+Use one FX root `THREE.Group` attached to `Game.scene`. Re-attach it if the engine removed it, on `levelStart`.
+
+Drive everything from your own `requestAnimationFrame` loop. Clamp `dt` to 0.05 and use `Game.time` only if it exists.
+The loop must be allocation-free. Reuse vectors, colours and matrices. Use typed arrays for pools.
+
+**Draw-call budget: at most 8 total, and aim for 3 or 4.** Plan for:
+1. One `THREE.Points` for additive glow particles (sparks, fireflies, glimmer bursts, embers, light dots, beacon motes).
+   Use a `ShaderMaterial` with per-vertex `position`, `color`, `size` (device pixels, not attenuated) and `alpha`. Use
+   `AdditiveBlending`, `depthWrite: false` and `depthTest: true`, so particles hide behind blocks. Give the particles a
+   soft radial texture drawn once on a canvas (no image file).
+
+ succeeded in 130ms:
+          var interval = i === 0 ? 0 : i === 1 ? (chord % 4 === 1 || minor && chord % 4 === 0 ? 3 : 4) : 7;
+          tone(frequency(base + interval), now + 0.01, 15, 0.14, "triangle", true, true, 0, 2, 900, (i - 1) * 5);
+        }
+        chord++; nextChord = now + 12;
+      }
+      if (now >= nextNote) {
+        var next = note + (Math.random() < 0.5 ? -1 : 1) * (Math.random() < 0.85 ? 1 : 2);
+        if (next < 0 || next > 9) next = note + (next < 0 ? 1 : -1);
+        note = next; boxNote(scaleNote(note), now + 0.01, 0.18, true); nextNote = now + 4 + Math.random() * 3;
+      }
+    } catch (e) { report(e); }
+  }
+
+  function particlesFrame(dt, ambientDt, active) {
+    glow.count = dust.count = live = ambientCount = 0;
+    for (var i = 0; i < budget; i++) {
+      var type = kind[i]; if (!type) continue;
+      var j = i * STRIDE, alpha = pool[j + 10], age;
+      if (type === 1) {
+        if (pool[j + 13] > 0) { pool[j + 13] -= dt; live++; continue; }
+        pool[j + 11] += dt; age = pool[j + 11];
+        if (age >= pool[j + 12]) { kind[i] = 0; continue; }
+        pool[j] += pool[j + 3] * dt; pool[j + 1] += pool[j + 4] * dt; pool[j + 2] += pool[j + 5] * dt;
+        pool[j + 4] -= pool[j + 19] * dt;
+        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - age / pool[j + 12], 1.3);
+      } else {
+        ambientCount++;
+        var phase = pool[j + 17], t = ambientClock;
+        if (type === 2) {
+          pool[j] = pool[j + 14] + Math.sin(t * 0.22 + phase) * 0.5;
+          pool[j + 1] = pool[j + 15] + Math.sin(t * 0.29 + phase * 2) * 0.3;
+          pool[j + 2] = pool[j + 16] + Math.cos(t * 0.17 + phase) * 0.5;
+          alpha *= 0.12 + 0.88 * Math.pow((Math.sin(t * 0.85 + phase) + 1) / 2, 2);
+        } else {
+          pool[j] = pool[j + 14] + Math.sin(t * 0.09 + phase) * 0.35;
+          pool[j + 1] += ambientDt * 0.045;
+          if (pool[j + 1] > max[1]) pool[j + 1] = min[1];
+        }
+        if (!active) alpha = 0;
+      }
+      live++;
+      var batch = pool[j + 18] ? dust : glow, k = batch.count++, out = batch.data, q = k * 3;
+      out.position[q] = pool[j]; out.position[q + 1] = pool[j + 1]; out.position[q + 2] = pool[j + 2];
+      out.color[q] = pool[j + 6]; out.color[q + 1] = pool[j + 7]; out.color[q + 2] = pool[j + 8];
+      out.size[k] = pool[j + 9]; out.alpha[k] = alpha;
+    }
+    upload(glow); upload(dust);
+  }
+  function upload(batch) {
+    batch.geometry.setDrawRange(0, batch.count);
+    var attrs = batch.geometry.attributes;
+    attrs.position.needsUpdate = attrs.color.needsUpdate = attrs.size.needsUpdate = attrs.alpha.needsUpdate = true;
+  }
+  function ringsFrame(dt) {
+    ringCount = 0;
+    for (var i = 0; i < 24; i++) {
+      var j = i * 10, duration = ringData[j + 4];
+      if (!duration) continue;
+      ringData[j + 3] += dt;
+      var progress = ringData[j + 3] / duration;
+      if (progress >= 1) { ringData[j + 4] = 0; continue; }
+      // RingGeometry has radius one; the requested tile sizes are diameters.
+      var radius = (0.3 + (ringData[j + 5] - 0.3) * progress) * 0.5;
+      a.set(ringData[j], ringData[j + 1], ringData[j + 2]); scale.set(radius, radius, radius);
+      matrix.compose(a, rotation, scale); ringMesh.setMatrixAt(ringCount, matrix);
+      var fadeOut = (1 - progress) * ringData[j + 9];
+      colour.setRGB(ringData[j + 6] * fadeOut, ringData[j + 7] * fadeOut * (1 - progress * 0.15),
+        ringData[j + 8] * fadeOut * (1 - progress * 0.5));
+      ringMesh.setColorAt(ringCount++, colour);
+    }
+    ringMesh.count = ringCount; ringMesh.instanceMatrix.needsUpdate = true;
+    if (ringMesh.instanceColor) ringMesh.instanceColor.needsUpdate = true;
+  }
+  function frame(now) {
+    try {
+      var dt = last ? Math.max(0, Math.min(0.05, (now - last) / 1000)) : 0; last = now;
+      if (Number.isFinite(G.time)) {
+        var delta = G.time - gameTime;
+        if (Number.isFinite(delta) && delta > 0) dt = Math.min(0.05, delta);
+        gameTime = G.time;
+      }
+      var freeze = paused || G.state === "paused", transientDt = freeze ? 0 : dt;
+      var ambientDt = dt * (freeze ? 0.2 : 1), active = G.state === "title" || G.state === "play" || freeze;
+      clock += transientDt; ambientClock += ambientDt; frameId++;
+      if (sway) sway.playbackRate = freeze ? 0.2 : 1;
+      if (active && ambientClock >= petalAt) {
+        randomPoint(a); a.y = max[1];
+        for (var i = 0, n = scaled(1); i < n; i++) particle(a, 0xf3c9d6, 0.017, 0.25, 8, 0.06, -0.2, 0.03, 1);
+        petalAt = ambientClock + 6 + Math.random() * 4;
+      }
+      if (transientDt > 0) cascadeFrame();
+      particlesFrame(transientDt, ambientDt, active); ringsFrame(transientDt);
+      poll -= dt;
+      if (poll <= 0) {
+        poll = 0.25;
+        var wantedFactor = (G.reducedMotion ? 0.5 : 1) * (low ? 0.5 : 1);
+        if (wantedFactor !== factor) rebuild(G.state === "title");
+        audioFrame();
+      }
+    } catch (e) { report(e); }
+    try { raf = window.requestAnimationFrame(frame); } catch (e) { report(e); }
+  }
+  function detach() {
+    if (!G) return;
+    if (G.bus && G.bus.off) for (var i = 0; i < bindings.length; i++) G.bus.off(bindings[i].name, bindings[i].handler);
+    bindings.length = 0;
+    window.removeEventListener("resize", resize);
+    window.removeEventListener("pointerdown", unlock, true); window.removeEventListener("keydown", unlock, true);
+    window.removeEventListener("touchend", unlock, true);
+    if (raf) window.cancelAnimationFrame(raf);
+    if (root) {
+      if (root.parent) root.parent.remove(root);
+      if (glow) { glow.geometry.dispose(); glow.material.dispose(); }
+      if (dust) { dust.geometry.dispose(); dust.material.dispose(); }
+      if (ringMesh) { ringMesh.geometry.dispose(); ringMesh.material.dispose(); }
+      if (texture) texture.dispose();
+    }
+    if (sway) sway.cancel();
+    if (shafts) shafts.remove(); if (flash) flash.remove();
+    resetBed(); ready = false;
+  }
+  function setup(game) {
+    try {
+      if (!game || ready && G === game) return;
+      if (G) detach(); G = game; T = G.THREE || window.THREE;
+      // Audio and event safety do not depend on the optional visual layer.
+      window.addEventListener("pointerdown", unlock, true); window.addEventListener("keydown", unlock, true);
+      window.addEventListener("touchend", unlock, true);
+      if (!T || !G.scene) return;
+      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); scale = new T.Vector3();
+      matrix = new T.Matrix4(); rotation = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -Math.PI / 2);
+      colour = new T.Color(); ray = new T.Raycaster(); ndc = new T.Vector2(); plane = new T.Plane(new T.Vector3(0, 1, 0), -1);
+      root = new T.Group(); root.name = "Spirelight FX"; G.scene.add(root);
+      var canvas = document.createElement("canvas"); canvas.width = canvas.height = 64;
+      var draw = canvas.getContext("2d"), gradient = draw.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gradient.addColorStop(0, "rgba(255,255,255,1)"); gradient.addColorStop(0.18, "rgba(255,255,255,.85)");
+      gradient.addColorStop(0.5, "rgba(255,255,255,.2)"); gradient.addColorStop(1, "rgba(255,255,255,0)");
+      draw.fillStyle = gradient; draw.fillRect(0, 0, 64, 64); texture = new T.CanvasTexture(canvas);
+      glow = makePoints(T.AdditiveBlending); dust = makePoints(T.NormalBlending);
+      ringMesh = new T.InstancedMesh(new T.RingGeometry(0.91, 1, 48), new T.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, blending: T.AdditiveBlending, depthTest: true, depthWrite: false,
+        side: T.DoubleSide, toneMapped: false }), 24);
+      ringMesh.instanceMatrix.setUsage(T.DynamicDrawUsage); ringMesh.count = 0; ringMesh.frustumCulled = false;
+      ringMesh.name = "FX ripples"; root.add(ringMesh);
+      low = G.quality === "low"; changeTheme(G.state === "title" ? "dusk" : G.level && G.level.theme);
+      overlay(); rebuild(G.state === "title"); events(); window.addEventListener("resize", resize);
+      clock = ambientClock = last = 0; gameTime = NaN; ready = true;
+      raf = window.requestAnimationFrame(frame);
+    } catch (e) { report(e); }
+  }
+  function debug() {
+    var count = 0, ambient = 0, rings = 0;
+    for (var i = 0; i < budget; i++) { if (kind[i]) count++; if (kind[i] > 1) ambient++; }
+    for (var j = 0; j < 24; j++) if (ringData[j * 10 + 4]) rings++;
+    return { live: count, poolSize: budget, drawCalls: ready ? 3 : 0, rings: rings,
+      audio: ctx ? ctx.state : "locked", played: Object.assign({}, played),
+      music: { running: bed, theme: theme, gain: ctx ? musicBus.gain.value : 0 }, ambient: ambient };
+  }
+  window.FX = { setup: setup, sound: sound, unlock: unlock, debug: debug };
+})();
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Spirelight FX test</title>
+<style>
+html,body{margin:0;overflow:hidden}#fx-test-root{position:fixed;inset:0;overflow:hidden;pointer-events:none}
+#fx-test-ui{position:absolute;inset:0;pointer-events:none;color:#efe2c6;font:12px monospace}
+#status{position:absolute;left:16px;bottom:16px;white-space:pre-line;opacity:.7}
+#unlock{position:absolute;right:16px;bottom:16px;min-height:44px;pointer-events:auto}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="testbed.js"></script>
+<script>
+window.__fxErrors = [];
+window.__fxReportError = function (e) { window.__fxErrors.push(String(e && e.stack || e)); console.error(e); };
+window.addEventListener("error", function (e) { console.error(e.error || e.message); });
+window.addEventListener("unhandledrejection", function (e) { console.error(e.reason); });
+</script>
+<script src="../js/fx.js"></script>
+</head>
+<body>
+<script>
+(function () {
+  "use strict";
+  // Verify the public no-op before setup or a gesture.
+  FX.sound("click");
+  window.__fxBeforeSetup = FX.debug();
+  Testbed.start({ height: 12, center: [3, 1, 3], bg: 0x241a3a, lights: true }, function (tb) {
+    var T = tb.THREE, query = new URLSearchParams(location.search);
+    var root = document.createElement("div"), ui = document.createElement("div"), status = document.createElement("div");
+    root.id = "fx-test-root"; ui.id = "fx-test-ui"; status.id = "status";
+    ui.appendChild(status); root.appendChild(ui); document.body.appendChild(root);
+    var unlock = document.createElement("button"); unlock.id = "unlock"; unlock.textContent = "Unlock audio";
+    unlock.addEventListener("click", function () {
+      Promise.resolve(FX.unlock()).then(function () {
+        unlock.textContent = "Audio: " + FX.debug().audio;
+      }).catch(window.__fxReportError);
+    });
+    ui.appendChild(unlock);
+    var listeners = Object.create(null);
+    var bus = {
+      on: function (name, fn) { (listeners[name] || (listeners[name] = [])).push(fn); },
+      off: function (name, fn) { var list = listeners[name] || [], i = list.indexOf(fn); if (i >= 0) list.splice(i, 1); },
+      emit: function (name, data) {
+        var list = listeners[name] || [];
+        for (var i = 0; i < list.length; i++) {
+          try { list[i](data || {}); } catch (e) { window.__fxReportError(e); }
+        }
+      }
+    };
+    var cube = new T.BoxGeometry(1, 1, 1);
+    var stone = new T.MeshStandardMaterial({ color: 0xb99376, roughness: 0.9 });
+    var paver = new T.MeshStandardMaterial({ color: 0xefe2c6, roughness: 0.85 });
+    var brass = new T.MeshStandardMaterial({ color: 0xc8963e, metalness: 0.6, roughness: 0.4 });
+    function box(x, y, z, sx, sy, sz, material, shadow) {
+      var mesh = new T.Mesh(cube, material); mesh.position.set(x, y, z); mesh.scale.set(sx, sy, sz);
+      mesh.castShadow = !!shadow; mesh.receiveShadow = true; tb.scene.add(mesh); return mesh;
+    }
+    box(3, 0, 3, 6, 1, 4, stone, true);
+    box(3, 0.54, 3, 5.9, 0.08, 3.9, paver);
+    box(2, 0.83, 2, 1, 0.5, 1, stone, true);
+    box(2, 1.32, 1, 1, 1.5, 1, stone, true);
+    box(4.5, 1.5, 1.5, 1.5, 3, 1.5, stone, true);
+    box(4.5, 3.06, 1.5, 1.7, 0.12, 1.7, paver);
+    var beaconMat = new T.MeshStandardMaterial({ color: 0xc8963e, emissive: 0xffb35a, emissiveIntensity: 0.12 });
+    var beacon = box(4.5, 3.55, 1.5, 0.55, 0.8, 0.55, beaconMat);
+    var tiles = {
+      start: { stand: [1.5, 0.58, 3.5], group: "base", ref: [1, 0, 3] },
+      middle: { stand: [3, 0.58, 3.5], group: "base", ref: [3, 0, 3] },
+      plate: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+      p1: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+      g1: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+      bridge_1: { stand: [5, 0.58, 3], group: "bridge", ref: [5, 0, 3] },
+      stair: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+      goal: { stand: [4.5, 3.12, 1.5], group: "bridge", ref: [4, 3, 1] }
+    };
+    var pivot = new T.Object3D(); pivot.position.set(5, 0.58, 3); tb.scene.add(pivot);
+    var handle = new T.Object3D(); handle.position.set(0, 0.5, 0); pivot.add(handle);
+    var knob = new T.Mesh(cube, brass); knob.scale.set(0.28, 0.28, 0.65); handle.add(knob);
+    var hero = new T.Object3D(); hero.position.fromArray(tiles.start.stand); tb.scene.add(hero);
+    var wick = new T.Mesh(cube, brass); wick.position.y = 0.22; wick.scale.set(0.22, 0.44, 0.22); hero.add(wick);
+    var identity = { R: [1, 0, 0, 0, 1, 0, 0, 0, 1], pivot: [5, 0.58, 3], offset: [0, 0, 0] };
+    var levelBounds = { min: [0, 0, 1], max: [6, 4, 5] }, screenVector = new T.Vector3();
+    var Game = window.Game = {
+      THREE: T, scene: tb.scene, camera: tb.camera, renderer: tb.renderer, root: root, ui: ui, bus: bus,
+      state: "title", time: 0, dt: 0, quality: query.get("quality") || "high",
+      reducedMotion: query.has("reduced") || matchMedia("(prefers-reduced-motion: reduce)").matches,
+      save: { sound: query.get("sound") !== "0", music: query.get("music") !== "0", quality: "auto" },
+      saveNow: function () {},
+      worldToScreen: function (p) {
+        screenVector.fromArray(p).project(tb.camera);
+        return { x: (screenVector.x + 1) * root.clientWidth / 2, y: (1 - screenVector.y) * root.clientHeight / 2 };
+      },
+      geom: { walkable: function (id) { return tiles[id] || null; }, transform: function () { return identity; },
+        bounds: function () { return levelBounds; } },
+      groups: { bridge: { id: "bridge", pivotNode: pivot, handle: { object3D: handle } } },
+      hero: { object3D: hero }, decor: [], level: { theme: "dusk" }
+    };
+    window.__fxLit = [];
+    var lanterns = [[4.9, 2.6, 2.3], [3.4, 1.5, 2.2], [5.5, 0.85, 3.9],
+      [3.7, 0.85, 4.5], [2.3, 0.85, 4.4], [0.6, 0.85, 4.3]];
+    lanterns.forEach(function (pos, i) {
+      var mat = new T.MeshStandardMaterial({ color: 0x9c783d, emissive: 0xffb35a, emissiveIntensity: 0.02, roughness: 0.5 });
+      var obj = box(pos[0], pos[1], pos[2], 0.19, 0.32, 0.19, mat), world = new T.Vector3();
+      obj.userData.target = 0.02;
+      obj.userData.setLit = function (on, instant) {
+        obj.userData.target = on ? 3 : 0.02;
+        if (instant) mat.emissiveIntensity = obj.userData.target;
+        if (on) window.__fxLit.push({ index: i, time: Game.time, instant: !!instant });
+      };
+      Game.decor.push({ item: { type: "lantern" }, object3D: obj, worldPos: function (target) {
+        return obj.getWorldPosition(target || world);
+      } });
+    });
+    var beaconWorld = new T.Vector3();
+    Game.decor.push({ item: { type: "beacon" }, object3D: beacon,
+      worldPos: function (target) { return beacon.getWorldPosition(target || beaconWorld); } });
+    FX.setup(Game); FX.setup(Game); // Repeated boot must not duplicate roots, listeners, or ambient particles.
+    var defaults = {
+      tap: { x: 0, y: 0, tile: "middle", reachable: true, pos: tiles.middle.stand },
+      tapUnreachable: { x: 0, y: 0, tile: "p1", reachable: false, pos: tiles.p1.stand },
+      path: { points: [tiles.start.stand, tiles.middle.stand, tiles.plate.stand] },
+      heroStep: { from: "start", to: "middle", k: 0, at: tiles.start.stand },
+      junction: { from: "middle", to: "bridge_1", k: 1, at: tiles.middle.stand },
+      mechGrab: { id: "bridge" }, mechMove: { id: "bridge", value: 15, delta: 1 },
+      mechTick: { id: "bridge", pos: [5, 1.08, 3] }, mechSnap: { id: "bridge", value: 90, pos: [5, 1.08, 3] },
+      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "base", pos: tiles.p1.stand },
+      glimmer: { tile: "g1", count: 1, total: 3, pos: tiles.g1.stand }, beacon: { index: 0, pos: [4.5, 3.95, 1.5] },
+      levelComplete: { index: 0 }, levelStart: { index: 0, level: Game.level }, pause: { paused: true },
+      quality: { level: "low" }
+    };
+    var beaconOn = false;
+    window.__fxIgnitions = 0;
+    beacon.userData.ignite = function () { beaconOn = true; window.__fxIgnitions++; };
+    window.__fxFire = function (name, data) {
+      try {
+        var payload = Object.assign({}, defaults[name] || {}, data || {}), event = name;
+        if (name === "tapUnreachable") event = "tap";
+        if (name === "junction") event = "heroStep";
+        if (event === "levelStart" || event === "restart") {
+          Game.state = "play"; Game.level = payload.level || Game.level; beaconOn = false; window.__fxLit.length = 0;
+          for (var i = 0; i < 6; i++) Game.decor[i].object3D.userData.setLit(false, true);
+        }
+        if (event === "title") Game.state = "title";
+        if (event === "pause") Game.state = payload.paused ? "paused" : "play";
+        if (event === "quality") Game.quality = payload.level;
+        if (event === "levelComplete") Game.state = "complete";
+        if (event === "beacon") beacon.userData.ignite(); // Fake engine owns the beacon's ignition.
+        status.textContent = "FX test · " + name + "\n__fxFire(name, data) · FX.debug()";
+        bus.emit(event, payload); return FX.debug();
+      } catch (e) { window.__fxReportError(e); throw e; }
+    };
+    var schedule = [[0.4, "tap"], [1.2, "tapUnreachable"], [2, "path"], [2.4, "heroStep"],
+      [2.6, "heroStep"], [2.8, "heroStep"], [3.5, "junction"], [4.2, "mechGrab"],
+      [5, "mechTick"], [5.5, "mechSnap"], [6.3, "mechLocked"], [7, "plate"], [8.3, "glimmer"],
+      [10, "beacon"], [14, "levelComplete"]];
+    var only = query.get("only"), scripted = query.get("script") !== "0", cursor = 0;
+    if (only) schedule = [[0.4, only]];
+    if (only === "heroStep") schedule = [[0.4, only], [0.5, only], [0.6, only]];
+    if (scripted && only !== "title") window.__fxFire("levelStart");
+    status.textContent = "FX test · " + (only || (scripted ? "sequence" : "manual")) + "\nClick or press a key to unlock audio";
+    tb.onFrame(function (dt, t) {
+      try {
+        Game.time = t; Game.dt = dt;
+        for (var i = 0; i < 6; i++) {
+          var obj = Game.decor[i].object3D;
+          obj.material.emissiveIntensity += (obj.userData.target - obj.material.emissiveIntensity) * (1 - Math.exp(-dt * 5));
+        }
+        beaconMat.emissiveIntensity += ((beaconOn ? 3 : 0.12) - beaconMat.emissiveIntensity) * (1 - Math.exp(-dt * 3));
+        if (scripted) {
+          while (cursor < schedule.length && t >= schedule[cursor][0]) window.__fxFire(schedule[cursor++][1]);
+          if (!only && t > 4.4 && t < 5.4 || only === "mechMove" && t > 0.4 && t < 1.4) {
+            bus.emit("mechMove", defaults.mechMove);
+          }
+        }
+      } catch (e) { window.__fxReportError(e); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
+

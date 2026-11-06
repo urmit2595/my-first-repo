@@ -52,16 +52,16 @@
     }
     var env = new THREE.CubeTexture(faces); env.encoding = THREE.sRGBEncoding; env.needsUpdate = true; textures.push(env);
     function linear(hex) { return new THREE.Color(hex).convertSRGBToLinear(); }
-    var brass = mat(new THREE.MeshStandardMaterial({ color: linear(0xc79540), metalness: 0.75, roughness: 0.45,
-      map: metalMap, bumpMap: grainMap, bumpScale: 0.00035, envMap: env, envMapIntensity: 1.6 }));
+    var brass = mat(new THREE.MeshStandardMaterial({ color: linear(0x93642a), metalness: 0.85, roughness: 0.4,
+      map: metalMap, bumpMap: grainMap, bumpScale: 0.00035, envMap: env, envMapIntensity: 1.9 }));
     var dark = mat(new THREE.MeshStandardMaterial({ color: linear(0x5c4931), metalness: 0.85, roughness: 0.53, envMap: env }));
     var patina = mat(new THREE.MeshStandardMaterial({ color: linear(0x4fa597), metalness: 0.65, roughness: 0.55, envMap: env }));
     var knitCanvas = canvas(128, 128), kc = knitCanvas.getContext("2d");
-    kc.fillStyle = "#2f9a98"; kc.fillRect(0, 0, 128, 128); kc.lineCap = "round";
+    kc.fillStyle = "#14a3a6"; kc.fillRect(0, 0, 128, 128); kc.lineCap = "round";
     for (y = -8; y < 136; y += 8) for (x = -8; x < 136; x += 8) {
-      kc.strokeStyle = "#277976"; kc.lineWidth = 4.5;
+      kc.strokeStyle = "#0c7f86"; kc.lineWidth = 4.5;
       kc.beginPath(); kc.moveTo(x - 2, y); kc.lineTo(x + 1, y + 5); kc.lineTo(x + 4, y); kc.stroke();
-      kc.strokeStyle = (x + y) % 16 ? "#55b9ae" : "#43aaa5"; kc.lineWidth = 2;
+      kc.strokeStyle = (x + y) % 16 ? "#3fd0c4" : "#26bcba"; kc.lineWidth = 2;
       kc.beginPath(); kc.moveTo(x - 2, y); kc.lineTo(x + 1, y + 4); kc.lineTo(x + 4, y); kc.stroke();
     }
     var knitColor = texture(knitCanvas, true), knit = texture(knitCanvas, false);
@@ -114,7 +114,7 @@
     }
     function lathe(points) { return geo(new THREE.LatheGeometry(points.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), radial)); }
     // Keep the fuller lantern silhouette within the 0.85-unit game scale.
-    var assembly = new THREE.Group(); assembly.name = "assembly"; root.add(assembly); assembly.scale.setScalar(0.82);
+    var assembly = new THREE.Group(); assembly.name = "assembly"; root.add(assembly); assembly.scale.setScalar(0.943);
     var hips = group(assembly, "hips", 0, 0.222, 0);
     var torso = group(hips, "torso");
     var egg = lathe([[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],
@@ -166,10 +166,10 @@
     ring(key, 0.031, 0.012, -0.053, 0.025, 0, brass, 0.03);
     rod(key, 0, 0.005, -0.053, 0.01, 0.06, 0, Math.PI / 2);
     // A real wool torus, with a rolled lower lip and a front-side knot.
-    part(torso, geo(new THREE.TorusGeometry(0.088, 0.043, 12, radial)), scarfMat,
+    part(torso, geo(new THREE.TorusGeometry(0.088, 0.056, 12, radial)), scarfMat,
       0, 0.263, 0, 1, 1, 0.8, Math.PI / 2);
-    ring(torso, 0, 0.242, 0, 0.096, Math.PI / 2, scarfMat);
-    ball(torso, -0.111, 0.262, 0.103, 0.038, 0.035, 0.035, scarfMat);
+    ring(torso, 0, 0.242, 0, 0.108, Math.PI / 2, scarfMat);
+    ball(torso, -0.111, 0.262, 0.103, 0.05, 0.046, 0.046, scarfMat);
     rod(torso, 0, 0.295, 0, 0.073, 0.065);
     var head = group(torso, "head", 0, 0.32, 0);
     var globe = lathe([[0.114,0.008],[0.145,0.03],[0.177,0.075],[0.191,0.115],
@@ -220,7 +220,7 @@
     var eyes = group(flame, "eyes", 0, 0.105, 0.106);
     ball(eyes, -0.023, 0, 0, 0.007, 0.0175, 0.006, eyeMat);
     ball(eyes, 0.023, 0, 0, 0.007, 0.0175, 0.006, eyeMat);
-    var light = new THREE.PointLight(0xffb35a, 1.4, 4, 2); light.name = "Wick flame light";
+    var light = new THREE.PointLight(0xffb35a, 2.24, 4, 2); light.name = "Wick flame light";
     light.castShadow = false; root.add(light);
     var uplight = new THREE.PointLight(0xffc389, 0.32, 1.1, 2);
     uplight.name = "Wick warm bounce"; uplight.position.set(0, 0.06, 0.28);
@@ -235,6 +235,23 @@
         blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.75, toneMapped: false })));
       halo.position.y = 0.13; halo.scale.set(1.1, 1.1, 1); head.add(halo);
     }
+    // One flat decal: warm additive pool of light plus a dark contact shadow, via premultiplied blending
+    // (rgb adds light, alpha darkens what is below). Part of the hero, never casts or receives shadows.
+    var groundGlow = null, GN = 64, gd = new Uint8Array(GN * GN * 4);
+    for (var gy = 0; gy < GN; gy++) for (var gx = 0; gx < GN; gx++) {
+      var gr = Math.sqrt(Math.pow((gx + 0.5) / GN * 2 - 1, 2) + Math.pow((gy + 0.5) / GN * 2 - 1, 2)), go = (gy * GN + gx) * 4;
+      var pool = Math.max(0, 1 - gr), pool2 = pool * pool * (0.55 + 0.45 * pool);
+      var contact = Math.max(0, 1 - gr / 0.26); contact = contact * contact * (3 - 2 * contact) * 0.55;
+      gd[go] = Math.min(255, 255 * pool2 * 0.62); gd[go + 1] = Math.min(255, 255 * pool2 * 0.34); gd[go + 2] = Math.min(255, 255 * pool2 * 0.1);
+      gd[go + 3] = Math.min(255, 255 * contact);
+    }
+    var gtex = new THREE.DataTexture(gd, GN, GN, THREE.RGBAFormat); gtex.minFilter = gtex.magFilter = THREE.LinearFilter; gtex.needsUpdate = true; textures.push(gtex);
+    var groundMat = mat(new THREE.MeshBasicMaterial({ map: gtex, transparent: true, depthWrite: false, toneMapped: false,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    groundGlow = new THREE.Mesh(geo(new THREE.PlaneGeometry(1.3, 1.3)), groundMat);
+    groundGlow.rotation.x = -Math.PI / 2; groundGlow.position.y = 0.012; groundGlow.renderOrder = 2;
+    groundGlow.castShadow = false; groundGlow.receiveShadow = false; groundGlow.name = "Wick ground glow"; root.add(groundGlow);
     var shoulders = [], elbows = [], legHips = [], knees = [], ankles = [];
     for (i = 0; i < 2; i++) {
       var sign = i === 0 ? 1 : -1, side = i === 0 ? "L" : "R";
@@ -310,30 +327,35 @@
     });
     batches.length = 0;
     // Two world-space Verlet ribbons. Every buffer/vector used below is persistent.
-    var tails = [], nodes = low ? 4 : 7, segment = 0.28 / (nodes - 1);
+    var tails = [], nodes = low ? 4 : 7, segment = 0.34 / (nodes - 1);
+    // Both tails share one geometry / one draw call; each ribbon owns a view into the shared buffers.
+    var VR = nodes * 2 + 24, sharedGeo = geo(new THREE.BufferGeometry()), sharedIdx = [];
+    var sharedPos = new Float32Array(VR * 6), sharedNor = new Float32Array(VR * 6), sharedUv = new Float32Array(VR * 4);
+    var posAttr = new THREE.BufferAttribute(sharedPos, 3).setUsage(THREE.DynamicDrawUsage);
+    var norAttr = new THREE.BufferAttribute(sharedNor, 3).setUsage(THREE.DynamicDrawUsage);
     for (i = 0; i < 2; i++) {
-      var ribbon = geo(new THREE.BufferGeometry()), positions = new Float32Array(nodes * 6 + 72), uv = new Float32Array(nodes * 4 + 48), indices = [];
+      var vo = i * VR, uv = sharedUv.subarray(vo * 2, (vo + VR) * 2);
       for (j = 0; j < nodes; j++) {
         uv[j * 4] = 0; uv[j * 4 + 1] = j / (nodes - 1); uv[j * 4 + 2] = 1; uv[j * 4 + 3] = j / (nodes - 1);
-        if (j < nodes - 1) { var n = j * 2; indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2); }
+        if (j < nodes - 1) { var n = vo + j * 2; sharedIdx.push(n, n + 1, n + 2, n + 1, n + 3, n + 2); }
       }
       for (j = 0; j < 6; j++) {
         var fringeBase = nodes * 2 + j * 4;
-        indices.push(fringeBase, fringeBase + 1, fringeBase + 2, fringeBase + 1, fringeBase + 3, fringeBase + 2);
+        sharedIdx.push(vo + fringeBase, vo + fringeBase + 1, vo + fringeBase + 2, vo + fringeBase + 1, vo + fringeBase + 3, vo + fringeBase + 2);
         for (var fv = 0; fv < 4; fv++) {
           uv[fringeBase * 2 + fv * 2] = (j + (fv % 2)) / 6;
           uv[fringeBase * 2 + fv * 2 + 1] = 1 + (fv > 1 ? 0.08 : 0);
         }
       }
-      ribbon.setAttribute("position", new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-      ribbon.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(nodes * 6 + 72), 3).setUsage(THREE.DynamicDrawUsage));
-      ribbon.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); ribbon.setIndex(indices);
-      var tailMesh = new THREE.Mesh(ribbon, scarfMat); tailMesh.name = "scarf tail " + i; tailMesh.castShadow = false; tailMesh.frustumCulled = false; root.add(tailMesh);
+      var ribbon = { attributes: { position: { array: sharedPos.subarray(vo * 3, (vo + VR) * 3) }, normal: { array: sharedNor.subarray(vo * 3, (vo + VR) * 3) } } };
       var current = [], previous = [];
       for (j = 0; j < nodes; j++) { current.push(new THREE.Vector3()); previous.push(new THREE.Vector3()); }
       tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.116 - i * 0.032, 0.25, 0.13 - i * 0.035),
         pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.94 : 1) });
     }
+    sharedGeo.setAttribute("position", posAttr); sharedGeo.setAttribute("normal", norAttr);
+    sharedGeo.setAttribute("uv", new THREE.BufferAttribute(sharedUv, 2)); sharedGeo.setIndex(sharedIdx);
+    var tailMesh = new THREE.Mesh(sharedGeo, scarfMat); tailMesh.name = "scarf tails"; tailMesh.castShadow = false; tailMesh.frustumCulled = false; root.add(tailMesh);
     var rootWorld = new THREE.Vector3(), lastWorld = new THREE.Vector3(), movement = new THREE.Vector3();
     var temp = new THREE.Vector3(), correction = new THREE.Vector3(), local = new THREE.Vector3(), local2 = new THREE.Vector3();
     var rootInverse = new THREE.Matrix4(), torsoInverse = new THREE.Matrix4();
@@ -418,13 +440,13 @@
         for (ni = 0; ni < nodes; ni++) {
           var along = ni / (nodes - 1), twist = 0.25 + along * (ti ? -0.85 : 0.65);
           tail.width.set(Math.cos(twist), 0.12 * Math.sin(along * 3), Math.sin(twist)).transformDirection(torso.matrixWorld);
-          var half = 0.03 * worldScale * (1 - 0.12 * along);
+          var half = 0.042 * worldScale * (1 - 0.12 * along);
           local.copy(cur[ni]).addScaledVector(tail.width, -half).applyMatrix4(rootInverse);
           local2.copy(cur[ni]).addScaledVector(tail.width, half).applyMatrix4(rootInverse);
           var at = ni * 6; array[at] = local.x; array[at + 1] = local.y; array[at + 2] = local.z;
           array[at + 3] = local2.x; array[at + 4] = local2.y; array[at + 5] = local2.z;
         }
-        tail.geometry.attributes.position.needsUpdate = true;
+        
         // r128 computeVertexNormals() allocates scratch vectors. Derive the
         // smooth ribbon normals directly in the existing typed array instead.
         var normal = tail.geometry.attributes.normal.array;
@@ -451,8 +473,8 @@
           array[fa + 2] = array[end + 2] + (array[end + 5] - array[end + 2]) * fraction + dz * norm * tassel;
           normal[fa] = normal[end]; normal[fa + 1] = normal[end + 1]; normal[fa + 2] = normal[end + 2];
         }
-        tail.geometry.attributes.normal.needsUpdate = true;
       }
+      posAttr.needsUpdate = true; norAttr.needsUpdate = true;
       lastWorld.copy(rootWorld); scarfInitialized = true;
     }
     var currentAnim = "idle", animTime = 0, phase = Math.PI * 2 - 0.6, glow = 1, requestedGlow = 1, keyAngle = 0;
@@ -549,10 +571,11 @@
         fp.needsUpdate = true;
         tongue.scale.y = 1.03 + Math.sin(t * 19) * 0.025;
         flameMat.emissiveIntensity = 1.85 * (0.65 + glow * 0.35) * flicker;
+        groundMat.color.setScalar(0.45 + glow * 0.55); groundGlow.scale.setScalar(0.85 + glow * 0.15);
         if (halo) { halo.scale.setScalar(1.1 * (0.85 + glow * 0.15)); halo.material.opacity = 0.75 * glow; }
         updateScarf(dt, t);
         temp.set(0, 0.15, 0).applyMatrix4(head.matrixWorld).applyMatrix4(rootInverse); light.position.copy(temp);
-        light.intensity = 1.4 * glow * flicker;
+        light.intensity = 2.24 * glow * flicker;
       },
       dispose: function () {
         if (disposed) return; disposed = true;
