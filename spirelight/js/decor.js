@@ -220,6 +220,7 @@
   // ------------------------------------------------------------------------------------------------ procedural environment (PBR metals need something to reflect)
   function makeEnvMap() {
     try {
+      if (window.__noenv) throw new Error("env disabled");
       const pm = new THREE.PMREMGenerator(renderer);
       const sc = new THREE.Scene();
       const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.ShaderMaterial({
