@@ -330,7 +330,7 @@
     fpsReset();
     if (changed && !silent && Game.level && Game.geom) safe(function () { // decor caps / shadow proxies depend on the tier: rebuild if nothing has been played yet
       var fresh = Game.state === "title" || (Game.state === "play" && heroW.tile === Game.geom.startId && !heroBusy() && Object.keys(Game.groups).every(function (id) { var g = Game.groups[id]; return g.state === "idle" && g.value === (g.def.rotor ? g.def.rotor.start : g.def.slider ? g.def.slider.start : 0) || g.kind === "static"; }));
-      if (fresh) loadLevel(Game.level);
+      if (fresh) loadLevel(Game.level, Game.state === "title");
     }, "tier reload");
     if (changed && !silent) emit("quality", { level: eff });
   }
@@ -411,6 +411,7 @@
       var vh = L.view.height || 14;
       H = vh * Math.max(1, (16 / 9) / cam.a); cam.canPan = false;
     }
+    if (cam.title) { if (cam.a < 1) cy += 1.5; else cx -= 0.14 * H * cam.a; } // title: clear the wordmark (portrait) / sit right of centre (landscape)
     cam.base = H; cam.cx0 = cx; cam.cy0 = cy; cam.upp = H / cam.h;
     clampPan();
     positionCamera();
@@ -665,7 +666,8 @@
     var k = keyLight(); if (k && k.shadow && k.shadow.camera) k.shadow.camera.layers.enable(1);
   }
 
-  function loadLevel(def) {
+  function loadLevel(def, isTitle) {
+    cam.title = !!isTitle;
     disposeLevel();
     var w = SpireGeom.load(def); Game.geom = w; Game.level = def;
     var theme = def.theme || "dusk";
@@ -838,7 +840,7 @@
   // ------------------------------------------------------------------ public level control
   Game.showTitle = function () {
     try {
-      var def = Game.titleLevel; loadLevel(def);
+      var def = Game.titleLevel; loadLevel(def, true);
     } catch (e) { console.error(e); }
     Game.levelIndex = -1; Game.state = "title"; Game.paused = false; lock.input = true;
     emit("title", {});
