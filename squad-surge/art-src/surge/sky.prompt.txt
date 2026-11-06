@@ -1,0 +1,4 @@
+The attached image is only a style reference for rendering look; do not copy its content. Create a sheet of 3 game sprites in a row with very wide gaps on a flat pure #FF00FF magenta background, none touching: left: a chunky military cargo plane seen from behind and slightly below, flying away, olive green; middle: a sleek grey fighter jet seen from behind and slightly below, flying away, twin engine glow; right: a wooden supply crate with a red and white striped parachute canopy above it, front view. No shadow cast on the background. Premium stylized 3D render, toy-like, glossy plastic and soft clay materials, chunky rounded bevelled shapes, soft global illumination and gentle ambient occlusion, warm key light from the upper left, saturated but harmonious colours, crisp clean silhouettes, no outlines, no text, no letters, no numbers, no logos.
+
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

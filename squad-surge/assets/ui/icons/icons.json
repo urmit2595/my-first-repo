@@ -1,0 +1,107 @@
+{
+ "airdrop": {
+  "file": "assets/ui/icons/airdrop.webp",
+  "w": 199,
+  "h": 256
+ },
+ "barrel": {
+  "file": "assets/ui/icons/barrel.webp",
+  "w": 185,
+  "h": 256
+ },
+ "block": {
+  "file": "assets/ui/icons/block.webp",
+  "w": 256,
+  "h": 254
+ },
+ "boss": {
+  "file": "assets/ui/icons/boss.webp",
+  "w": 256,
+  "h": 221
+ },
+ "daily": {
+  "file": "assets/ui/icons/daily.webp",
+  "w": 247,
+  "h": 256
+ },
+ "flame": {
+  "file": "assets/ui/icons/flame.webp",
+  "w": 237,
+  "h": 256
+ },
+ "gate": {
+  "file": "assets/ui/icons/gate.webp",
+  "w": 256,
+  "h": 235
+ },
+ "medal": {
+  "file": "assets/ui/icons/medal.webp",
+  "w": 160,
+  "h": 256
+ },
+ "pu-airstrike": {
+  "file": "assets/ui/icons/pu-airstrike.webp",
+  "w": 256,
+  "h": 251
+ },
+ "pu-giant": {
+  "file": "assets/ui/icons/pu-giant.webp",
+  "w": 235,
+  "h": 256
+ },
+ "pu-jackpot": {
+  "file": "assets/ui/icons/pu-jackpot.webp",
+  "w": 253,
+  "h": 256
+ },
+ "pu-shield": {
+  "file": "assets/ui/icons/pu-shield.webp",
+  "w": 234,
+  "h": 256
+ },
+ "skull": {
+  "file": "assets/ui/icons/skull.webp",
+  "w": 256,
+  "h": 245
+ },
+ "squad": {
+  "file": "assets/ui/icons/squad.webp",
+  "w": 256,
+  "h": 255
+ },
+ "star": {
+  "file": "assets/ui/icons/star.webp",
+  "w": 256,
+  "h": 245
+ },
+ "surge": {
+  "file": "assets/ui/icons/surge.webp",
+  "w": 196,
+  "h": 256
+ },
+ "target": {
+  "file": "assets/ui/icons/target.webp",
+  "w": 256,
+  "h": 234
+ },
+ "trophy": {
+  "file": "assets/ui/icons/trophy.webp",
+  "w": 251,
+  "h": 256
+ },
+ "cargo-plane": {
+  "file": "assets/fx-extra/cargo-plane.webp",
+  "w": 686,
+  "h": 390
+ },
+ "jet": {
+  "file": "assets/fx-extra/jet.webp",
+  "w": 631,
+  "h": 261
+ },
+ "parachute-crate": {
+  "file": "assets/fx-extra/parachute-crate.webp",
+  "w": 361,
+  "h": 499
+ }
+}
