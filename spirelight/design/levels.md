@@ -1,39 +1,30 @@
-# Spirelight: level design notes
+# Spirelight: level design notes (levels 1-5 and the title; levels 6-10 are in design/levels2.md)
 
-Ten levels in four chapters plus a decorative `title` diorama, all in `levels/levels.js`, verified by
-`node tools/solve.js --all`. Geometry rules learned while building (useful for reviewers):
+All in `levels/levels.js`, verified by `node tools/solve.js --all`. Play order is array order.
 
-- A non-veil impossible join works only at the NEARER tile's back edge (-x or -z side). A farther tile (k < 0) beyond
-  a back edge is visible (Sky Bridge, Twin Drawbridges B). A nearer tile in front of a back edge hides the junction, so
-  a veil is needed (the staircase illusion).
-- x/z rotors only have walkable tiles at angle 0 (a tile must still face +y), so they act as drawbridges: raised =
-  standing vertical, lowered = a bridge. Wick cannot be on one while it turns (lock).
-- Handles are screen-space, so a crank can be turned from anywhere: puzzles gate on geometry and plates, not on walking
-  to the crank.
+Rules learned (for reviewers and the other designer):
+- A non-veil impossible join works only at the NEARER tile's back edge (-x or -z side): a farther tile (k < 0) beyond a back
+  edge is visible. A nearer tile in front of a back edge hides the junction, so it needs a veil.
+- x/z rotors are walkable only at angle 0, so they act as drawbridges.
+- Handles are hit-tested on screen, so a crank can always be turned from anywhere. Never put a handle on a -x, -z or -y
+  face (invisible); give it a visible post and use +y/+x/+z.
+- Portrait: aim for a screen-x span (x - z)/sqrt2 of at most about 6.5 world units, stack upward instead of sideways.
+- Every level has a spine (a tall non-walkable shaft at the minimum-x/z side, behind the beacon, so it never occludes a
+  tile), one `keel`, struts/chains/pipes/corbels/railings as decor (about 40-60 items; helpers `D()` and `S()` in the file).
 
-| # | id | chapter / theme | place | idea | solution |
+| # | id | chapter / theme | idea | solution | glimmers |
 |---|---|---|---|---|---|
-| 1 | first-light | Embers / dusk | terrace + stairs | walk, climb stairs (trivial by design; solver warns "trivial") | walk goal |
-| 2 | turning-stair | Embers | stair court | y-rotor turns a stair; stairs only climb away from you | mech turntable 180; walk goal |
-| 3 | sky-bridge | Embers | bridge tower | first impossible join (k = -1) and a plate | mech bridge 90; walk p1; walk goal |
-| 4 | lamp-lift | Lanterns / night | lighthouse | y-slider lift, Wick rides it | walk liftTop; mech lift 4; walk goal |
-| 5 | chime-stair | Lanterns | bell tower | plate chain: plate, lift, plate | walk p1; walk liftTop; mech lift 2; walk p2; walk goal |
-| 6 | twin-drawbridges | Lanterns | clock dock | z- and x-rotor drawbridges; the second meets the far ledge by looks (k = -1) | mech drawA 0; walk isle; mech drawB 0; walk goal |
-| 7 | veiled-steps | Veils / aurora | observatory | a pillar (veil) on a turntable hides a stair that climbs toward the viewer | mech dial 0; walk ledge; mech dial 90; walk goal |
-| 8 | greenhouse-spire | Veils | greenhouse | bridge (k = -1) + plate lift + sliding veil pillar | mech bridge 90; walk p1; mech pillar 0; walk goal |
-| 9 | clock-spiral | Daybreak / dawn | clockwork stair | impossible loop (k = 2), bridge, plate lift, z-drawbridge | mech bridge 90; walk p1; mech draw 0; walk goal |
-| 10 | beacon-spire | Daybreak | tall diagonal spire | finale: drawbridge, 3-stop lift, bridge, plate, veil pillar, stair | mech draw 0; walk elevTop; mech elevator 2; mech bridge 90; walk p1; mech pillar 0; walk goal (7 actions) |
-| - | title | dusk | small spire | decorative, no solution | - |
+| 1 | first-light | 1 dusk | walk and climb stairs (trivial by design; the glimmer teaches "look around the spire") | walk goal | g1 on a ledge behind the tower's back corner |
+| 2 | turning-stair | 1 dusk | a gear-driven turntable (clock dial, gears, crank) turns a stair; stairs only climb away from you | mech turntable 180; walk goal | g1, g2 on a ledge only the turntable at 90 reaches |
+| 3 | lamp-lift | 1 dusk | slider lift in a lighthouse, Wick rides it | walk liftTop; mech lift 4; walk goal | g1 mid balcony end (lift at 2), g2 far end of the gallery (4,4,0) |
+| 4 | sky-bridge | 2 night | first impossible join (k=-1) and a plate-driven lift | mech bridge 90; walk p1; walk goal | g1 needs the bridge at 180 |
+| 5 | chime-stair | 2 night | zig-zag bell tower: real decision (raise-plate vs decoy plate), lift, counting plate | walk p1; walk liftTop; mech lift 2; walk p2; walk c5; walk p2; walk goal | g1 on the lift's middle stop |
+| - | title | dusk | decorative spire with balcony, spine, keel and beacon | - | - |
 
-## Glimmers and notes
-
-- **1**: g1 on the tower's back-left tile (0,2,0). **2**: g1 on the far ledge (2,1,0); the stair starts edge-on.
-- **3**: g1 (1,2,2) needs the bridge at 180, then back to 90.
-- **4**: g1 on the mid balcony end (1,2,4): ride to stop 2, walk the L balcony, back to the lift, then stop 4.
-- **5**: g1 (11,1,2) via the lift's middle stop. p2's arm is a y-rotor.
-- **6**: g1 (9,-1,-3). Both cranks are on the base, so the solver's shortest is 3 actions (drawA, drawB, walk); the intended order is A, cross, B.
-- **7**: dial starts at 180; 0 hides the first stair, 90 the second. g1 balcony (6,2,1).
-- **8**: g1 (1,2,2) needs bridge 180; g2 (-3,2,0) balcony. Pillar starts away (slider 2), pull to 0.
-- **9 (intentional shortcut)**: the start tile is the foot of the ring stair, and it looks joined to the stair's top (k = 2 loop), so the long ring lap is optional scenery. The solver lists k=2 joins start-top, (1,0,0)-platform, (1,0,0)-hub: one illusion. g1 (4,0,7) spur on the ring, g2 (5,2,4) balcony.
-- **10**: g1 (1,2,2), g2 (-3,2,0), g3 (6,1,6) on the lift's middle stop.
-- Only warning anywhere: the intentional "trivial" on level 1. Windows and lanterns are mostly unlit so the beacon cascade pays off.
+Notes
+- Level 3 and 4 swapped content (lift lesson first); the bridge crank now has its own visible post on +y.
+- Level 5: p1 (0,0,1) raises the hidden span, pd (2,0,1) is a decoy that pulls it back (recoverable). The arm starts at 180 and the
+  plate steps 180 > 0 > 90, so p2 must be pressed twice (step off to c5 and back). Screen span is about 6.4 units.
+- Level 1 intentionally leaves the solver's "trivial" warning.
+- Decor using new types (`keel`, `strut`, `chain`, `corbel`, `dial`) is ignored until decor.js implements them. `strut` and `chain`
+  carry an integer `at` (their start cell) because the loader requires it.
