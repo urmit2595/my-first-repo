@@ -116,24 +116,24 @@
     var torso = group(hips, "torso");
     var egg = lathe([[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],
       [0.112,0.148],[0.097,0.194],[0.071,0.22],[0,0.226]]);
-    egg.scale(1.29, 1, 1.29);
+    egg.scale(1.29, 1.1, 1.29);
     part(torso, egg, brass);
-    ring(torso, 0, 0.053, 0, 0.134, Math.PI / 2, dark);
-    ring(torso, 0, 0.059, 0, 0.136, Math.PI / 2);
-    ring(torso, 0, 0.183, 0, 0.127, Math.PI / 2);
-    ring(torso, 0, 0.19, 0, 0.122, Math.PI / 2, dark);
-    // Three fine longitudinal seams, expressed as curved brass wires.
+    part(torso, geo(new THREE.TorusGeometry(0.135, 0.002, 6, radial)), dark, 0, 0.055, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.139, 0.003, 6, radial)), brass, 0, 0.063, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.13, 0.003, 6, radial)), brass, 0, 0.2024, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.128, 0.0015, 6, radial)), dark, 0, 0.209, 0, 1, 1, 1, Math.PI / 2);
+    // Six fine longitudinal seams, expressed as curved brass wires.
     for (i = 0; i < 6; i++) {
       var angle = i * Math.PI / 3, seam = [];
       for (var j = 1; j < 8; j++) {
         var pp = [[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],[0.112,0.148],[0.097,0.194],[0.071,0.22]][j];
-        seam.push(new THREE.Vector3(Math.sin(angle) * (pp[0] * 1.29 + 0.001), pp[1], Math.cos(angle) * (pp[0] * 1.29 + 0.001)));
+        seam.push(new THREE.Vector3(Math.sin(angle) * (pp[0] * 1.29 + 0.001), pp[1] * 1.1, Math.cos(angle) * (pp[0] * 1.29 + 0.001)));
       }
       var wire = geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(seam), 12, 0.0018, 4, false)); part(torso, wire, dark);
       for (j = 0; j < 3; j++) {
         var yy = 0.055 + j * 0.065, rr = j === 1 ? 0.116 : 0.104;
-        ball(torso, Math.sin(angle + 0.2) * rr * 1.29, yy, Math.cos(angle + 0.2) * rr * 1.29, 0.0075);
-        ball(torso, Math.sin(angle + 0.2) * rr * 1.28, yy - 0.005, Math.cos(angle + 0.2) * rr * 1.28, 0.009, 0.008, 0.008, patina);
+        ball(torso, Math.sin(angle + 0.2) * rr * 1.29, yy * 1.1, Math.cos(angle + 0.2) * rr * 1.29, 0.0075);
+        ball(torso, Math.sin(angle + 0.2) * rr * 1.28, yy * 1.1 - 0.005, Math.cos(angle + 0.2) * rr * 1.28, 0.009, 0.008, 0.008, patina);
       }
     }
     // Cream pressure dial, including tiny printed ticks and a moving needle.
@@ -150,7 +150,7 @@
     dc.fillStyle = "#736044"; dc.font = "bold 19px Georgia"; dc.textAlign = "center";
     dc.fillText("LUMEN", 128, 167); dc.font = "14px Georgia"; dc.fillText("0       5       10", 128, 77);
     var dialMat = mat(new THREE.MeshStandardMaterial({ map: texture(dialCanvas, true), roughness: 0.63, metalness: 0.08 }));
-    var gauge = group(torso, "chest gauge", 0, 0.145, 0.148); gauge.scale.setScalar(1.28); gauge.rotation.x = -0.16;
+    var gauge = group(torso, "chest gauge", 0, 0.16, 0.148); gauge.scale.setScalar(1.28); gauge.rotation.x = -0.16;
     rod(gauge, 0, 0, 0, 0.042, 0.014, Math.PI / 2);
     ring(gauge, 0, 0, 0.011, 0.037, 0);
     part(gauge, geo(new THREE.CircleGeometry(0.033, radial)), dialMat, 0, 0, 0.013);
@@ -163,18 +163,18 @@
     ring(key, 0.031, 0.012, -0.053, 0.025, 0, brass, 0.03);
     rod(key, 0, 0.005, -0.053, 0.01, 0.06, 0, Math.PI / 2);
     // A real wool torus, with a rolled lower lip and a front-side knot.
-    part(torso, geo(new THREE.TorusGeometry(0.088, 0.038, 12, radial)), scarfMat,
-      0, 0.239, 0, 1, 1, 0.8, Math.PI / 2);
-    ring(torso, 0, 0.218, 0, 0.096, Math.PI / 2, scarfMat);
-    ball(torso, -0.094, 0.238, 0.093, 0.038, 0.035, 0.035, scarfMat);
-    var head = group(torso, "head", 0, 0.265, 0);
+    part(torso, geo(new THREE.TorusGeometry(0.088, 0.043, 12, radial)), scarfMat,
+      0, 0.263, 0, 1, 1, 0.8, Math.PI / 2);
+    ring(torso, 0, 0.242, 0, 0.096, Math.PI / 2, scarfMat);
+    ball(torso, -0.094, 0.262, 0.093, 0.038, 0.035, 0.035, scarfMat);
+    var head = group(torso, "head", 0, 0.289, 0); head.scale.y = 0.94;
     var globe = lathe([[0.114,0.008],[0.145,0.03],[0.173,0.067],[0.183,0.111],
       [0.178,0.151],[0.159,0.20],[0.134,0.248],[0.127,0.263]]);
     var glass = new THREE.Mesh(globe, glassMat); glass.name = "lantern glass"; glass.renderOrder = 3; head.add(glass);
     rod(head, 0, 0.009, 0, 0.12, 0.014);
-    ring(head, 0, 0.017, 0, 0.115, Math.PI / 2);
+    part(head, geo(new THREE.TorusGeometry(0.115, 0.0045, 8, radial)), brass, 0, 0.017, 0, 1, 1, 1, Math.PI / 2);
     rod(head, 0, 0.267, 0, 0.139, 0.01);
-    ring(head, 0, 0.267, 0, 0.135, Math.PI / 2);
+    part(head, geo(new THREE.TorusGeometry(0.136, 0.004, 8, radial)), brass, 0, 0.267, 0, 1, 1, 1, Math.PI / 2);
     var dome = lathe([[0.137,0.271],[0.127,0.278],[0.103,0.285],[0.07,0.29],[0.034,0.292],[0,0.293]]);
     part(head, dome, brass);
     rod(head, 0, 0.298, 0, 0.023, 0.009);
@@ -201,7 +201,7 @@
     for (i = 0; i < fp.count; i++) {
       var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.118);
       fp.setX(i, fp.getX(i) + Math.sin(bend * 6.8) * 0.038 * bend);
-      fp.setZ(i, fp.getZ(i) + bend * 0.035);
+      fp.setZ(i, fp.getZ(i) + bend * 0.07);
       var heat = fy / 0.197;
       color.setRGB(1, Math.max(0.015, 0.45 * Math.pow(1 - heat, 2)), 0.002);
       colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
@@ -228,7 +228,7 @@
     var shoulders = [], elbows = [], legHips = [], knees = [], ankles = [];
     for (i = 0; i < 2; i++) {
       var sign = i === 0 ? 1 : -1, side = i === 0 ? "L" : "R";
-      var sh = group(torso, "shoulder." + side, sign * 0.153, 0.18, 0); shoulders.push(sh);
+      var sh = group(torso, "shoulder." + side, sign * 0.153, 0.20, 0); shoulders.push(sh);
       ball(sh, 0, 0, 0, 0.025, 0.028, 0.025);
       rod(sh, 0, -0.044, 0, 0.011, 0.072);
       ring(sh, 0, -0.025, 0, 0.013, Math.PI / 2);
@@ -286,12 +286,14 @@
       var tailMesh = new THREE.Mesh(ribbon, scarfMat); tailMesh.name = "scarf tail " + i; tailMesh.castShadow = true; tailMesh.frustumCulled = false; root.add(tailMesh);
       var current = [], previous = [];
       for (j = 0; j < nodes; j++) { current.push(new THREE.Vector3()); previous.push(new THREE.Vector3()); }
-      tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.09 - i * 0.045, 0.235, 0.124 - i * 0.008),
+      tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.09 - i * 0.045, 0.259, 0.124 - i * 0.008),
         pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.87 : 1) });
     }
     var rootWorld = new THREE.Vector3(), lastWorld = new THREE.Vector3(), movement = new THREE.Vector3();
     var temp = new THREE.Vector3(), correction = new THREE.Vector3(), local = new THREE.Vector3(), local2 = new THREE.Vector3();
     var rootInverse = new THREE.Matrix4(), torsoInverse = new THREE.Matrix4();
+    var armCapsules = [];
+    for (i = 0; i < 4; i++) armCapsules.push({ a: new THREE.Vector3(), b: new THREE.Vector3() });
     var scarfInitialized = false;
     function updateScarf(dt, t) {
       root.updateWorldMatrix(true, true);
@@ -300,6 +302,12 @@
       movement.subVectors(rootWorld, lastWorld);
       var teleport = movement.lengthSq() > 0.64;
       rootInverse.copy(root.matrixWorld).invert(); torsoInverse.copy(torso.matrixWorld).invert();
+      for (var arm = 0; arm < 2; arm++) {
+        armCapsules[arm * 2].a.setFromMatrixPosition(shoulders[arm].matrixWorld);
+        armCapsules[arm * 2].b.setFromMatrixPosition(elbows[arm].matrixWorld);
+        armCapsules[arm * 2 + 1].a.copy(armCapsules[arm * 2].b);
+        armCapsules[arm * 2 + 1].b.set(0, -0.11, 0.008).applyMatrix4(elbows[arm].matrixWorld);
+      }
       var steps = Math.max(1, Math.ceil(dt * 120)), h = dt / steps;
       var speedX = dt > 0 ? movement.x / dt : 0, speedZ = dt > 0 ? movement.z / dt : 0;
       for (var ti = 0; ti < 2; ti++) {
@@ -323,10 +331,27 @@
               correction.multiplyScalar((len - tail.length) / Math.max(len, 0.00001));
               if (ni === 1) cur[ni].sub(correction);
               else { correction.multiplyScalar(0.5); cur[ni].sub(correction); cur[ni - 1].add(correction); }
-              // Expanded torso ellipsoid; test in torso space so turns/parenting work.
-              local.copy(cur[ni]).applyMatrix4(torsoInverse); local.y -= 0.112;
-              var d = Math.sqrt(local.x * local.x / 0.0396 + local.y * local.y / 0.024 + local.z * local.z / 0.0342);
-              if (d < 1) { local.multiplyScalar(1 / Math.max(d, 0.0001)); local.y += 0.112; cur[ni].copy(local).applyMatrix4(torso.matrixWorld); }
+              // Rounded torso capsule, expanded by half the ribbon width.
+              local.copy(cur[ni]).applyMatrix4(torsoInverse);
+              var capsuleY = Math.max(0.115, Math.min(0.14, local.y));
+              local.y -= capsuleY;
+              var d = Math.sqrt(local.x * local.x / 0.038 + local.y * local.y / 0.0196 + local.z * local.z / 0.038);
+              if (d < 1) local.multiplyScalar(1 / Math.max(d, 0.0001));
+              local.y += capsuleY;
+              // Clearance around the projecting gauge and its bezel.
+              correction.set(local.x, local.y - 0.16, local.z - 0.166);
+              var gaugeDistance = correction.length();
+              if (gaugeDistance < 0.088) local.addScaledVector(correction, (0.088 - gaugeDistance) / Math.max(gaugeDistance, 0.0001));
+              cur[ni].copy(local).applyMatrix4(torso.matrixWorld);
+              // Animated arm capsules keep the ribbons ahead of the pumping hands.
+              for (var ac = 0; ac < 4; ac++) {
+                var capsule = armCapsules[ac];
+                correction.subVectors(capsule.b, capsule.a); temp.subVectors(cur[ni], capsule.a);
+                var projection = Math.max(0, Math.min(1, temp.dot(correction) / Math.max(0.000001, correction.lengthSq())));
+                temp.addScaledVector(correction, -projection);
+                var clearance = temp.length();
+                if (clearance < 0.06) cur[ni].addScaledVector(temp, (0.06 - clearance) / Math.max(0.0001, clearance));
+              }
             }
           }
           cur[0].copy(tail.pin);
@@ -401,23 +426,23 @@
         }
         var walk = weights[1], climb = weights[2], celebrate = weights[3], bump = weights[4], ride = weights[5], wave = weights[6];
         var gait = (walk + climb) * Math.min(1, speed / 0.3);
-        var oldContact = Math.floor(phase / Math.PI);
+        var oldContact = Math.floor((phase + climb * 0.9) / Math.PI);
         phase += dt * speed * Math.PI * 2 * (1 - climb * 0.2);
-        var newContact = Math.floor(phase / Math.PI);
+        var newContact = Math.floor((phase + climb * 0.9) / Math.PI);
         if ((currentAnim === "walk" || currentAnim === "climb") && grounded && speed > 0.01) {
           for (var contact = oldContact + 1; contact <= newContact; contact++) {
             if (typeof hero.onStep === "function") { try { hero.onStep(stepEvents[(contact + 1) % 2]); } catch (_) { /* Engine callbacks cannot break animation. */ } }
           }
         }
         air += ((grounded ? 0 : 1) - air) * ease;
-        var s = Math.sin(phase), hop = Math.pow(Math.max(0, Math.sin(animTimes[3] * 5)), 2);
+        var s = Math.sin(phase + climb * 0.9), hop = Math.pow(Math.max(0, Math.sin(animTimes[3] * 5)), 2);
         hips.position.y = 0.222
           + celebrate * 0.048 * hop + wave * (0.005 + 0.004 * Math.sin(t * 5));
         torso.rotation.x = 0.09 * walk + 0.19 * climb;
         torso.rotation.z = gait * 0.025 * s + ride * Math.sin(t * 3) * 0.045 + bump * Math.sin(animTimes[4] * 22) * Math.exp(-animTimes[4] * 4) * 0.11;
         torso.scale.y = 1 + 0.008 * Math.sin(t * 2.6);
         var look = Math.sin(t * 0.69) * Math.pow(Math.max(0, Math.sin(t * 0.37)), 4);
-        head.position.y = 0.265 + celebrate * 0.025 + gait * 0.003 * Math.cos(phase * 2);
+        head.position.y = 0.289 + celebrate * 0.025 + gait * 0.003 * Math.cos(phase * 2);
         head.rotation.y = look * 0.5 * weights[0];
         head.rotation.z = bump * 0.28 + wave * 0.11 + ride * Math.sin(t * 2.4) * 0.04;
         head.rotation.x = bump * 0.12 - torso.rotation.x * 0.65;

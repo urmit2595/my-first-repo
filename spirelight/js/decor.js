@@ -98,12 +98,12 @@
       g.fillStyle = lg; g.beginPath(); g.moveTo(-64, 0); g.quadraticCurveTo(0, -4, 64, 0); g.quadraticCurveTo(0, 4, -64, 0); g.fill(); g.restore();
     }
     T.star = ctex(c);
-    // soft ring (mechanism hint), drawn in the XY plane of a flat plane
+    // soft ring (mechanism hint), drawn in the XY plane of a flat plane: a crisp thin ring with a soft halo
     c = canvas(256, 256); g = c.getContext("2d");
-    gr = g.createRadialGradient(128, 128, 70, 128, 128, 126);
-    gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(0.55, "rgba(255,255,255,0.55)"); gr.addColorStop(0.72, "rgba(255,255,255,1)");
-    gr.addColorStop(0.86, "rgba(255,255,255,0.35)"); gr.addColorStop(1, "rgba(255,255,255,0)");
-    g.fillStyle = gr; g.fillRect(0, 0, 256, 256); T.ring = ctex(c);
+    g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = 26; g.filter = "blur(8px)"; g.beginPath(); g.arc(128, 128, 98, 0, TAU); g.stroke();
+    g.filter = "none"; g.strokeStyle = "rgba(255,255,255,1)"; g.lineWidth = 7; g.beginPath(); g.arc(128, 128, 98, 0, TAU); g.stroke();
+    g.setLineDash([2, 26]); g.lineWidth = 14; g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineCap = "round"; g.beginPath(); g.arc(128, 128, 82, 0, TAU); g.stroke();
+    T.ring = ctex(c);
     // smoke puff
     c = canvas(64, 64); g = c.getContext("2d");
     gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -219,24 +219,29 @@
 
   // ------------------------------------------------------------------------------------------------ procedural environment (PBR metals need something to reflect)
   function makeEnvMap() {
+    // painted dusk cube map (warm horizon, violet zenith, a bright sun blob): enough for brass and glass to read as metal
     try {
       if (window.__noenv) throw new Error("env disabled");
-      const pm = new THREE.PMREMGenerator(renderer);
-      const sc = new THREE.Scene();
-      const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.ShaderMaterial({
-        side: THREE.BackSide, depthWrite: false,
-        vertexShader: "varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }",
-        fragmentShader: "varying vec3 vP; void main(){ float h = vP.y;" +
-          "vec3 top = vec3(0.16,0.17,0.42), mid = vec3(0.55,0.35,0.62), hor = vec3(1.0,0.62,0.38), low = vec3(0.28,0.18,0.3);" +
-          "vec3 c = h > 0.0 ? mix(hor, mix(mid, top, smoothstep(0.25,0.9,h)), smoothstep(0.0,0.35,h)) : mix(hor, low, smoothstep(0.0,-0.5,h));" +
-          "float sun = pow(max(dot(vP, normalize(vec3(-0.55,0.45,0.7))),0.), 24.); c += vec3(2.4,1.5,0.7)*sun;" +
-          "float sun2 = pow(max(dot(vP, normalize(vec3(0.7,0.2,-0.5))),0.), 8.); c += vec3(0.25,0.35,0.7)*sun2;" +
-          "gl_FragColor = vec4(c,1.); }",
-      }));
-      sc.add(sky);
-      const rt = pm.fromScene(sc, 0.02);
-      M._envTex = rt.texture; pm.dispose();
-      sky.geometry.dispose(); sky.material.dispose();
+      const S = 64, faces = [];
+      for (let f = 0; f < 6; f++) {
+        const c = canvas(S, S), g = c.getContext("2d");
+        if (f === 2) { const gr = g.createRadialGradient(S / 2, S / 2, 4, S / 2, S / 2, S * 0.75); gr.addColorStop(0, "#5b4aa0"); gr.addColorStop(1, "#2a2468"); g.fillStyle = gr; g.fillRect(0, 0, S, S); }
+        else if (f === 3) { g.fillStyle = "#3a2540"; g.fillRect(0, 0, S, S); }
+        else {
+          const gr = g.createLinearGradient(0, 0, 0, S);
+          gr.addColorStop(0, "#3d3b86"); gr.addColorStop(0.35, "#8a5a98"); gr.addColorStop(0.5, "#ffb070"); gr.addColorStop(0.58, "#ff9a6a"); gr.addColorStop(0.7, "#5a3358"); gr.addColorStop(1, "#3a2540");
+          g.fillStyle = gr; g.fillRect(0, 0, S, S);
+          if (f === 4 || f === 1) {  // sun side: nx and pz
+            const rg = g.createRadialGradient(f === 4 ? S * 0.2 : S * 0.8, S * 0.38, 1, f === 4 ? S * 0.2 : S * 0.8, S * 0.38, S * 0.45);
+            rg.addColorStop(0, "rgba(255,244,210,1)"); rg.addColorStop(0.3, "rgba(255,190,110,0.8)"); rg.addColorStop(1, "rgba(255,150,80,0)");
+            g.fillStyle = rg; g.fillRect(0, 0, S, S);
+          }
+          if (f === 0 || f === 5) { const rg = g.createRadialGradient(S * 0.5, S * 0.3, 1, S * 0.5, S * 0.3, S * 0.4); rg.addColorStop(0, "rgba(120,160,255,0.5)"); rg.addColorStop(1, "rgba(120,160,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, S, S); }
+        }
+        faces.push(c);
+      }
+      const ct = new THREE.CubeTexture(faces); ct.encoding = THREE.sRGBEncoding; ct.generateMipmaps = true; ct.minFilter = THREE.LinearMipmapLinearFilter; ct.needsUpdate = true;
+      M._envTex = ct; own.push(ct);
     } catch (e) { warn("env map failed", e); M._envTex = null; }
   }
 
@@ -244,7 +249,7 @@
     const env = M._envTex;
     M.metal = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.85, roughness: 0.34, envMap: env, envMapIntensity: 1.25 });
     if (!env) { M.metal.metalness = 0.55; M.metal.roughness = 0.45; }
-    M.matte = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.05, roughness: 0.78, envMap: env, envMapIntensity: 0.5, bumpMap: T.noise, bumpScale: 0.6 });
+    M.matte = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.05, roughness: 0.78, envMap: env, envMapIntensity: 0.5 });
     M.glass = new THREE.MeshStandardMaterial({ color: lin(0xcfe6f2), metalness: 0.1, roughness: 0.04, transparent: true, opacity: 0.3, envMap: env, envMapIntensity: 1.8, depthWrite: false });
     M.dial = new THREE.MeshStandardMaterial({ map: T.dial, metalness: 0.1, roughness: 0.6 });
     for (const k of ["metal", "matte", "glass", "dial"]) own.push(M[k]);
@@ -342,7 +347,7 @@
 
   // pulsing handle ring: lies flat in the local XZ plane (the handle axis is local y)
   function addHint(env, radius, y) {
-    const m = new THREE.MeshBasicMaterial({ map: T.ring, color: lin(0xffd27a), blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, opacity: 0.8 });
+    const m = new THREE.MeshBasicMaterial({ map: T.ring, color: lin(0xffc24a), depthWrite: false, depthTest: false, transparent: true, opacity: 0.8 });
     env.own.push(m);
     const g = new THREE.PlaneGeometry(radius * 2, radius * 2); env.ownG.push(g);
     const ring = new THREE.Mesh(g, m); ring.rotation.x = -Math.PI / 2; ring.position.y = y; ring.renderOrder = 9;
@@ -489,10 +494,11 @@
       col.setXYZ(i, col.getX(i) * k, col.getY(i) * k, col.getZ(i) * k);
     }
   }
-  // crossed pair of vertical cards (reads from any side in the iso view)
+  // upright cut-out card turned to face the iso camera
   function cross(b, an, id, w, p, ry, o) {
     o = o || {};
-    for (let i = 0; i < 2; i++) card(b, an, id, w, Object.assign({ p, ry: ry + i * Math.PI / 2, anchor: "b" }, o));
+    // one billboard facing the iso camera (normal along (1,0,1)): full width on screen, no X-shaped artefacts
+    card(b, an, id, w, Object.assign({ p, ry: Math.PI / 4 + (ry % 1 - 0.5) * 0.16, anchor: "b" }, o));
   }
 
   // ------------------------------------------------------------------------------------------------ registry + frames
@@ -642,7 +648,7 @@
     const set = (v) => { arm.rotation.z = -(clamp(v / range, 0, 1) - 0.5) * 1.35; };
     set(0);
     env.ud.spin = set; env.ud.handleY = 0.55;
-    addHint(env, 0.55, 0.05);
+    addHint(env, 0.55, 0.05); W.scale.setScalar(1.15);
   });
 
   def("knob", "floor", {}, (env) => {
@@ -668,15 +674,16 @@
     const g = new THREE.Group(); g.rotation.y = env.yawOf(P(env.item, "dir", "+x")); env.root.add(g);
     const b = new Builder({ ao: 0.12 }), x0 = -0.45;
     for (const z of [-0.09, 0.09]) {
-      b.box("metal", L, 0.04, 0.045, { p: [x0 + L / 2, 0.045, z], c: C.brass });
-      b.box("metal", L, 0.012, 0.03, { p: [x0 + L / 2, 0.07, z], c: C.brassHi });
+      b.box("metal", L, 0.05, 0.06, { p: [x0 + L / 2, 0.05, z], c: C.brass });
+      b.box("metal", L, 0.014, 0.04, { p: [x0 + L / 2, 0.082, z], c: C.brassHi });
     }
-    b.box("metal", L, 0.012, 0.13, { p: [x0 + L / 2, 0.013, 0], c: C.ironDk });
+    b.box("metal", L, 0.012, 0.12, { p: [x0 + L / 2, 0.013, 0], c: C.ironDk });
+    b.box("metal", L, 0.03, 0.2, { p: [x0 + L / 2, 0.015, 0], c: C.brassDk });
     const nS = Math.floor(L / 0.5) + 1;
     for (let i = 0; i < nS; i++) {
       const x = x0 + 0.08 + i * ((L - 0.16) / Math.max(1, nS - 1));
       b.box("metal", 0.1, 0.03, 0.3, { p: [x, 0.015, 0], c: C.iron });
-      for (const z of [-0.09, 0.09]) b.cyl("metal", 0.017, 0.017, 0.02, 8, { p: [x, 0.075, z], c: C.brassHi });
+      for (const z of [-0.09, 0.09]) b.cyl("metal", 0.017, 0.017, 0.02, 8, { p: [x, 0.09, z], c: C.brassHi });
     }
     for (const sx of [0, 1]) {
       const x = sx ? x0 + L : x0;
@@ -789,7 +796,7 @@
   // lit/unlit controller shared by lantern and streetlamp
   function lampRig(env, flamePos, size, lampMat, light) {
     const halo = glowSprite(env, C.lamp, size * 1.15, 0, T.hot); halo.position.copy(flamePos); env.root.add(halo);
-    const core = glowSprite(env, 0xffe0a0, size * 0.42, 0, T.hot); core.position.copy(flamePos); env.root.add(core);
+    const core = { material: { opacity: 0 }, visible: true };
     const wash = flatGlow(env, C.lamp, size * 3.4, size * 3.4, 0, true); wash.visible = false; // soft light bleed (kept off; sprites suffice)
     void wash;
     let pl = null;
@@ -798,7 +805,7 @@
     const apply = (t) => {
       const v = smooth(st.v), f = v > 0 ? flicker(t, ph) : 1;
       lampMat.emissiveIntensity = lerp(0.05, 2.6, v) * (v > 0.5 ? f : 1);
-      lampMat.emissive.setRGB(lerp(0.35, 1, v), lerp(0.18, 0.6, v), lerp(0.08, 0.22, v));
+      lampMat.emissive.setRGB(lerp(0.35, 1, v), lerp(0.18, 0.46, v), lerp(0.08, 0.12, v));
       lampMat.color.copy(lin(v > 0.01 ? 0xffc06a : 0x5a4030));
       halo.material.opacity = v * 0.5 * f; core.material.opacity = v * 0.85;
       halo.visible = core.visible = v > 0.005;
@@ -908,7 +915,7 @@
     const apply = (t) => {
       const v = smooth(st.v), f = v > 0 ? 1 + 0.04 * Math.sin(t * 2.3 + ph) : 1;
       const k = lerp(0.0, 1.0, v);
-      pm.color.setRGB(lerp(0.05, 1.5 * f, k), lerp(0.06, 1.3 * f, k), lerp(0.1, 1.1 * f, k));
+      pm.color.setRGB(lerp(0.05, 1.45 * f, k), lerp(0.06, 1.0 * f, k), lerp(0.1, 0.55 * f, k));
       if (wash) { wash.material.opacity = v * 0.38; wash.visible = v > 0.01; }
     };
     env.ud.setLit = (on, instant) => { st.set(on !== false, instant); env.ud.lit = on !== false; if (instant) apply(0); };
@@ -946,14 +953,14 @@
     b.finish(W);
 
     // glass lens + flame
-    const lens = new THREE.Mesh(new THREE.SphereGeometry(0.33, sg(24), sg(16)), M.glass); lens.scale.set(1, 1.1, 1); lens.position.y = 0.8; lens.renderOrder = 4; env.ownG.push(lens.geometry);
-    const lensM = M.glass.clone(); lensM.emissive = new THREE.Color(1, 0.55, 0.2); lensM.emissiveIntensity = 0; env.own.push(lensM); lens.material = lensM; W.add(lens);
+    const lens = new THREE.Mesh(new THREE.SphereGeometry(0.33, sg(24), sg(16)), M.glass); lens.scale.set(1, 1.1, 1); lens.position.y = 0.8; lens.renderOrder = 1; env.ownG.push(lens.geometry);
+    const lensM = M.glass.clone(); lensM.emissive = new THREE.Color(1, 0.4, 0.1); lensM.color = lin(0xffd9a0); lensM.emissiveIntensity = 0; env.own.push(lensM); lens.material = lensM; W.add(lens);
     const flameM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 0.06, 0.03) }); env.own.push(flameM);
     const fg = new THREE.SphereGeometry(0.1, 14, 10); env.ownG.push(fg);
     const core = new THREE.Mesh(fg, flameM); core.scale.set(1, 1.7, 1); core.position.y = 0.78; W.add(core);
-    const flame = glowSprite(env, 0xffffff, 1, 0, T.flame); flame.scale.set(0.34, 0.56, 1); flame.position.y = 0.82; W.add(flame);
+    const flame = glowSprite(env, 0xffc070, 1, 0, T.flame); flame.scale.set(0.34, 0.56, 1); flame.position.y = 0.82; W.add(flame);
     const halo = glowSprite(env, C.lamp, 1.2, 0, T.hot); halo.position.y = 0.8; W.add(halo);
-    const big = glowSprite(env, 0xff9a4a, 3, 0); big.position.y = 0.8; big.renderOrder = 1; W.add(big);
+    const big = glowSprite(env, 0xff9a4a, 3, 0); big.position.y = 0.8; big.renderOrder = 2; W.add(big);
     // rotating glints and sweeping beam
     const glints = [];
     for (let i = 0; i < 5; i++) { const s = glowSprite(env, i % 2 ? 0xffe9b0 : 0xffffff, 0.4, 0, T.star); W.add(s); glints.push(s); }
@@ -963,14 +970,14 @@
     const beam2 = new THREE.Mesh(beamG, beamM); beam2.rotation.x = -Math.PI / 2; beam2.position.y = 0.8; beam2.renderOrder = 2; W.add(beam2);
     const pl = new THREE.PointLight(C.lamp, 0, 9, 2); pl.position.set(0, 0.9, 0.2); W.add(pl);
     const st = ramp(env.item.lit === true, 1.0), ph = env.rng() * TAU;
-    const hot = new THREE.Color(3.2, 1.9, 0.7), ember = new THREE.Color(0.2, 0.06, 0.03);
+    const hot = new THREE.Color(1.7, 0.62, 0.12), ember = new THREE.Color(0.2, 0.06, 0.03);
     const apply = (t) => {
       const v = smooth(st.v), f = v > 0 ? flicker(t, ph) : 1;
       const em = 0.1 + 0.05 * Math.sin(t * 1.5 + ph);   // unlit: faint ember hint
       flameM.color.copy(ember).lerp(hot, v).multiplyScalar(v > 0.5 ? f : 1);
-      lensM.emissiveIntensity = v * 1.1 * f; lensM.opacity = lerp(0.3, 0.55, v);
-      flame.material.opacity = v; flame.scale.set(0.34 * (0.9 + 0.1 * f) * (0.6 + 0.4 * v), 0.56 * f * (0.6 + 0.5 * v), 1);
-      halo.material.opacity = v * 0.85 * f + (1 - v) * em * 0.5; halo.scale.setScalar(lerp(0.6, 1.5, v));
+      lensM.emissiveIntensity = v * 0.5 * f; lensM.opacity = lerp(0.3, 0.16, v); lensM.envMapIntensity = lerp(1.8, 0.7, v);
+      flame.material.opacity = v; flame.scale.set(0.46 * (0.9 + 0.1 * f) * (0.6 + 0.4 * v), 0.74 * f * (0.6 + 0.5 * v), 1);
+      halo.material.opacity = v * 0.5 * f + (1 - v) * em * 0.5; halo.scale.setScalar(lerp(0.6, 1.25, v));
       big.material.opacity = v * 0.42; big.scale.setScalar(lerp(1.2, 4.2, v) * (0.97 + 0.03 * f));
       beamM.opacity = v * 0.6; beam.visible = beam2.visible = v > 0.02;
       pl.intensity = v * 3.4 * f;
@@ -1201,7 +1208,7 @@
   const bannerMats = {};
   function bannerMaterial(colorName) {
     if (bannerMats[colorName]) return bannerMats[colorName];
-    const m = new THREE.MeshStandardMaterial({ map: clothTexture(colorName), side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.9, metalness: 0, envMap: M._envTex, envMapIntensity: 0.3, bumpMap: T.noise, bumpScale: 0.3 });
+    const m = new THREE.MeshStandardMaterial({ map: clothTexture(colorName), side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.9, metalness: 0, envMap: M._envTex, envMapIntensity: 0.3 });
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uWind = WIND;
       sh.vertexShader = "uniform float uWind;\n" + sh.vertexShader.replace("#include <begin_vertex>",
@@ -1280,7 +1287,7 @@
     W.add(a, c);
     // foam and spray at the base (also at the lip)
     const base = lipY - len, foam = [];
-    for (let i = 0; i < 5; i++) { const s = glowSprite(env, 0xe8f2ff, 0.6, 0, T.smoke); s.material.blending = THREE.NormalBlending; s.renderOrder = 6; W.add(s); foam.push({ s, o: i / 5 }); }
+    for (let i = 0; i < 3; i++) { const s = glowSprite(env, 0xe8f2ff, 0.6, 0, T.smoke); s.material.blending = THREE.NormalBlending; s.renderOrder = 6; W.add(s); foam.push({ s, o: i / 3 }); }
     const sp = glowSprite(env, 0xbfe0ff, 1.4, 0.35, T.glow); sp.position.set(0, base + 0.1, 0.25); W.add(sp);
     const lipFoam = glowSprite(env, 0xffffff, 0.45, 0.5, T.glow); lipFoam.position.set(0, lipY - 0.02, 0.12); W.add(lipFoam);
     env.upd((dt, t) => {

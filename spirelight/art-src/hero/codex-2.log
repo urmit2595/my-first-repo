@@ -2147,3 +2147,557 @@ JS" in /home/user/my-first-repo/spirelight
   }
 ]
 
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/hero.js';s=open(p).read()
+s=s.replace('ring(head, 0, 0.017, 0, 0.115, Math.PI / 2);','part(head, geo(new THREE.TorusGeometry(0.115, 0.0045, 8, radial)), brass, 0, 0.017, 0, 1, 1, 1, Math.PI / 2);')
+s=s.replace('ring(head, 0, 0.267, 0, 0.135, Math.PI / 2);','part(head, geo(new THREE.TorusGeometry(0.136, 0.004, 8, radial)), brass, 0, 0.267, 0, 1, 1, 1, Math.PI / 2);')
+s=s.replace('bend * 0.035','bend * 0.07')
+s=s.replace('Math.floor(phase / Math.PI)','Math.floor((phase + climb * 0.9) / Math.PI)')
+s=s.replace('var s = Math.sin(phase)','var s = Math.sin(phase + climb * 0.9)')
+# Torso bands follow the egg, with thin rolled brass edges and dark grooves.
+s=s.replace('ring(torso, 0, 0.053, 0, 0.134, Math.PI / 2, dark);\\n    ring(torso, 0, 0.059, 0, 0.136, Math.PI / 2);\\n    ring(torso, 0, 0.183, 0, 0.127, Math.PI / 2);\\n    ring(torso, 0, 0.19, 0, 0.122, Math.PI / 2, dark);','''part(torso, geo(new THREE.TorusGeometry(0.135, 0.002, 6, radial)), dark, 0, 0.055, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.139, 0.003, 6, radial)), brass, 0, 0.063, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.13, 0.003, 6, radial)), brass, 0, 0.184, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.128, 0.0015, 6, radial)), dark, 0, 0.19, 0, 1, 1, 1, Math.PI / 2);''')
+open(p,'w').write(s)
+PY
+node <<'JS'
+const T=require(require('./tools/harness').VENDOR+'/three/build/three.js');global.window={};const noop=()=>{},grad={addColorStop:noop},ctx=new Proxy({createLinearGradient:()=>grad,createRadialGradient:()=>grad},{get:(o,k)=>o[k]||noop,set:(o,k,v)=>(o[k]=v,true)});global.document={createElement:()=>({getContext:()=>ctx})};require('./js/hero.js');
+const dir=new T.Vector3(1,1,1).normalize(),ray=new T.Raycaster();
+for(const anim of ['idle','walk','climb','celebrate','bump','ride','wave']){const h=window.Hero.create(T,{quality:'high'});h.object3D.rotation.y=35*Math.PI/180;h.setAnim(anim);let a=[];for(let f=1;f<=96;f++){h.update(1/60,f/60,{speed:1.4,grounded:true});if([30,60,72,96].includes(f)){const flame=h.object3D.getObjectByName('living flame'),pos=flame.children[0].geometry.attributes.position,tip=new T.Vector3();for(let j=0;j<pos.count;j++)if(pos.getY(j)>.196)tip.fromBufferAttribute(pos,j);tip.applyMatrix4(flame.matrixWorld);const solids=[];h.object3D.traverse(o=>{if(o.isMesh&&"'!o.material.transparent)solids.push(o)});ray.set(tip.clone().addScaledVector(dir,10),dir.clone().negate());const hit=ray.intersectObjects(solids).find(x=>x.distance<9.998);a.push([f/60,hit?.object.parent.name||'"'clear',+h.object3D.getObjectByName('hip.L').rotation.x.toFixed(2)]);}}console.log(anim,a);h.dispose();}
+JS" in /home/user/my-first-repo/spirelight
+ succeeded in 1089ms:
+idle [
+  [ 0.5, 'clear', 0 ],
+  [ 1, 'clear', 0 ],
+  [ 1.2, 'clear', 0 ],
+  [ 1.6, 'clear', 0 ]
+]
+walk [
+  [ 0.5, 'clear', 0.4 ],
+  [ 1, 'clear', -0.62 ],
+  [ 1.2, 'clear', 0.33 ],
+  [ 1.6, 'clear', -0.52 ]
+]
+climb [
+  [ 0.5, 'clear', 0.68 ],
+  [ 1, 'clear', -0.89 ],
+  [ 1.2, 'clear', -0.54 ],
+  [ 1.6, 'clear', 0.77 ]
+]
+celebrate [
+  [ 0.5, 'clear', 0 ],
+  [ 1, 'clear', 0 ],
+  [ 1.2, 'clear', 0 ],
+  [ 1.6, 'clear', 0 ]
+]
+bump [
+  [ 0.5, 'clear', 0 ],
+  [ 1, 'clear', 0 ],
+  [ 1.2, 'clear', 0 ],
+  [ 1.6, 'clear', 0 ]
+]
+ride [
+  [ 0.5, 'clear', -0.38 ],
+  [ 1, 'clear', -0.38 ],
+  [ 1.2, 'clear', -0.38 ],
+  [ 1.6, 'clear', -0.38 ]
+]
+wave [
+  [ 0.5, 'clear', 0 ],
+  [ 1, 'clear', 0 ],
+  [ 1.2, 'clear', 0 ],
+  [ 1.6, 'clear', 0 ]
+]
+
+exec
+/bin/bash -lc "command -v glslangValidator || true
+sed -n '410,510p' js/hero.js
+sed -n '43,160p' tests/hero.html
+rg -n 'get\\( material.envMap|cubeuvmaps|cubemaps' /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/src/renderers/webgl/WebGLPrograms.js" in /home/user/my-first-repo/spirelight
+ succeeded in 149ms:
+          }
+        }
+        air += ((grounded ? 0 : 1) - air) * ease;
+        var s = Math.sin(phase + climb * 0.9), hop = Math.pow(Math.max(0, Math.sin(animTimes[3] * 5)), 2);
+        hips.position.y = 0.222
+          + celebrate * 0.048 * hop + wave * (0.005 + 0.004 * Math.sin(t * 5));
+        torso.rotation.x = 0.09 * walk + 0.19 * climb;
+        torso.rotation.z = gait * 0.025 * s + ride * Math.sin(t * 3) * 0.045 + bump * Math.sin(animTimes[4] * 22) * Math.exp(-animTimes[4] * 4) * 0.11;
+        torso.scale.y = 1 + 0.008 * Math.sin(t * 2.6);
+        var look = Math.sin(t * 0.69) * Math.pow(Math.max(0, Math.sin(t * 0.37)), 4);
+        head.position.y = 0.265 + celebrate * 0.025 + gait * 0.003 * Math.cos(phase * 2);
+        head.rotation.y = look * 0.5 * weights[0];
+        head.rotation.z = bump * 0.28 + wave * 0.11 + ride * Math.sin(t * 2.4) * 0.04;
+        head.rotation.x = bump * 0.12 - torso.rotation.x * 0.65;
+        for (var li = 0; li < 2; li++) {
+          var sideSign = li === 0 ? 1 : -1, swing = s * sideSign;
+          legHips[li].rotation.x = -gait * swing * (0.66 + climb * 0.32) - air * 0.55 - ride * 0.38;
+          legHips[li].rotation.z = sideSign * (ride * 0.13 + celebrate * 0.05);
+          knees[li].rotation.x = gait * Math.max(0, swing) * (1.8 + climb * 0.6) + air * 1.1 + ride * 0.76;
+          ankles[li].rotation.x = -legHips[li].rotation.x - knees[li].rotation.x;
+          ankles[li].rotation.z = -legHips[li].rotation.z;
+          shoulders[li].rotation.x = gait * swing * (0.65 + climb * 0.2) + Math.sin(t * 2 + li) * 0.035 - bump * (li ? 0.8 : 0.05);
+          shoulders[li].rotation.z = sideSign * (0.18 + celebrate * 2.65 + ride * 0.85 + wave * (li ? 2.45 : 0) + bump * (li ? 0.9 : 0));
+          elbows[li].rotation.x = -0.13 - gait * (0.2 + Math.max(0, -swing) * 0.25) - celebrate * 0.35 - bump * (li ? 0.8 : 0);
+          elbows[li].rotation.z = wave * (li ? Math.sin(t * 9) * 0.5 - 0.3 : 0) + sideSign * celebrate * 0.25;
+        }
+        // Plant the lower sole analytically; the opposite knee supplies foot lift.
+        // This also produces the 0.03-unit walking bob without floor penetration.
+        var plantHeight = 0;
+        for (li = 0; li < 2; li++) {
+          var hipX = legHips[li].rotation.x, kneeX = knees[li].rotation.x;
+          var reach = (0.085 * Math.cos(hipX) + 0.071 * Math.cos(hipX + kneeX)) * Math.cos(legHips[li].rotation.z) + 0.066;
+          plantHeight = Math.max(plantHeight, reach);
+        }
+        hips.position.y += (plantHeight - 0.222) * Math.min(1, gait + ride) * (1 - air);
+        keyAngle += dt * (0.32 + gait * speed * 2.8); key.rotation.z = keyAngle;
+        needle.rotation.z = -0.65 + Math.sin(t * 0.8) * 0.23 + Math.sin(t * 3.1) * 0.045;
+        blinkClock += dt;
+        if (blinkAge < 0 && blinkClock >= nextBlink) { blinkAge = 0; blinkClock = 0; nextBlink = 2.5 + (0.5 + Math.sin(t * 7.13) * 0.5) * 2.5; }
+        if (blinkAge >= 0) { blinkAge += dt; if (blinkAge >= 0.12) blinkAge = -1; }
+        eyes.scale.y = blinkAge < 0 ? 1 : 0.1 + 0.9 * Math.abs(blinkAge - 0.06) / 0.06;
+        eyes.position.x = look * 0.008;
+        var glowTarget = requestedGlow + (2 - requestedGlow) * celebrate;
+        glow += (glowTarget - glow) * (1 - Math.exp(-dt * 7));
+        var flicker = 1 + 0.035 * Math.sin(t * 17) + 0.021 * Math.sin(t * 29 + 1) + bump * 0.045 * Math.sin(t * 51);
+        var flameSize = (0.82 + glow * 0.18) * (1 + celebrate * 0.28);
+        // A broad flare stays inside the glass, with breathing room below the cap.
+        flame.scale.set(flameSize * (2 - flicker), Math.min(1.04, flameSize * flicker), Math.min(1.15, flameSize));
+        flame.rotation.z = Math.sin(t * 11) * 0.025 + gait * s * 0.03;
+        outer.scale.x = 1 + Math.sin(t * 13) * 0.025;
+        tongue.scale.y = 1.03 + Math.sin(t * 19) * 0.025;
+        flameMat.emissiveIntensity = 2.8 * (0.65 + glow * 0.35) * flicker;
+        if (halo) { halo.scale.setScalar(0.47 * (0.85 + glow * 0.15)); halo.material.opacity = 0.65 * glow; }
+        updateScarf(dt, t);
+        temp.set(0, 0.105, 0).applyMatrix4(head.matrixWorld).applyMatrix4(rootInverse); light.position.copy(temp);
+        light.intensity = 1.2 * glow * flicker;
+      },
+      dispose: function () {
+        if (disposed) return; disposed = true;
+        if (root.parent) root.parent.remove(root);
+        geometries.forEach(function (g) { g.dispose(); });
+        materials.forEach(function (m) { m.dispose(); });
+        textures.forEach(function (tx) { tx.dispose(); });
+        hero.onStep = null; root.clear();
+      }
+    };
+    Object.defineProperty(hero, "anim", { enumerable: true, get: function () { return currentAnim; } });
+    hero.update(0, 0);
+    return hero;
+  }
+  // THREE is deliberately resolved at create(), so script load has no dependencies.
+  if (typeof window !== "undefined") window.Hero = { create: create };
+})();
+    gradient.addColorStop(0.62, small ? "#674874" : "#33303d");
+    gradient.addColorStop(1, small ? "#c47b6e" : "#51404a");
+    bc.fillStyle = gradient; bc.fillRect(0, 0, 16, 512);
+    var background = new THREE.CanvasTexture(bg); background.encoding = THREE.sRGBEncoding; scene.background = background;
+    tb.key.shadow.normalBias = 0.008;
+    tb.key.shadow.camera.left = tb.key.shadow.camera.bottom = -4;
+    tb.key.shadow.camera.right = tb.key.shadow.camera.top = 4; tb.key.shadow.camera.updateProjectionMatrix();
+    var stone = document.createElement("canvas"); stone.width = stone.height = 128;
+    var sc = stone.getContext("2d"); sc.fillStyle = "#e8d8b8"; sc.fillRect(0, 0, 128, 128);
+    var seed = 410;
+    for (var speck = 0; speck < 3200; speck++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      var sx = seed % 128, sy = (seed >>> 8) % 128;
+      sc.fillStyle = speck % 2 ? "rgba(97,72,44,.07)" : "rgba(255,245,220,.12)";
+      sc.fillRect(sx, sy, 1, 1);
+    }
+    var stoneMap = new THREE.CanvasTexture(stone); stoneMap.encoding = THREE.sRGBEncoding;
+    var paver = new THREE.MeshStandardMaterial({ map: stoneMap, roughness: 0.9 });
+    var edge = new THREE.MeshStandardMaterial({ color: 0x997653, roughness: 0.72 });
+    var inlay = new THREE.MeshStandardMaterial({ color: 0xc8963e, roughness: 0.4, metalness: 0.65 });
+    function tile(x, z, width) {
+      var floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.07, width), edge); floor.position.set(x, -0.046, z); floor.receiveShadow = true; scene.add(floor);
+      var top = new THREE.Mesh(new THREE.BoxGeometry(width - 0.025, 0.02, width - 0.025), paver); top.position.set(x, -0.001 - 0.01, z); top.receiveShadow = true; scene.add(top);
+      // Fine brass perimeter set flush into the pale top.
+      var strip = new THREE.BoxGeometry(width - 0.07, 0.001, 0.0035);
+      for (var e = 0; e < 4; e++) {
+        var line = new THREE.Mesh(strip, inlay); var a = e * Math.PI / 2;
+        line.position.set(x + Math.sin(a) * (width / 2 - 0.035), -0.0005, z + Math.cos(a) * (width / 2 - 0.035));
+        line.rotation.y = a; scene.add(line);
+      }
+    }
+    for (var i = 0; i < names.length; i++) {
+      var hero = Hero.create(THREE, { quality: params.get("quality") || "high" });
+      var offset = lineup ? (i - 3) * 0.94 : 0;
+      hero.object3D.position.set(offset / Math.SQRT2, 0, -offset / Math.SQRT2);
+      hero.object3D.rotation.y = yaw * Math.PI / 180; hero.setAnim(names[i]); scene.add(hero.object3D); heroes.push(hero);
+      tile(hero.object3D.position.x, hero.object3D.position.z, lineup ? 0.62 : (small ? 0.9 : 0.73));
+      if (lineup) {
+        var label = document.createElement("div"); label.className = "label"; label.textContent = names[i];
+        document.getElementById("labels").appendChild(label); labels.push(label);
+      }
+    }
+    if (small) { tile(-0.66, 0.66, 0.9); tile(0.66, -0.66, 0.9); }
+    function placeLabels() {
+      for (var j = 0; j < labels.length; j++) {
+        labelPoint.copy(heroes[j].object3D.position); labelPoint.y = -0.48; labelPoint.project(tb.camera);
+        labels[j].style.left = (labelPoint.x * 0.5 + 0.5) * window.innerWidth + "px";
+        labels[j].style.top = (-labelPoint.y * 0.5 + 0.5) * window.innerHeight + "px";
+      }
+    }
+    // Fixed 60 Hz simulation, including the final fractional frame. No wall clock
+    // input reaches a frozen frame (including Testbed's public time).
+    if (frozen) {
+      var frames = Math.floor(time * 60);
+      for (var f = 0; f < frames; f++) for (i = 0; i < heroes.length; i++) heroes[i].update(1 / 60, (f + 1) / 60, states);
+      for (i = 0; i < heroes.length; i++) heroes[i].update(time - frames / 60, time, states);
+      tb.time = time;
+      Object.defineProperty(tb, "time", { configurable: true, get: function () { return time; }, set: function () {} });
+    }
+    var liveTime = 0;
+    tb.onFrame(function (dt) {
+      if (!frozen) {
+        liveTime += dt;
+        for (var j = 0; j < heroes.length; j++) {
+          if (params.get("walkto") === "1") {
+            var p = heroes[j].object3D, a = liveTime * 1.5, radius = small ? 0.6 : 0.20;
+            p.position.set(Math.sin(a) * radius, 0, Math.sin(a * 2) * radius * 0.5);
+            var desired = Math.atan2(Math.cos(a), Math.cos(a * 2));
+            var difference = Math.atan2(Math.sin(desired - p.rotation.y), Math.cos(desired - p.rotation.y));
+            p.rotation.y += difference * (1 - Math.exp(-dt * 12));
+          }
+          heroes[j].update(dt, liveTime, states);
+        }
+      }
+      placeLabels();
+    });
+    placeLabels();
+    // Exposed for console inspection and the screenshot harness.
+    window.hero = heroes[0]; window.heroes = heroes;
+    window.addEventListener("pagehide", function () {
+      try { heroes.forEach(function (h) { h.dispose(); }); background.dispose(); stoneMap.dispose(); paver.dispose(); edge.dispose(); inlay.dispose(); } catch (error) { console.error(error); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
+6:function WebGLPrograms( renderer, cubemaps, extensions, capabilities, bindingStates, clipping ) {
+115:		const envMap = cubemaps.get( material.envMap || environment );
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/hero.js';s=open(p).read().replace('egg.scale(1.29, 1, 1.29)','egg.scale(1.29, 1.1, 1.29)')
+s=s.replace('pp[1], Math.cos(angle)','pp[1] * 1.1, Math.cos(angle)').replace('yy, Math.cos(angle + 0.2)','yy * 1.1, Math.cos(angle + 0.2)').replace('yy - 0.005, Math.cos(angle + 0.2)','yy * 1.1 - 0.005, Math.cos(angle + 0.2)')
+s=s.replace('0, 0.145, 0.148','0, 0.16, 0.148')
+s=s.replace('0, 0.239, 0','0, 0.263, 0').replace('0, 0.218, 0','0, 0.242, 0').replace('-0.094, 0.238, 0.093','-0.094, 0.262, 0.093')
+s=s.replace('\"head\", 0, 0.265, 0);','\"head\", 0, 0.289, 0); head.scale.y = 0.94;').replace('head.position.y = 0.265','head.position.y = 0.289')
+s=s.replace('sign * 0.153, 0.18','sign * 0.153, 0.20').replace('i * 0.045, 0.235','i * 0.045, 0.259')
+s=s.replace('    var scarfInitialized = false;', '''    var armCapsules = [];
+    for (i = 0; i < 4; i++) armCapsules.push({ a: new THREE.Vector3(), b: new THREE.Vector3() });
+    var scarfInitialized = false;''')
+s=s.replace('      var steps = Math.max(1, Math.ceil(dt * 120)), h = dt / steps;', '''      for (var arm = 0; arm < 2; arm++) {
+        armCapsules[arm * 2].a.setFromMatrixPosition(shoulders[arm].matrixWorld);
+        armCapsules[arm * 2].b.setFromMatrixPosition(elbows[arm].matrixWorld);
+        armCapsules[arm * 2 + 1].a.copy(armCapsules[arm * 2].b);
+        armCapsules[arm * 2 + 1].b.set(0, -0.11, 0.008).applyMatrix4(elbows[arm].matrixWorld);
+      }
+      var steps = Math.max(1, Math.ceil(dt * 120)), h = dt / steps;''')
+a=s.index('              // Expanded torso ellipsoid;');b=s.index('\\n            }',a)
+s=s[:a]+'''              // Rounded torso capsule, expanded by half the ribbon width.
+              local.copy(cur[ni]).applyMatrix4(torsoInverse);
+              var capsuleY = Math.max(0.115, Math.min(0.14, local.y));
+              local.y -= capsuleY;
+              var d = Math.sqrt(local.x * local.x / 0.038 + local.y * local.y / 0.0196 + local.z * local.z / 0.038);
+              if (d < 1) local.multiplyScalar(1 / Math.max(d, 0.0001));
+              local.y += capsuleY;
+              // Clearance around the projecting gauge and its bezel.
+              correction.set(local.x, local.y - 0.16, local.z - 0.166);
+              var gaugeDistance = correction.length();
+              if (gaugeDistance < 0.088) local.addScaledVector(correction, (0.088 - gaugeDistance) / Math.max(gaugeDistance, 0.0001));
+              cur[ni].copy(local).applyMatrix4(torso.matrixWorld);
+              // Animated arm capsules keep the ribbons ahead of the pumping hands.
+              for (var ac = 0; ac < 4; ac++) {
+                var capsule = armCapsules[ac];
+                correction.subVectors(capsule.b, capsule.a); temp.subVectors(cur[ni], capsule.a);
+                var projection = Math.max(0, Math.min(1, temp.dot(correction) / Math.max(0.000001, correction.lengthSq())));
+                temp.addScaledVector(correction, -projection);
+                var clearance = temp.length();
+                if (clearance < 0.06) cur[ni].addScaledVector(temp, (0.06 - clearance) / Math.max(0.0001, clearance));
+              }''' +s[b:]
+open(p,'w').write(s)
+p='tests/hero.html';s=open(p).read();s=s.replace('    tb.key.shadow.normalBias', '    tb.key.intensity = 1.15; tb.hemi.intensity = 0.45;\\n    tb.key.shadow.normalBias')
+s=s.replace('var names = lineup ? [\"idle\", \"walk\", \"climb\", \"celebrate\", \"bump\", \"ride\", \"wave\"] : [params.get(\"anim\") || \"idle\"];','var names = lineup ? [\"idle\", \"walk\", \"climb\", \"celebrate\", \"bump\", \"ride\", \"wave\"] : [params.get(\"anim\") || (params.get(\"walkto\") === \"1\" ? \"walk\" : \"idle\")];')
+open(p,'w').write(s)
+PY
+node --check js/hero.js
+git diff --check -- js/hero.js tests/hero.html" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+exec
+/bin/bash -lc "node <<'JS'
+const assert=require('assert'), fs=require('fs'),vm=require('vm'),T=require(require('./tools/harness').VENDOR+'/three/build/three.js');
+const noop=()=>{},gradient={addColorStop:noop};function element(){const ctx=new Proxy({createLinearGradient:()=>gradient,createRadialGradient:()=>gradient},{get:(o,k)=>o[k]||noop,set:(o,k,v)=>(o[k]=v,true)});return {style:{},children:[],appendChild(e){this.children.push(e)},getContext:()=>ctx};}
+global.window={};global.document={createElement:element};require('./js/hero.js');const H=window.Hero;
+const state={speed:1.4,grounded:true},dir=new T.Vector3(1,1,1).normalize(),ray=new T.Raycaster();
+let poses=0;
+for(const quality of ['low','med','high']){
+ let h=H.create(T,{quality}), calls=0,triangles=0;const resources=new Set();h.object3D.traverse(o=>{if(o.isMesh||o.isSprite){calls++;if(o.geometry){resources.add(o.geometry);triangles+=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;}resources.add(o.material);for(const key of ['map','bumpMap','envMap'])if(o.material[key])resources.add(o.material[key]);}});
+ assert(calls<=40&&triangles<=60000);let disposed=0;for(const r of resources)r.addEventListener('dispose',()=>disposed++);
+ h.dispose();h.dispose();assert.equal(disposed,resources.size);assert.equal(h.object3D.children.length,0);console.log(quality,{calls,triangles,disposed});
+}
+for(const anim of ['idle','walk','climb','celebrate','bump','ride','wave']){
+ const h=H.create(T,{quality:'high'});h.object3D.rotation.y=35*Math.PI/180;h.setAnim(anim);let feet=[];h.onStep=e=>feet.push(e.foot);
+ for(let f=1;f<=96;f++){h.update(1/60,f/60,state);if([30,60,72,96].includes(f)){
+  const flame=h.object3D.getObjectByName('living flame'),pos=flame.children[0].geometry.attributes.position,tip=new T.Vector3();for(let j=0;j<pos.count;j++)if(pos.getY(j)>.196)tip.fromBufferAttribute(pos,j);
+  const solids=[];h.object3D.traverse(o=>{if(o.isMesh&&"'!o.material.transparent)solids.push(o)});
+  for(const [part,target,p] of [['"'tip',flame,tip],['eyeL',h.object3D.getObjectByName('eyes'),new T.Vector3(-.023,0,.005)],['eyeR',h.object3D.getObjectByName('eyes'),new T.Vector3(.023,0,.005)]]){
+    p.applyMatrix4(target.matrixWorld);ray.set(p.clone().addScaledVector(dir,10),dir.clone().negate());const hit=ray.intersectObjects(solids).find(x=>x.distance<9.997);
+    assert("'!hit,`${anim} ${f/60} ${part} occluded by ${hit?.object.parent.name}`);
+  }
+  for(const n of ['"'scarf tail 0','scarf tail 1'])assert(h.object3D.getObjectByName(n).geometry.attributes.position.array.every(Number.isFinite));poses++;
+ }}
+ if(anim==='walk'||anim==='climb'){assert(feet.length>=3);assert(feet.every((foot,i)=>"'!i||foot!==feet[i-1]));}
+ h.setAnim('"'invalid');assert.equal(h.anim,'idle');h.setGlow(0);for(let f=0;f<180;f++)h.update(1/60,f/60);assert(h.light.intensity<0.001);
+ h.setGlow(3);for(let f=0;f<180;f++)h.update(1/60,f/60);assert(h.light.intensity>2.1&&h.light.intensity<2.6);h.dispose();
+}
+console.log('unoccluded tip and both eyes in',poses,'iso poses; APIs, alternating footsteps, glow easing and disposal passed');
+const h=H.create(T),parent=new T.Group();parent.position.set(2,1,-3);parent.rotation.y=.6;parent.add(h.object3D);h.setAnim('walk');
+let peakStretch=0;for(let f=0;f<720;f++){let t=f/60;h.object3D.position.set(Math.sin(t)*.6,0,Math.sin(t*2)*.3);h.object3D.rotation.y=Math.atan2(Math.cos(t),Math.cos(2*t));h.update(1/60,t,state);for(let k=0;k<2;k++){let a=h.object3D.getObjectByName('scarf tail '+k).geometry.attributes.position.array;assert(a.every(Number.isFinite));for(let j=1;j<7;j++){let d=0;for(let c=0;c<3;c++){let v=(a[j*6+c]+a[j*6+c+3]-a[(j-1)*6+c]-a[(j-1)*6+c+3])*.5;d+=v*v;}peakStretch=Math.max(peakStretch,Math.sqrt(d));}}}
+h.object3D.position.set(20,0,20);h.update(.1,13,state);h.setAnim('idle');for(let f=0;f<300;f++)h.update(1/60,13+f/60);for(let k=0;k<2;k++){let a=h.object3D.getObjectByName('scarf tail '+k).geometry.attributes.position.array;assert(a.every(Number.isFinite));console.log('settled tail',k,Array.from(a.slice(36,42)).map(x=>+x.toFixed(3)));}console.log('world path, parent transforms, teleport recovery passed; peak chain segment',+peakStretch.toFixed(4));h.dispose();
+const source=fs.readFileSync('tests/hero.html','utf8').match(/<script>\\s*([\\s\\S]*?)<\\/script>/)[1];
+for(const query of ['?view=lineup&t=.5','?view=lineup&t=1','?view=lineup&t=1.6','?view=small&anim=walk&t=.7','?anim=walk&t=1.2&view=large','?walkto=1','?yaw=180&t=0']){
+ const dom={},events={};const win={innerWidth:1600,innerHeight:600,addEventListener:(n,f)=>events[n]=f};const ctx={console,THREE:T,Hero:H,URLSearchParams,location:{search:query},window:win,document:{createElement:element,getElementById:n=>dom[n]||(dom[n]=element())}};
+ let tb;ctx.Testbed={start(opts,fn){const c=opts.center,H=opts.height;tb={scene:new T.Scene(),camera:new T.OrthographicCamera(-H*1600/600/2,H*1600/600/2,H/2,-H/2,-200,400),key:new T.DirectionalLight(),hemi:new T.HemisphereLight(),time:0,frames:[],onFrame(f){this.frames.push(f)}};tb.camera.position.set(c[0]+50,c[1]+50,c[2]+50);tb.camera.lookAt(...c);tb.camera.updateMatrixWorld();fn(tb)}};
+ vm.runInNewContext(source,ctx);assert(win.heroes.length=== (query.includes('lineup')?7:1));for(let f=0;f<180;f++){tb.time+=1/60;tb.frames.forEach(fn=>fn(1/60))}if(query.includes('t=')){assert.equal(tb.time,+new URLSearchParams(query).get('t'));}else{assert.equal(win.hero.anim,'walk');assert(win.hero.object3D.position.length()>.01)}
+ if(query.includes('lineup'))assert(dom.labels.children.every(e=>parseFloat(e.style.top)>430));events.pagehide();console.log('page parameters passed',query);
+}
+JS" in /home/user/my-first-repo/spirelight
+ exited 1 in 437ms:
+low { calls: 29, triangles: 23616, disposed: 43 }
+node:assert:150
+  throw new AssertionError(obj);
+  ^
+
+AssertionError [ERR_ASSERTION]: 45 == 46
+    at [stdin]:9:33
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [stdin]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+    at node:internal/main/eval_stdin:53:5
+    at Socket.<anonymous> (node:internal/process/execution:201:5)
+    at Socket.emit (node:events:531:35) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 45,
+  expected: 46,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v22.23.4
+
+exec
+/bin/bash -lc "node <<'JS'
+const assert=require('assert'),fs=require('fs'),vm=require('vm'),T=require(require('./tools/harness').VENDOR+'/three/build/three.js');
+const noop=()=>{},gradient={addColorStop:noop};
+function element(){const ctx=new Proxy({createLinearGradient:()=>gradient,createRadialGradient:()=>gradient},{get:(o,k)=>o[k]||noop,set:(o,k,v)=>(o[k]=v,true)});return {style:{},children:[],appendChild(e){this.children.push(e)},getContext:()=>ctx};}
+global.window={};global.document={createElement:element};require('./js/hero.js');const H=window.Hero,state={speed:1.4,grounded:true},dir=new T.Vector3(1,1,1).normalize(),ray=new T.Raycaster();
+for(const quality of ['low','med','high']){
+ const h=H.create(T,{quality}),resources=new Set();let calls=0,triangles=0;
+ h.object3D.traverse(o=>{if(o.isMesh||o.isSprite){calls++;if(o.isMesh){resources.add(o.geometry);triangles+=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;}else triangles+=2;resources.add(o.material);for(const key of ['map','bumpMap','envMap'])if(o.material[key])resources.add(o.material[key]);}});
+ assert(calls<=40&&triangles<=60000);let disposed=0;for(const r of resources)r.addEventListener('dispose',()=>disposed++);h.dispose();h.dispose();assert.equal(disposed,resources.size);console.log(quality,{calls,triangles,disposed});
+}
+let poses=0;
+for(const anim of ['idle','walk','climb','celebrate','bump','ride','wave']){
+ const h=H.create(T,{quality:'high'});h.object3D.rotation.y=35*Math.PI/180;h.setAnim(anim);let feet=[];h.onStep=e=>feet.push(e.foot);
+ for(let f=1;f<=96;f++){h.update(1/60,f/60,state);if([30,60,72,96].includes(f)){
+ const flame=h.object3D.getObjectByName('living flame'),pos=flame.children[0].geometry.attributes.position,tip=new T.Vector3();for(let j=0;j<pos.count;j++)if(pos.getY(j)>.196)tip.fromBufferAttribute(pos,j);
+ const solids=[];h.object3D.traverse(o=>{if(o.isMesh&&"'!o.material.transparent)solids.push(o)});
+ for(const [part,target,p] of [['"'tip',flame,tip],['eyeL',h.object3D.getObjectByName('eyes'),new T.Vector3(-.023,0,.005)],['eyeR',h.object3D.getObjectByName('eyes'),new T.Vector3(.023,0,.005)]]){
+ p.applyMatrix4(target.matrixWorld);ray.set(p.clone().addScaledVector(dir,10),dir.clone().negate());const hit=ray.intersectObjects(solids).find(x=>x.distance<9.997);assert("'!hit,anim+'"' '+f/60+' '+part+' occluded by '+hit?.object.parent.name);
+ }poses++;
+ }}
+ if(anim==='walk'||anim==='climb'){assert(feet.length>=3);assert(feet.every((foot,i)=>"'!i||foot!==feet[i-1]));}
+ h.setAnim('"'invalid');assert.equal(h.anim,'idle');h.setGlow(0);for(let f=0;f<180;f++)h.update(1/60,f/60);assert(h.light.intensity<.001);
+ h.setGlow(3);for(let f=0;f<180;f++)h.update(1/60,f/60);assert(h.light.intensity>2.1&&h.light.intensity<2.6);h.dispose();
+}
+console.log('tip and both eyes unobstructed in '+poses+' iso poses; APIs, footsteps, glow easing passed');
+const h=H.create(T),parent=new T.Group();parent.position.set(2,1,-3);parent.rotation.y=.6;parent.add(h.object3D);h.setAnim('walk');let peak=0;
+for(let f=0;f<720;f++){let t=f/60;h.object3D.position.set(Math.sin(t)*.6,0,Math.sin(t*2)*.3);h.object3D.rotation.y=Math.atan2(Math.cos(t),Math.cos(2*t));h.update(1/60,t,state);
+for(let k=0;k<2;k++){let a=h.object3D.getObjectByName('scarf tail '+k).geometry.attributes.position.array;assert(a.every(Number.isFinite));for(let j=1;j<7;j++){let d=0;for(let c=0;c<3;c++){let v=(a[j*6+c]+a[j*6+c+3]-a[(j-1)*6+c]-a[(j-1)*6+c+3])*.5;d+=v*v;}peak=Math.max(peak,Math.sqrt(d));}}}
+h.object3D.position.set(20,0,20);h.update(.1,13,state);h.setAnim('idle');for(let f=0;f<300;f++)h.update(1/60,13+f/60);
+for(let k=0;k<2;k++){let a=h.object3D.getObjectByName('scarf tail '+k).geometry.attributes.position.array;assert(a.every(Number.isFinite));console.log('settled tail',k,Array.from(a.slice(36,42)).map(x=>+x.toFixed(3)));}
+console.log('world path, parent transforms, teleport recovery passed; peak chain segment',+peak.toFixed(4));h.dispose();
+const source=fs.readFileSync('tests/hero.html','utf8').match(/<script>\\s*([\\s\\S]*?)<\\/script>/)[1];
+for(const query of ['?view=lineup&t=.5','?view=lineup&t=1','?view=lineup&t=1.6','?view=small&anim=walk&t=.7','?anim=walk&t=1.2&view=large','?walkto=1','?yaw=180&t=0']){
+ const dom={},events={},win={innerWidth:1600,innerHeight:600,addEventListener:(n,f)=>events[n]=f};let tb;
+ const ctx={console,THREE:T,Hero:H,URLSearchParams,location:{search:query},window:win,document:{createElement:element,getElementById:n=>dom[n]||(dom[n]=element())},Testbed:{start(opts,fn){const c=opts.center,H=opts.height;tb={scene:new T.Scene(),camera:new T.OrthographicCamera(-H*1600/600/2,H*1600/600/2,H/2,-H/2,-200,400),key:new T.DirectionalLight(),hemi:new T.HemisphereLight(),time:0,frames:[],onFrame(f){this.frames.push(f)}};tb.camera.position.set(c[0]+50,c[1]+50,c[2]+50);tb.camera.lookAt(...c);tb.camera.updateMatrixWorld();fn(tb)}}};
+ vm.runInNewContext(source,ctx);assert(win.heroes.length===(query.includes('lineup')?7:1));for(let f=0;f<180;f++){tb.time+=1/60;tb.frames.forEach(fn=>fn(1/60));}if(query.includes('t='))assert.equal(tb.time,+new URLSearchParams(query).get('t'));else{assert.equal(win.hero.anim,'walk');assert(win.hero.object3D.position.length()>.01);}
+ if(query.includes('lineup'))assert(dom.labels.children.every(e=>parseFloat(e.style.top)>430));events.pagehide();console.log('page parameters passed',query);
+}
+JS" in /home/user/my-first-repo/spirelight
+ succeeded in 1645ms:
+low { calls: 29, triangles: 23616, disposed: 43 }
+med { calls: 30, triangles: 53764, disposed: 45 }
+high { calls: 30, triangles: 56278, disposed: 45 }
+tip and both eyes unobstructed in 28 iso poses; APIs, footsteps, glow easing passed
+settled tail 0 [ -0.135, 0.279, 0.133, -0.094, 0.28, 0.185 ]
+settled tail 1 [ -0.175, 0.299, 0.147, -0.121, 0.3, 0.109 ]
+world path, parent transforms, teleport recovery passed; peak chain segment 0.0406
+page parameters passed ?view=lineup&t=.5
+page parameters passed ?view=lineup&t=1
+page parameters passed ?view=lineup&t=1.6
+page parameters passed ?view=small&anim=walk&t=.7
+page parameters passed ?anim=walk&t=1.2&view=large
+page parameters passed ?walkto=1
+page parameters passed ?yaw=180&t=0
+
+codex
+The direct Three.js checks now pass for all seven animations at 0.5, 1.0, 1.2, and 1.6 seconds: the flame tip and both eyes are unobstructed from the default iso view. Scarf motion, parent transforms, teleport recovery, footsteps, glow easing, disposal, and URL parameters also pass. High quality uses 30 visible draw calls and 56,278 triangles. Chromium is still blocked, so I haven’t been able to verify the revised appearance in PNGs.
+
+exec
+/bin/bash -lc "rg -n 'info.reset|shadowMap.render' /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/src/renderers/WebGLRenderer.js
+sed -n '120,190p' js/hero.js
+git diff --numstat -- js/hero.js tests/hero.html
+git status --short -- js/hero.js tests/hero.html" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+1053:		shadowMap.render( shadowsArray, scene, camera );
+1062:		if ( this.info.autoReset === true ) this.info.reset();
+    part(torso, egg, brass);
+    part(torso, geo(new THREE.TorusGeometry(0.135, 0.002, 6, radial)), dark, 0, 0.055, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.139, 0.003, 6, radial)), brass, 0, 0.063, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.13, 0.003, 6, radial)), brass, 0, 0.184, 0, 1, 1, 1, Math.PI / 2);
+    part(torso, geo(new THREE.TorusGeometry(0.128, 0.0015, 6, radial)), dark, 0, 0.19, 0, 1, 1, 1, Math.PI / 2);
+    // Three fine longitudinal seams, expressed as curved brass wires.
+    for (i = 0; i < 6; i++) {
+      var angle = i * Math.PI / 3, seam = [];
+      for (var j = 1; j < 8; j++) {
+        var pp = [[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],[0.112,0.148],[0.097,0.194],[0.071,0.22]][j];
+        seam.push(new THREE.Vector3(Math.sin(angle) * (pp[0] * 1.29 + 0.001), pp[1] * 1.1, Math.cos(angle) * (pp[0] * 1.29 + 0.001)));
+      }
+      var wire = geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(seam), 12, 0.0018, 4, false)); part(torso, wire, dark);
+      for (j = 0; j < 3; j++) {
+        var yy = 0.055 + j * 0.065, rr = j === 1 ? 0.116 : 0.104;
+        ball(torso, Math.sin(angle + 0.2) * rr * 1.29, yy * 1.1, Math.cos(angle + 0.2) * rr * 1.29, 0.0075);
+        ball(torso, Math.sin(angle + 0.2) * rr * 1.28, yy * 1.1 - 0.005, Math.cos(angle + 0.2) * rr * 1.28, 0.009, 0.008, 0.008, patina);
+      }
+    }
+    // Cream pressure dial, including tiny printed ticks and a moving needle.
+    var dialCanvas = canvas(256, 256), dc = dialCanvas.getContext("2d");
+    dc.fillStyle = "#f3e5bd"; dc.fillRect(0, 0, 256, 256);
+    dc.strokeStyle = "#655037"; dc.lineWidth = 3;
+    dc.beginPath(); dc.arc(128, 128, 111, 0, Math.PI * 2); dc.stroke();
+    for (i = 0; i < 28; i++) {
+      var a = -Math.PI * 1.2 + i * Math.PI * 1.4 / 27;
+      dc.lineWidth = i % 3 ? 2 : 4; dc.beginPath();
+      dc.moveTo(128 + Math.sin(a) * 98, 128 - Math.cos(a) * 98);
+      dc.lineTo(128 + Math.sin(a) * (i % 3 ? 88 : 77), 128 - Math.cos(a) * (i % 3 ? 88 : 77)); dc.stroke();
+    }
+    dc.fillStyle = "#736044"; dc.font = "bold 19px Georgia"; dc.textAlign = "center";
+    dc.fillText("LUMEN", 128, 167); dc.font = "14px Georgia"; dc.fillText("0       5       10", 128, 77);
+    var dialMat = mat(new THREE.MeshStandardMaterial({ map: texture(dialCanvas, true), roughness: 0.63, metalness: 0.08 }));
+    var gauge = group(torso, "chest gauge", 0, 0.16, 0.148); gauge.scale.setScalar(1.28); gauge.rotation.x = -0.16;
+    rod(gauge, 0, 0, 0, 0.042, 0.014, Math.PI / 2);
+    ring(gauge, 0, 0, 0.011, 0.037, 0);
+    part(gauge, geo(new THREE.CircleGeometry(0.033, radial)), dialMat, 0, 0, 0.013);
+    var needle = group(gauge, "gauge needle", 0, 0, 0.014);
+    rod(needle, 0, 0.009, 0, 0.0016, 0.031, 0, 0, dark); ball(needle, 0, 0, 0.001, 0.0033, 0.0033, 0.002, dark);
+    var key = group(torso, "key", 0, 0.13, -0.157);
+    rod(key, 0, 0, -0.014, 0.014, 0.065, Math.PI / 2);
+    ball(key, 0, 0, -0.052, 0.017, 0.019, 0.01);
+    ring(key, -0.031, 0.012, -0.053, 0.025, 0, brass, 0.03);
+    ring(key, 0.031, 0.012, -0.053, 0.025, 0, brass, 0.03);
+    rod(key, 0, 0.005, -0.053, 0.01, 0.06, 0, Math.PI / 2);
+    // A real wool torus, with a rolled lower lip and a front-side knot.
+    part(torso, geo(new THREE.TorusGeometry(0.088, 0.038, 12, radial)), scarfMat,
+      0, 0.263, 0, 1, 1, 0.8, Math.PI / 2);
+    ring(torso, 0, 0.242, 0, 0.096, Math.PI / 2, scarfMat);
+    ball(torso, -0.094, 0.262, 0.093, 0.038, 0.035, 0.035, scarfMat);
+    var head = group(torso, "head", 0, 0.289, 0); head.scale.y = 0.94;
+    var globe = lathe([[0.114,0.008],[0.145,0.03],[0.173,0.067],[0.183,0.111],
+      [0.178,0.151],[0.159,0.20],[0.134,0.248],[0.127,0.263]]);
+    var glass = new THREE.Mesh(globe, glassMat); glass.name = "lantern glass"; glass.renderOrder = 3; head.add(glass);
+    rod(head, 0, 0.009, 0, 0.12, 0.014);
+    part(head, geo(new THREE.TorusGeometry(0.115, 0.0045, 8, radial)), brass, 0, 0.017, 0, 1, 1, 1, Math.PI / 2);
+    rod(head, 0, 0.267, 0, 0.139, 0.01);
+    part(head, geo(new THREE.TorusGeometry(0.136, 0.004, 8, radial)), brass, 0, 0.267, 0, 1, 1, 1, Math.PI / 2);
+    var dome = lathe([[0.137,0.271],[0.127,0.278],[0.103,0.285],[0.07,0.29],[0.034,0.292],[0,0.293]]);
+    part(head, dome, brass);
+    rod(head, 0, 0.298, 0, 0.023, 0.009);
+    ball(head, 0, 0.309, 0, 0.014);
+    ring(head, 0, 0.334, 0, 0.03, 0);
+    for (i = 0; i < 4; i++) {
+      angle = Math.PI / 4 + i * Math.PI / 2;
+      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.176,.078],[.185,.117],[.175,.16],[.15,.225],[.13,.263]];
+      for (j = 0; j < ribProfile.length; j++) {
+        ribs.push(new THREE.Vector3(Math.sin(angle) * ribProfile[j][0], ribProfile[j][1], Math.cos(angle) * ribProfile[j][0]));
+      }
+      part(head, geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ribs), low ? 10 : 24, 0.0055, 6, false)), brass);
+    }
+51	26	spirelight/js/hero.js
+2	1	spirelight/tests/hero.html
+ M js/hero.js
+ M tests/hero.html
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/hero.js';s=open(p).read().replace('brass, 0, 0.184, 0','brass, 0, 0.2024, 0').replace('dark, 0, 0.19, 0','dark, 0, 0.209, 0').replace('// Three fine longitudinal seams','// Six fine longitudinal seams').replace('TorusGeometry(0.088, 0.038','TorusGeometry(0.088, 0.043')
+open(p,'w').write(s)
+PY
+node --check js/hero.js
+git diff --check -- js/hero.js tests/hero.html" in /home/user/my-first-repo/spirelight
+ succeeded in 49ms:
+exec
+/bin/bash -lc "node <<'JS'
+const assert=require('assert'),fs=require('fs'),vm=require('vm'),T=require(require('./tools/harness').VENDOR+'/three/build/three.js');
+const noop=()=>{},gradient={addColorStop:noop};
+function element(){const ctx=new Proxy({createLinearGradient:()=>gradient,createRadialGradient:()=>gradient},{get:(o,k)=>o[k]||noop,set:(o,k,v)=>(o[k]=v,true)});return {style:{},children:[],appendChild(e){this.children.push(e)},getContext:()=>ctx};}
+global.window={};global.document={createElement:element};require('./js/hero.js');const H=window.Hero,state={speed:1.4,grounded:true},dir=new T.Vector3(1,1,1).normalize(),ray=new T.Raycaster();
+for(const quality of ['low','med','high']){
+ const h=H.create(T,{quality}),resources=new Set();let calls=0,triangles=0;
+ h.object3D.traverse(o=>{if(o.isMesh||o.isSprite){calls++;if(o.isMesh){resources.add(o.geometry);triangles+=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;}else triangles+=2;resources.add(o.material);for(const key of ['map','bumpMap','envMap'])if(o.material[key])resources.add(o.material[key]);}});
+ assert(calls<=40&&triangles<=60000);let disposed=0;for(const r of resources)r.addEventListener('dispose',()=>disposed++);h.dispose();h.dispose();assert.equal(disposed,resources.size);console.log(quality,{calls,triangles,disposed});
+}
+let poses=0;
+for(const anim of ['idle','walk','climb','celebrate','bump','ride','wave']){
+ const h=H.create(T,{quality:'high'});h.object3D.rotation.y=35*Math.PI/180;h.setAnim(anim);let feet=[];h.onStep=e=>feet.push(e.foot);
+ for(let f=1;f<=96;f++){h.update(1/60,f/60,state);if([30,60,72,96].includes(f)){
+ const flame=h.object3D.getObjectByName('living flame'),pos=flame.children[0].geometry.attributes.position,tip=new T.Vector3();for(let j=0;j<pos.count;j++)if(pos.getY(j)>.196)tip.fromBufferAttribute(pos,j);
+ const solids=[];h.object3D.traverse(o=>{if(o.isMesh&&"'!o.material.transparent)solids.push(o)});
+ for(const [part,target,p] of [['"'tip',flame,tip],['eyeL',h.object3D.getObjectByName('eyes'),new T.Vector3(-.023,0,.005)],['eyeR',h.object3D.getObjectByName('eyes'),new T.Vector3(.023,0,.005)]]){
+ p.applyMatrix4(target.matrixWorld);ray.set(p.clone().addScaledVector(dir,10),dir.clone().negate());const hit=ray.intersectObjects(solids).find(x=>x.distance<9.997);assert("'!hit,anim+'"' '+f/60+' '+part+' occluded by '+hit?.object.parent.name);
+ }poses++;
+ }}
+ if(anim==='walk'||anim==='climb'){assert(feet.length>=3);assert(feet.every((foot,i)=>"'!i||foot!==feet[i-1]));}
+ h.setAnim('"'invalid');assert.equal(h.anim,'idle');h.setGlow(0);for(let f=0;f<180;f++)h.update(1/60,f/60);assert(h.light.intensity<.001);
+ h.setGlow(3);for(let f=0;f<180;f++)h.update(1/60,f/60);assert(h.light.intensity>2.1&&h.light.intensity<2.6);h.dispose();
+}
+console.log('tip and both eyes unobstructed in '+poses+' iso poses; APIs, footsteps, glow easing passed');
+const h=H.create(T),parent=new T.Group();parent.position.set(2,1,-3);parent.rotation.y=.6;parent.add(h.object3D);h.setAnim('walk');let peak=0;
+for(let f=0;f<720;f++){let t=f/60;h.object3D.position.set(Math.sin(t)*.6,0,Math.sin(t*2)*.3);h.object3D.rotation.y=Math.atan2(Math.cos(t),Math.cos(2*t));h.update(1/60,t,state);
+for(let k=0;k<2;k++){let a=h.object3D.getObjectByName('scarf tail '+k).geometry.attributes.position.array;assert(a.every(Number.isFinite));for(let j=1;j<7;j++){let d=0;for(let c=0;c<3;c++){let v=(a[j*6+c]+a[j*6+c+3]-a[(j-1)*6+c]-a[(j-1)*6+c+3])*.5;d+=v*v;}peak=Math.max(peak,Math.sqrt(d));}}}
+h.object3D.position.set(20,0,20);h.update(.1,13,state);h.setAnim('idle');for(let f=0;f<300;f++)h.update(1/60,13+f/60);
+for(let k=0;k<2;k++){let a=h.object3D.getObjectByName('scarf tail '+k).geometry.attributes.position.array;assert(a.every(Number.isFinite));console.log('settled tail',k,Array.from(a.slice(36,42)).map(x=>+x.toFixed(3)));}
+console.log('world path, parent transforms, teleport recovery passed; peak chain segment',+peak.toFixed(4));h.dispose();
+const source=fs.readFileSync('tests/hero.html','utf8').match(/<script>\\s*([\\s\\S]*?)<\\/script>/)[1];
+for(const query of ['?view=lineup&t=.5','?view=lineup&t=1','?view=lineup&t=1.6','?view=small&anim=walk&t=.7','?anim=walk&t=1.2&view=large','?walkto=1','?yaw=180&t=0']){
+ const dom={},events={},win={innerWidth:1600,innerHeight:600,addEventListener:(n,f)=>events[n]=f};let tb;
+ const ctx={console,THREE:T,Hero:H,URLSearchParams,location:{search:query},window:win,document:{createElement:element,getElementById:n=>dom[n]||(dom[n]=element())},Testbed:{start(opts,fn){const c=opts.center,H=opts.height;tb={scene:new T.Scene(),camera:new T.OrthographicCamera(-H*1600/600/2,H*1600/600/2,H/2,-H/2,-200,400),key:new T.DirectionalLight(),hemi:new T.HemisphereLight(),time:0,frames:[],onFrame(f){this.frames.push(f)}};tb.camera.position.set(c[0]+50,c[1]+50,c[2]+50);tb.camera.lookAt(...c);tb.camera.updateMatrixWorld();fn(tb)}}};
+ vm.runInNewContext(source,ctx);assert(win.heroes.length===(query.includes('lineup')?7:1));for(let f=0;f<180;f++){tb.time+=1/60;tb.frames.forEach(fn=>fn(1/60));}if(query.includes('t='))assert.equal(tb.time,+new URLSearchParams(query).get('t'));else{assert.equal(win.hero.anim,'walk');assert(win.hero.object3D.position.length()>.01);}
+ if(query.includes('lineup'))assert(dom.labels.children.every(e=>parseFloat(e.style.top)>430));events.pagehide();console.log('page parameters passed',query);
+}
+JS" in /home/user/my-first-repo/spirelight
+ succeeded in 2290ms:
+low { calls: 29, triangles: 23616, disposed: 43 }
+med { calls: 30, triangles: 53764, disposed: 45 }
+high { calls: 30, triangles: 56278, disposed: 45 }
+tip and both eyes unobstructed in 28 iso poses; APIs, footsteps, glow easing passed
+settled tail 0 [ -0.135, 0.279, 0.133, -0.094, 0.28, 0.185 ]
+settled tail 1 [ -0.175, 0.299, 0.147, -0.121, 0.3, 0.109 ]
+world path, parent transforms, teleport recovery passed; peak chain segment 0.0406
+page parameters passed ?view=lineup&t=.5
+page parameters passed ?view=lineup&t=1
+page parameters passed ?view=lineup&t=1.6
+page parameters passed ?view=small&anim=walk&t=.7
+page parameters passed ?anim=walk&t=1.2&view=large
+page parameters passed ?walkto=1
+page parameters passed ?yaw=180&t=0
+

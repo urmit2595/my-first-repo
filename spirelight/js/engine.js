@@ -250,7 +250,7 @@
 
   // ------------------------------------------------------------------ post-processing
   var GradeShader = {
-    uniforms: { tDiffuse: { value: null }, time: { value: 0 }, vig: { value: 0.34 }, grain: { value: 0.03 }, res: { value: new (window.THREE ? THREE.Vector2 : Object)(1280, 720) } },
+    uniforms: { tDiffuse: { value: null }, time: { value: 0 }, vig: { value: 0.34 }, grain: { value: 0.03 }, res: { value: null } },
     vertexShader: "varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }",
     fragmentShader: [
       "uniform sampler2D tDiffuse; uniform float time, vig, grain; uniform vec2 res; varying vec2 vUv;",
@@ -292,6 +292,7 @@
     bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.55, 0.86);
     bloomPass.enabled = tier.bloom;
     composer.addPass(bloomPass);
+    GradeShader.uniforms.res.value = new THREE.Vector2(w * pr, h * pr);
     gradePass = new THREE.ShaderPass(GradeShader);
     gradePass.uniforms.res.value.set(w * pr, h * pr);
     composer.addPass(gradePass);

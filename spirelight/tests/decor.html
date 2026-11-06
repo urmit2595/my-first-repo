@@ -30,7 +30,7 @@ html,body{margin:0;overflow:hidden;background:#1b1830}
   Testbed.start({ height: H, center: center, bg: 0x2a2146, exposure: 1.0, shadows: true }, function (tb) {
     var THREE = tb.THREE, scene = tb.scene;
     // warm key, closer to the game's dusk look
-    tb.key.intensity = 1.9; tb.key.shadow.camera.left = -16; tb.key.shadow.camera.right = 16; tb.key.shadow.camera.top = 12; tb.key.shadow.camera.bottom = -12;
+    tb.key.intensity = 1.25; tb.hemi.intensity = 0.55; tb.key.shadow.camera.left = -16; tb.key.shadow.camera.right = 16; tb.key.shadow.camera.top = 12; tb.key.shadow.camera.bottom = -12;
     tb.key.position.set(center[0] - 12, center[1] + 20, center[2] + 14); tb.key.target.position.set(center[0], center[1], center[2]);
     // screen-space-ish gradient backdrop (a big plane doesn't matter: scene.background is a flat colour, so paint a canvas)
     var bgc = document.createElement("canvas"); bgc.width = 4; bgc.height = 256; var g = bgc.getContext("2d");
@@ -39,10 +39,12 @@ html,body{margin:0;overflow:hidden;background:#1b1830}
 
     // --- the shelf: cream-paved platform + sandstone back wall
     var cream = new THREE.MeshStandardMaterial({ color: 0xefe2c6, roughness: 0.8 }), sand = new THREE.MeshStandardMaterial({ color: 0xd9a46a, roughness: 0.9 }), dark = new THREE.MeshStandardMaterial({ color: 0x8a5a48, roughness: 0.95 });
+    if (q.has("dark")) { cream.color.set(0x8a7a6a); sand.color.set(0x6a4a52); dark.color.set(0x3a2a40); tb.key.intensity = 0.8; tb.hemi.intensity = 0.4; }
+    [cream, sand, dark].forEach(function (m) { m.color.convertSRGBToLinear(); });
     var box = new THREE.BoxGeometry(1, 1, 1);
     function cell(x, y, z, m, jit) { var k = new THREE.Mesh(box, m); k.position.set(x + 0.5, y + 0.5, z + 0.5); k.castShadow = k.receiveShadow = true; scene.add(k); if (jit) k.material = m.clone(), k.material.color.offsetHSL(0, 0, (Math.sin(x * 7.1 + y * 3.3 + z * 5.7)) * 0.025); return k; }
     for (var x = 0; x < 17; x++) {
-      for (var z = 0; z < 3; z++) { cell(x, -1, z, dark, true); cell(x, 0, z, cream, true); }
+      for (var z = 0; z < 4; z++) { if (!(z === 3 && x >= 2 && x <= 7)) cell(x, -1, z, dark, true); cell(x, 0, z, cream, true); }
       for (var y = -1; y < 4; y++) cell(x, y, -1, sand, true);
     }
 
@@ -77,10 +79,10 @@ html,body{margin:0;overflow:hidden;background:#1b1830}
       add("dome", { type: "dome", at: [15, 0, 1] });
       add("finial", { type: "finial", at: [16, 0, 1] });
       // third row (z = 2): arches, clock, plants
-      add("arch", { type: "arch", at: [1, 0, 2] }); add("flowers", { type: "flowers", at: [1, 1, 2] });
-      add("arch + ivy", { type: "arch", at: [3, 0, 2] });
-      add("plant herb", { type: "plant", at: [5, 0, 2], variant: "herb" }); add("shrub", { type: "plant", at: [6, 0, 2], variant: "shrub" }); add("tuft", { type: "plant", at: [7, 0, 2], variant: "tuft" });
-      add("clock", { type: "clock", at: [9, 0, 2] });
+      add("arch", { type: "arch", at: [1, 0, 3] });
+      add("arch", { type: "arch", at: [3, 0, 3], w: 1.0 });
+      add("plant herb", { type: "plant", at: [5, 0, 3], variant: "herb" }); add("shrub", { type: "plant", at: [6, 0, 3], variant: "shrub" }); add("tuft", { type: "plant", at: [7, 0, 3], variant: "tuft" });
+      add("clock", { type: "clock", at: [9, 0, 3] });
       // wall row (face +z of the back wall cells, y = 1..3)
       add("window", { type: "window", at: [0, 1, -1], face: "+z" }); add("window lit", { type: "window", at: [1, 1, -1], face: "+z", lit: true });
       add("window", { type: "window", at: [0, 2, -1], face: "+z" }); add("window lit", { type: "window", at: [1, 2, -1], face: "+z", lit: true });
@@ -96,9 +98,9 @@ html,body{margin:0;overflow:hidden;background:#1b1830}
       // waterfall off the right-hand end of the platform; beacon cage close-up is the ignited one
       add("waterfall", { type: "waterfall", at: [16, 0, 0], face: "+x", len: 5 });
       // hanging items on the platform's underside
-      add("vines (hang)", { type: "vines", at: [2, -1, 1], face: "-y", len: 1.5 });
-      add("lantern (hang)", { type: "lantern", at: [4, -1, 1], face: "-y", lit: true });
-      add("lantern (hang)", { type: "lantern", at: [6, -1, 1], face: "-y" });
+      add("vines (hang)", { type: "vines", at: [2, -1, 3], face: "-y", len: 1.5 });
+      add("lantern (hang)", { type: "lantern", at: [4, -1, 3], face: "-y", lit: true });
+      add("lantern (hang)", { type: "lantern", at: [6, -1, 3], face: "-y" }); add("banner (hang)", { type: "banner", at: [7, -1, 3], face: "-y", color: "plum" });
 
       items = A;
       var crank = A[0].obj, wheel = A[1].obj, lever = A[2].obj, knob = A.filter(function (a) { return a.item.type === "knob"; })[0].obj;

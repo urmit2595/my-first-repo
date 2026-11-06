@@ -30,7 +30,7 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
   var frozen = params.has("t") || lineup, time = params.has("t") ? Number(params.get("t")) : (lineup ? 1 : 0);
   if (!Number.isFinite(time)) time = 0; time = Math.max(0, time);
   var yaw = params.has("yaw") ? Number(params.get("yaw")) : 35; if (!Number.isFinite(yaw)) yaw = 35;
-  var names = lineup ? ["idle", "walk", "climb", "celebrate", "bump", "ride", "wave"] : [params.get("anim") || "idle"];
+  var names = lineup ? ["idle", "walk", "climb", "celebrate", "bump", "ride", "wave"] : [params.get("anim") || (params.get("walkto") === "1" ? "walk" : "idle")];
   var height = small ? window.innerHeight * 0.85 / 70 : (lineup ? 3 : 1.6);
   var heroes = [], labels = [], labelPoint = new THREE.Vector3(), states = { speed: 1.4, grounded: true };
   document.getElementById("caption").textContent = lineup ? "Seven small ways to be alive" : names[0] + (frozen ? " · " + time.toFixed(2) + " s" : " · live");
@@ -44,6 +44,7 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
     gradient.addColorStop(1, small ? "#c47b6e" : "#51404a");
     bc.fillStyle = gradient; bc.fillRect(0, 0, 16, 512);
     var background = new THREE.CanvasTexture(bg); background.encoding = THREE.sRGBEncoding; scene.background = background;
+    tb.key.intensity = 1.15; tb.hemi.intensity = 0.45;
     tb.key.shadow.normalBias = 0.008;
     tb.key.shadow.camera.left = tb.key.shadow.camera.bottom = -4;
     tb.key.shadow.camera.right = tb.key.shadow.camera.top = 4; tb.key.shadow.camera.updateProjectionMatrix();
