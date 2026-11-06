@@ -242,7 +242,7 @@
       var gr = Math.sqrt(Math.pow((gx + 0.5) / GN * 2 - 1, 2) + Math.pow((gy + 0.5) / GN * 2 - 1, 2)), go = (gy * GN + gx) * 4;
       var pool = Math.max(0, 1 - gr), pool2 = pool * pool * (0.55 + 0.45 * pool);
       var contact = Math.max(0, 1 - gr / 0.26); contact = contact * contact * (3 - 2 * contact) * 0.55;
-      gd[go] = Math.min(255, 255 * pool2 * 0.62); gd[go + 1] = Math.min(255, 255 * pool2 * 0.34); gd[go + 2] = Math.min(255, 255 * pool2 * 0.1);
+      gd[go] = Math.min(255, 255 * pool2 * 0.3); gd[go + 1] = Math.min(255, 255 * pool2 * 0.16); gd[go + 2] = Math.min(255, 255 * pool2 * 0.04);
       gd[go + 3] = Math.min(255, 255 * contact);
     }
     var gtex = new THREE.DataTexture(gd, GN, GN, THREE.RGBAFormat); gtex.minFilter = gtex.magFilter = THREE.LinearFilter; gtex.needsUpdate = true; textures.push(gtex);

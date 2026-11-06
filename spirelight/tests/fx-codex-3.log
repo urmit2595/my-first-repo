@@ -1977,3 +1977,5 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
 </body>
 </html>
 
+codex
+The current pool and cascade scheduler can support these changes. I’ll keep the plate ring and audio, add the target trail, make path dots expire together after 0.4 seconds, and localize the beacon glow. I’ll also add harness cases for an impossible join, `heroStep` with `k: 1`, and night lighting.
