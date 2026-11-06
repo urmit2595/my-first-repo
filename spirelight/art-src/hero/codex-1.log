@@ -862,3 +862,134 @@ const [page = "index.html?test", out = "design/qa/shot.png"] = pos;
   await h.close();
 })().catch(e => { console.error("FAIL", e.message); process.exit(1); });
 
+exec
+/bin/bash -lc 'for d in / /home /home/user /home/user/my-first-repo /home/user/my-first-repo/spirelight; do if [ -f "$d/AGENTS.md" ]; then cat "$d/AGENTS.md"; fi; done; rg --files js tests .agents .codex 2>/dev/null; cat index.html; cat tools/harness.js' in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+tests/testbed.js
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#120d24">
+<title>Spirelight</title>
+<link rel="icon" href="data:,">
+<style>
+@font-face{font-family:'Sl Display';src:url(assets/fonts/display.woff2) format('woff2');font-display:block}
+:root{--ink:#120d24;--amber:#ffb35a;--glow:#ffd98a;--teal:#4fd6c9;--brass:#c8963e;--paver:#efe2c6;--text:#fff4e2}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:#0b0818;color:var(--text);font-family:'Sl Display',Georgia,serif;color-scheme:dark}
+#game{position:fixed;inset:0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ui{position:absolute;inset:0;pointer-events:none}
+#ui>*{pointer-events:auto}
+.loading{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 58%,#3a2450,#0b0818 70%);z-index:50;transition:opacity .7s}
+.loading.done{opacity:0;pointer-events:none}
+.loading .orb{width:44px;height:44px;margin:auto;border-radius:50%;background:radial-gradient(circle at 42% 40%,#fff3c4,#ffb35a 45%,#ff7a1a00 70%);box-shadow:0 0 40px 12px #ffb35a55;animation:breathe 1.8s ease-in-out infinite}
+.loading p{margin:18px 0 0;text-align:center;letter-spacing:.32em;font-size:13px;opacity:.75}
+.loading .err{color:#ffb4ab;font:14px system-ui,sans-serif;max-width:340px;text-align:center;letter-spacing:0;opacity:1}
+@keyframes breathe{50%{transform:scale(1.15);box-shadow:0 0 60px 20px #ffb35a77}}
+@media (prefers-reduced-motion:reduce){.loading .orb{animation:none}}
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="view" aria-label="Spirelight game view"></canvas>
+  <div id="ui"></div>
+  <div class="loading" id="loading"><div><div class="orb"></div><p>KINDLING</p><p class="err" id="loadErr"></p></div></div>
+</div>
+
+<!-- three.js r128 + add-ons (design.md section 7) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FXAAShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<!-- game modules -->
+<script src="js/geom.js"></script>
+<script src="levels/levels.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/decor.js"></script>
+<script src="js/world.js"></script>
+<script src="js/hero.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/ui.js"></script>
+<script>
+"use strict";
+(async function boot() {
+  const err = m => { document.getElementById("loadErr").textContent = m; };
+  try {
+    if (!window.THREE) throw new Error("Could not load the game libraries. Check your connection and reload.");
+    if (!window.Game) throw new Error("The game engine failed to load.");
+    await Game.init({ canvas: document.getElementById("view"), root: document.getElementById("game"), ui: document.getElementById("ui") });
+    try { window.FX && FX.setup && FX.setup(Game); } catch (e) { console.error(e); }
+    try { window.UI && UI.setup && UI.setup(Game); } catch (e) { console.error(e); }
+    Game.start();   // URL flags: ?level=N starts that level, otherwise the title screen
+    document.getElementById("loading").classList.add("done");
+  } catch (e) { console.error(e); err(e.message || String(e)); }
+})();
+</script>
+</body>
+</html>
+// Shared headless harness for Spirelight tests (Playwright + swiftshader).
+// Serves the spirelight/ folder on a random port and swaps the CDN libraries for local copies (the CDNs are blocked
+// in this sandbox). Use it from your own test scripts:
+//
+//   const { open } = require("./harness");
+//   const h = await open("tests/blocks.html", { w: 1280, h: 720 });   // page path relative to spirelight/
+//   await h.page.waitForFunction(() => window.__ready);              // your page sets window.__ready = true
+//   await h.page.screenshot({ path: "design/qa/blocks.png" });
+//   console.log(h.errors);                                            // console errors, page errors, HTTP >= 400
+//   await h.close();
+const http = require("http"), fs = require("fs"), path = require("path");
+const { chromium } = require("playwright");
+
+const ROOT = path.resolve(__dirname, "..");
+const VENDOR = process.env.SL_VENDOR || "/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor";
+const TYPES = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".css": "text/css",
+  ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".woff2": "font/woff2",
+  ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav" };
+
+function serve() {
+  const server = http.createServer((req, res) => {
+    const u = decodeURIComponent(req.url.split("?")[0]);
+    const f = path.join(ROOT, u === "/" ? "index.html" : u);
+    if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end("not found"); }
+    res.writeHead(200, { "content-type": TYPES[path.extname(f).toLowerCase()] || "application/octet-stream" });
+    fs.createReadStream(f).pipe(res);
+  });
+  return new Promise(r => server.listen(0, "127.0.0.1", () => r(server)));
+}
+
+async function open(page = "index.html?test", opts = {}) {
+  const server = await serve();
+  const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist",
+    "--autoplay-policy=no-user-gesture-required"] });
+  const ctx = await browser.newContext({ viewport: { width: opts.w || 1280, height: opts.h || 720 },
+    deviceScaleFactor: opts.dpr || 1, isMobile: !!opts.mobile, hasTouch: !!opts.mobile,
+    reducedMotion: opts.reducedMotion ? "reduce" : "no-preference" });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on("pageerror", e => errors.push("PAGEERROR " + e.message));
+  p.on("console", m => {
+    const t = m.text();
+    if ((m.type() === "error" || m.type() === "warning") && !/GPU stall|GL Driver|swiftshader|WebGL-|ReadPixels/i.test(t)) errors.push(m.type() + " " + t);
+    if (opts.log) console.log("[page]", m.type(), t);
+  });
+  p.on("response", r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`); });
+  await p.route("**/three.min.js", r => r.fulfill({ path: path.join(VENDOR, "three/build/three.min.js"), contentType: "application/javascript" }));
+  await p.route("**/three@0.128.0/examples/js/**", r => r.fulfill({ path: path.join(VENDOR, "three/examples/js", r.request().url().split("/examples/js/")[1]), contentType: "application/javascript" }));
+  await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  if (opts.save !== false) await p.addInitScript(s => { try { if (s) localStorage.setItem("spirelight-v1", JSON.stringify(s)); } catch (e) {} }, opts.save || { unlocked: 99, sound: false, music: false });
+  const url = `http://127.0.0.1:${server.address().port}/${page.replace(/^\//, "")}`;
+  await p.goto(url);
+  return { page: p, browser, ctx, errors, url, close: async () => { await browser.close(); server.close(); } };
+}
+
+module.exports = { open, ROOT, VENDOR };
+
