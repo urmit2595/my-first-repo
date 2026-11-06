@@ -1,0 +1,8 @@
+# Intermediates rebuilt by tools/kit_tools.py from the raw generations
+*-k.png
+*_k.png
+*-keyed.png
+cut*/
+split*/
+*rejected*
+*-half.jpg

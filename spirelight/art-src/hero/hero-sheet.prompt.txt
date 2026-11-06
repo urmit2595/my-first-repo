@@ -1,0 +1,5 @@
+Character design sheet for an ORIGINAL game hero named Wick, a tiny lamplighter automaton. Landscape 16:9, plain dark slate background (#1b1f2a), even studio lighting.
+Show four views side by side at the same scale: front, three-quarter front, side, back.
+Wick: about 2 heads tall. Head = a round glass lantern in a brass cage (four thin brass ribs, a little domed brass cap with a ring on top), a warm orange-gold flame floating inside that also forms the face (two small dark eye-slits in the flame glow). Body = a small rounded brass boiler-like torso with rivets and a tiny round pressure gauge on the chest, a short teal knitted scarf with two tails, thin jointed brass arms with simple three-finger hands, slender legs with ball joints and small rounded boots. A brass wind-up key sticks out of the back. Slight verdigris in the crevices, polished highlights.
+Style: stylized but detailed 3D character render, physically based brass and glass, clear silhouette, charming and gentle, not a robot warrior. No text or labels.
+
