@@ -74,7 +74,7 @@
     var coreMat = mat(new THREE.MeshBasicMaterial({ color: 0xfff2a1, toneMapped: false }));
     var tipMat = mat(new THREE.MeshBasicMaterial({ color: 0xff8b20, transparent: true, opacity: 0.7,
       blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-    var sphere = geo(new THREE.SphereGeometry(1, radial, low ? 8 : 14));
+    var sphere = geo(new THREE.SphereGeometry(1, low ? 12 : 20, low ? 8 : 12));
     var cylinder = geo(new THREE.CylinderGeometry(1, 1, 1, radial));
     var torus = geo(new THREE.TorusGeometry(1, 0.12, low ? 5 : 8, radial));
     var transform = new THREE.Object3D();
@@ -101,7 +101,7 @@
       part(p, torus, material || brass, xx, yy, zz, radius, sy || radius, radius, rx || 0);
     }
     function lathe(points) { return geo(new THREE.LatheGeometry(points.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), radial)); }
-    var hips = group(root, "hips", 0, 0.225, 0);
+    var hips = group(root, "hips", 0, 0.222, 0);
     var torso = group(hips, "torso");
     var egg = lathe([[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],
       [0.112,0.148],[0.097,0.194],[0.071,0.22],[0,0.226]]);
@@ -208,7 +208,7 @@
         blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.65, toneMapped: false })));
       halo.position.y = 0.13; halo.scale.set(0.47, 0.47, 1); head.add(halo);
     }
-    var shoulders = [], elbows = [], legHips = [], knees = [];
+    var shoulders = [], elbows = [], legHips = [], knees = [], ankles = [];
     for (i = 0; i < 2; i++) {
       var sign = i === 0 ? 1 : -1, side = i === 0 ? "L" : "R";
       var sh = group(torso, "shoulder." + side, sign * 0.12, 0.193, 0); shoulders.push(sh);
@@ -227,11 +227,12 @@
       ball(hip, 0, 0, 0, 0.023); rod(hip, 0, -0.043, 0, 0.0115, 0.069);
       var knee = group(hip, "knee." + side, 0, -0.085, 0); knees.push(knee);
       ball(knee, 0, 0, 0, 0.019); rod(knee, 0, -0.036, 0, 0.012, 0.06);
-      ball(knee, 0, -0.071, 0, 0.019);
-      rod(knee, 0, -0.075, 0, 0.026, 0.012);
-      ball(knee, 0, -0.105, 0.017, 0.038, 0.028, 0.057);
-      ball(knee, 0, -0.129, 0.018, 0.04, 0.008, 0.058, dark);
-      ring(knee, 0, -0.085, 0, 0.023, Math.PI / 2);
+      var ankle = group(knee, "ankle." + side, 0, -0.071, 0); ankles.push(ankle);
+      ball(ankle, 0, 0, 0, 0.019);
+      rod(ankle, 0, -0.004, 0, 0.026, 0.012);
+      ball(ankle, 0, -0.034, 0.017, 0.038, 0.028, 0.057);
+      ball(ankle, 0, -0.058, 0.018, 0.04, 0.008, 0.058, dark);
+      ring(ankle, 0, -0.014, 0, 0.023, Math.PI / 2);
     }
     batches.forEach(function (b) {
       var count = 0; b.parts.forEach(function (g) { count += g.attributes.position.count; });
@@ -261,7 +262,7 @@
       var current = [], previous = [];
       for (j = 0; j < nodes; j++) { current.push(new THREE.Vector3()); previous.push(new THREE.Vector3()); }
       tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.105 - i * 0.013, 0.235, 0.065 - i * 0.026),
-        pin: new THREE.Vector3(), width: new THREE.Vector3(), length: segment * (i ? 0.87 : 1) });
+        pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.87 : 1) });
     }
     var rootWorld = new THREE.Vector3(), lastWorld = new THREE.Vector3(), movement = new THREE.Vector3();
     var temp = new THREE.Vector3(), correction = new THREE.Vector3(), local = new THREE.Vector3(), local2 = new THREE.Vector3();
@@ -286,7 +287,7 @@
         }
         for (var sub = 0; sub < steps; sub++) {
           if (h > 0) for (ni = 1; ni < nodes; ni++) {
-            temp.subVectors(cur[ni], prev[ni]).multiplyScalar(Math.exp(-9 * h)); prev[ni].copy(cur[ni]); cur[ni].add(temp);
+            temp.subVectors(cur[ni], prev[ni]).multiplyScalar(Math.exp(-9 * h) * h / tail.lastDt); prev[ni].copy(cur[ni]); cur[ni].add(temp);
             cur[ni].x += (-speedX * 1.6 + (low ? 0 : Math.sin(t * 3 + ni) * 0.07)) * h * h;
             cur[ni].y -= 2.4 * h * h; cur[ni].z -= speedZ * 1.6 * h * h;
           }
@@ -304,6 +305,7 @@
             }
           }
           cur[0].copy(tail.pin);
+          if (h > 0) tail.lastDt = h;
         }
         var array = tail.geometry.attributes.position.array;
         for (ni = 0; ni < nodes; ni++) {
@@ -314,29 +316,49 @@
           array[at + 3] = local2.x; array[at + 4] = local2.y; array[at + 5] = local2.z;
         }
         tail.geometry.attributes.position.needsUpdate = true;
-        tail.geometry.computeVertexNormals();
+        // r128 computeVertexNormals() allocates scratch vectors. Derive the
+        // smooth ribbon normals directly in the existing typed array instead.
+        var normal = tail.geometry.attributes.normal.array;
+        for (ni = 0; ni < nodes; ni++) {
+          var before = Math.max(0, ni - 1) * 6, after = Math.min(nodes - 1, ni + 1) * 6, base = ni * 6;
+          var tx = array[after] - array[before], ty = array[after + 1] - array[before + 1], tz = array[after + 2] - array[before + 2];
+          var wx = array[base + 3] - array[base], wy = array[base + 4] - array[base + 1], wz = array[base + 5] - array[base + 2];
+          var nx = wy * tz - wz * ty, ny = wz * tx - wx * tz, nz = wx * ty - wy * tx;
+          var inv = 1 / Math.max(0.000001, Math.sqrt(nx * nx + ny * ny + nz * nz));
+          normal[base] = normal[base + 3] = nx * inv;
+          normal[base + 1] = normal[base + 4] = ny * inv;
+          normal[base + 2] = normal[base + 5] = nz * inv;
+        }
+        tail.geometry.attributes.normal.needsUpdate = true;
       }
       lastWorld.copy(rootWorld); scarfInitialized = true;
     }
     var currentAnim = "idle", animTime = 0, phase = 0, glow = 1, requestedGlow = 1, keyAngle = 0;
-    var weights = new Float64Array(7); weights[0] = 1;
+    var weights = new Float64Array(7), animTimes = new Float64Array(7), elapsed = 0; weights[0] = 1;
     var blinkClock = 0, nextBlink = 2.8, blinkAge = -1, air = 0;
     var stepEvents = [{ foot: "L" }, { foot: "R" }];
     var hero = { object3D: root, light: light, onStep: null,
       setAnim: function (name) {
         name = ANIMS.indexOf(name) < 0 ? "idle" : name;
-        if (name !== currentAnim) { currentAnim = name; animTime = 0; }
+        if (name !== currentAnim) {
+          var index = ANIMS.indexOf(name);
+          if (weights[index] < 0.001) animTimes[index] = 0;
+          currentAnim = name; animTime = 0;
+        }
       },
       setGlow: function (k) { if (Number.isFinite(k)) requestedGlow = Math.max(0, Math.min(2, k)); },
       update: function (dt, t, state) {
         if (disposed) return;
         dt = Number.isFinite(dt) ? Math.max(0, Math.min(0.1, dt)) : 0;
-        t = Number.isFinite(t) ? t : animTime;
+        elapsed += dt; t = Number.isFinite(t) ? t : elapsed;
         var speed = state && Number.isFinite(state.speed) ? Math.abs(state.speed) : 1.4;
         var grounded = !state || state.grounded !== false;
         animTime += dt;
         var ease = 1 - Math.exp(-dt * 16), target = ANIMS.indexOf(currentAnim);
-        for (var wi = 0; wi < 7; wi++) weights[wi] += ((wi === target ? 1 : 0) - weights[wi]) * ease;
+        for (var wi = 0; wi < 7; wi++) {
+          weights[wi] += ((wi === target ? 1 : 0) - weights[wi]) * ease;
+          animTimes[wi] += dt;
+        }
         var walk = weights[1], climb = weights[2], celebrate = weights[3], bump = weights[4], ride = weights[5], wave = weights[6];
         var gait = (walk + climb) * Math.min(1, speed / 0.3);
         var oldContact = Math.floor(phase / Math.PI);
@@ -348,11 +370,11 @@
           }
         }
         air += ((grounded ? 0 : 1) - air) * ease;
-        var s = Math.sin(phase), hop = Math.pow(Math.max(0, Math.sin(animTime * 5)), 2);
-        hips.position.y = 0.225 + Math.sin(t * 2.6) * 0.0025 + gait * (0.009 + 0.008 * Math.cos(phase * 2))
+        var s = Math.sin(phase), hop = Math.pow(Math.max(0, Math.sin(animTimes[3] * 5)), 2);
+        hips.position.y = 0.222 - gait * 0.156 * (1 - Math.cos(s * (0.48 + climb * 0.2)))
           + celebrate * 0.048 * hop + wave * (0.005 + 0.004 * Math.sin(t * 5)) - ride * 0.017;
         torso.rotation.x = 0.09 * walk + 0.19 * climb;
-        torso.rotation.z = gait * 0.025 * s + ride * Math.sin(t * 3) * 0.045 + bump * Math.sin(animTime * 22) * Math.exp(-animTime * 4) * 0.11;
+        torso.rotation.z = gait * 0.025 * s + ride * Math.sin(t * 3) * 0.045 + bump * Math.sin(animTimes[4] * 22) * Math.exp(-animTimes[4] * 4) * 0.11;
         torso.scale.y = 1 + 0.008 * Math.sin(t * 2.6);
         var look = Math.sin(t * 0.69) * Math.pow(Math.max(0, Math.sin(t * 0.37)), 4);
         head.position.y = 0.272 + celebrate * 0.025 + gait * 0.003 * Math.cos(phase * 2);
@@ -363,7 +385,9 @@
           var sideSign = li === 0 ? 1 : -1, swing = s * sideSign;
           legHips[li].rotation.x = -gait * swing * (0.48 + climb * 0.2) - air * 0.55 - ride * 0.21;
           legHips[li].rotation.z = sideSign * (ride * 0.13 + celebrate * 0.05);
-          knees[li].rotation.x = gait * Math.max(0, swing) * (0.72 + climb * 0.5) + air * 1.1 + ride * 0.42;
+          knees[li].rotation.x = gait * Math.max(0, swing) * (0.96 + climb * 0.65) + air * 1.1 + ride * 0.42;
+          ankles[li].rotation.x = -legHips[li].rotation.x - knees[li].rotation.x;
+          ankles[li].rotation.z = -legHips[li].rotation.z;
           shoulders[li].rotation.x = gait * swing * 0.55 + Math.sin(t * 2 + li) * 0.035 - bump * (li ? 0.8 : 0.05);
           shoulders[li].rotation.z = sideSign * (0.12 + celebrate * 2.35 + ride * 0.55 + wave * (li ? 2.2 : 0));
           elbows[li].rotation.x = -0.13 - gait * (0.2 + Math.max(0, -swing) * 0.25) - celebrate * 0.35 - bump * (li ? 0.8 : 0);
@@ -380,7 +404,8 @@
         glow += (glowTarget - glow) * (1 - Math.exp(-dt * 7));
         var flicker = 1 + 0.035 * Math.sin(t * 17) + 0.021 * Math.sin(t * 29 + 1) + bump * 0.045 * Math.sin(t * 51);
         var flameSize = (0.82 + glow * 0.18) * (1 + celebrate * 0.5);
-        flame.scale.set(flameSize * (2 - flicker), flameSize * flicker, flameSize);
+        // Flare sideways; compress the curled tip as it approaches the cap.
+        flame.scale.set(flameSize * (2 - flicker), Math.min(1.025, flameSize * flicker), flameSize);
         flame.rotation.z = Math.sin(t * 11) * 0.025 + gait * s * 0.03;
         outer.scale.x = 1 + Math.sin(t * 13) * 0.025;
         tongue.scale.y = 0.76 + Math.sin(t * 19) * 0.06;

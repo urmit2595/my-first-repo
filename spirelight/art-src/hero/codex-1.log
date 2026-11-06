@@ -1711,3 +1711,183 @@ wave {
   tailLengths: [ 0.21012354353195056, 0.18286927517329366 ]
 }
 
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/hero.js'
+s=open(p).read().replace('new THREE.SphereGeometry(1, radial, low ? 8 : 14)', 'new THREE.SphereGeometry(1, low ? 12 : 20, low ? 8 : 12)')
+s=s.replace('var hips = group(root, \"hips\", 0, 0.225, 0);', 'var hips = group(root, \"hips\", 0, 0.222, 0);')
+s=s.replace('var shoulders = [], elbows = [], legHips = [], knees = [];','var shoulders = [], elbows = [], legHips = [], knees = [], ankles = [];')
+s=s.replace('''      ball(knee, 0, -0.071, 0, 0.019);
+      rod(knee, 0, -0.075, 0, 0.026, 0.012);
+      ball(knee, 0, -0.105, 0.017, 0.038, 0.028, 0.057);
+      ball(knee, 0, -0.129, 0.018, 0.04, 0.008, 0.058, dark);
+      ring(knee, 0, -0.085, 0, 0.023, Math.PI / 2);''','''      var ankle = group(knee, \"ankle.\" + side, 0, -0.071, 0); ankles.push(ankle);
+      ball(ankle, 0, 0, 0, 0.019);
+      rod(ankle, 0, -0.004, 0, 0.026, 0.012);
+      ball(ankle, 0, -0.034, 0.017, 0.038, 0.028, 0.057);
+      ball(ankle, 0, -0.058, 0.018, 0.04, 0.008, 0.058, dark);
+      ring(ankle, 0, -0.014, 0, 0.023, Math.PI / 2);''')
+s=s.replace('var weights = new Float64Array(7); weights[0] = 1;', 'var weights = new Float64Array(7), animTimes = new Float64Array(7), elapsed = 0; weights[0] = 1;')
+s=s.replace('if (name "'!== currentAnim) { currentAnim = name; animTime = 0; }'"','if (name "'!== currentAnim) {'"\\n          var index = ANIMS.indexOf(name);\\n          if (weights[index] < 0.001) animTimes[index] = 0;\\n          currentAnim = name; animTime = 0;\\n        }')
+s=s.replace('t = Number.isFinite(t) ? t : animTime;', 'elapsed += dt; t = Number.isFinite(t) ? t : elapsed;')
+s=s.replace('for (var wi = 0; wi < 7; wi++) weights[wi] += ((wi === target ? 1 : 0) - weights[wi]) * ease;', 'for (var wi = 0; wi < 7; wi++) {\\n          weights[wi] += ((wi === target ? 1 : 0) - weights[wi]) * ease;\\n          animTimes[wi] += dt;\\n        }')
+s=s.replace('var s = Math.sin(phase), hop = Math.pow(Math.max(0, Math.sin(animTime * 5)), 2);','var s = Math.sin(phase), hop = Math.pow(Math.max(0, Math.sin(animTimes[3] * 5)), 2);')
+s=s.replace('hips.position.y = 0.225 + Math.sin(t * 2.6) * 0.0025 + gait * (0.009 + 0.008 * Math.cos(phase * 2))', 'hips.position.y = 0.222 - gait * 0.156 * (1 - Math.cos(s * (0.48 + climb * 0.2)))')
+s=s.replace('Math.sin(animTime * 22) * Math.exp(-animTime * 4)', 'Math.sin(animTimes[4] * 22) * Math.exp(-animTimes[4] * 4)')
+s=s.replace('knees[li].rotation.x = gait * Math.max(0, swing) * (0.72 + climb * 0.5) + air * 1.1 + ride * 0.42;', 'knees[li].rotation.x = gait * Math.max(0, swing) * (0.96 + climb * 0.65) + air * 1.1 + ride * 0.42;\\n          ankles[li].rotation.x = -legHips[li].rotation.x - knees[li].rotation.x;\\n          ankles[li].rotation.z = -legHips[li].rotation.z;')
+s=s.replace('flame.scale.set(flameSize * (2 - flicker), flameSize * flicker, flameSize);','// Flare sideways; compress the curled tip as it approaches the cap.\\n        flame.scale.set(flameSize * (2 - flicker), Math.min(1.025, flameSize * flicker), flameSize);')
+open(p,'w').write(s)
+PY
+node --check js/hero.js" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+exec
+/bin/bash -lc "rg -n 'computeVertexNormals\\(|getWorldPosition\\(|updateWorldMatrix\\(' /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/src/core/BufferGeometry.js; sed -n '555,655p' /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/src/core/BufferGeometry.js; git status --short" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+631:	computeVertexNormals() {
+
+		if ( groups.length === 0 ) {
+
+			groups = [ {
+				start: 0,
+				count: indices.length
+			} ];
+
+		}
+
+		for ( let i = 0, il = groups.length; i < il; ++ i ) {
+
+			const group = groups[ i ];
+
+			const start = group.start;
+			const count = group.count;
+
+			for ( let j = start, jl = start + count; j < jl; j += 3 ) {
+
+				handleTriangle(
+					indices[ j + 0 ],
+					indices[ j + 1 ],
+					indices[ j + 2 ]
+				);
+
+			}
+
+		}
+
+		const tmp = new Vector3(), tmp2 = new Vector3();
+		const n = new Vector3(), n2 = new Vector3();
+
+		function handleVertex( v ) {
+
+			n.fromArray( normals, v * 3 );
+			n2.copy( n );
+
+			const t = tan1[ v ];
+
+			// Gram-Schmidt orthogonalize
+
+			tmp.copy( t );
+			tmp.sub( n.multiplyScalar( n.dot( t ) ) ).normalize();
+
+			// Calculate handedness
+
+			tmp2.crossVectors( n2, t );
+			const test = tmp2.dot( tan2[ v ] );
+			const w = ( test < 0.0 ) ? - 1.0 : 1.0;
+
+			tangents[ v * 4 ] = tmp.x;
+			tangents[ v * 4 + 1 ] = tmp.y;
+			tangents[ v * 4 + 2 ] = tmp.z;
+			tangents[ v * 4 + 3 ] = w;
+
+		}
+
+		for ( let i = 0, il = groups.length; i < il; ++ i ) {
+
+			const group = groups[ i ];
+
+			const start = group.start;
+			const count = group.count;
+
+			for ( let j = start, jl = start + count; j < jl; j += 3 ) {
+
+				handleVertex( indices[ j + 0 ] );
+				handleVertex( indices[ j + 1 ] );
+				handleVertex( indices[ j + 2 ] );
+
+			}
+
+		}
+
+	}
+
+	computeVertexNormals() {
+
+		const index = this.index;
+		const positionAttribute = this.getAttribute( 'position' );
+
+		if ( positionAttribute !== undefined ) {
+
+			let normalAttribute = this.getAttribute( 'normal' );
+
+			if ( normalAttribute === undefined ) {
+
+				normalAttribute = new BufferAttribute( new Float32Array( positionAttribute.count * 3 ), 3 );
+				this.setAttribute( 'normal', normalAttribute );
+
+			} else {
+
+				// reset existing normals to zero
+
+				for ( let i = 0, il = normalAttribute.count; i < il; i ++ ) {
+
+					normalAttribute.setXYZ( i, 0, 0, 0 );
+
+				}
+
+			}
+ M art-src/hero/codex-1.log
+ M design/qa/world/dusk-l.png
+ M design/qa/world/dusk-p.png
+ M js/hero.js
+ M js/world.js
+ M tests/fx-codex-1.log
+?? design/qa/world/night-l.png
+?? design/qa/world/night-p.png
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/hero.js';s=open(p).read()
+s=s.replace('pin: new THREE.Vector3(), width: new THREE.Vector3(), length: segment * (i ? 0.87 : 1)', 'pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.87 : 1)')
+s=s.replace('temp.subVectors(cur[ni], prev[ni]).multiplyScalar(Math.exp(-9 * h));', 'temp.subVectors(cur[ni], prev[ni]).multiplyScalar(Math.exp(-9 * h) * h / tail.lastDt);')
+s=s.replace('''          cur[0].copy(tail.pin);
+        }
+        var array''','''          cur[0].copy(tail.pin);
+          if (h > 0) tail.lastDt = h;
+        }
+        var array''')
+s=s.replace('''        tail.geometry.attributes.position.needsUpdate = true;
+        tail.geometry.computeVertexNormals();''','''        tail.geometry.attributes.position.needsUpdate = true;
+        // r128 computeVertexNormals() allocates scratch vectors. Derive the
+        // smooth ribbon normals directly in the existing typed array instead.
+        var normal = tail.geometry.attributes.normal.array;
+        for (ni = 0; ni < nodes; ni++) {
+          var before = Math.max(0, ni - 1) * 6, after = Math.min(nodes - 1, ni + 1) * 6, base = ni * 6;
+          var tx = array[after] - array[before], ty = array[after + 1] - array[before + 1], tz = array[after + 2] - array[before + 2];
+          var wx = array[base + 3] - array[base], wy = array[base + 4] - array[base + 1], wz = array[base + 5] - array[base + 2];
+          var nx = wy * tz - wz * ty, ny = wz * tx - wx * tz, nz = wx * ty - wy * tx;
+          var inv = 1 / Math.max(0.000001, Math.sqrt(nx * nx + ny * ny + nz * nz));
+          normal[base] = normal[base + 3] = nx * inv;
+          normal[base + 1] = normal[base + 4] = ny * inv;
+          normal[base + 2] = normal[base + 5] = nz * inv;
+        }
+        tail.geometry.attributes.normal.needsUpdate = true;''')
+open(p,'w').write(s)
+PY
+node --check js/hero.js" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+2026-11-06T20:31:17.258720Z ERROR codex_api::endpoint::responses_websocket: failed to connect to Responses WebSocket stage=Unknown
+ERROR: Reconnecting... 2/5
+2026-11-06T20:31:17.706473Z ERROR codex_api::endpoint::responses_websocket: failed to connect to Responses WebSocket stage=Unknown
+ERROR: Reconnecting... 3/5
+2026-11-06T20:31:18.497243Z ERROR codex_api::endpoint::responses_websocket: failed to connect to Responses WebSocket stage=Unknown
+ERROR: Reconnecting... 4/5

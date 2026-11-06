@@ -29,7 +29,7 @@
       cloudLit: 0x7fd6d0, cloudMid: 0x3f6f98, cloudShadow: 0x1c1f5a, cloudRim: 0xcff6ff, cloudCover: 0.44,
       sunCol: 0xaedcff, glare: 0.5, rays: 0.16, stars: 1.0, aurora: 0, mist: 0.10, mistCol: 0x24407a,
       puff: 0x6fa6c8, bird: 0x0a0f2c, wisp: 0x9ff4ff, birds: 0,
-      keyCol: 0xa9c8ff, keyI: 1.1, keyDir: [0.55, 0.6, 0.3], hemiSky: 0x5a74d0, hemiGround: 0x3a2f6e, hemiI: 1.0,
+      keyCol: 0xa9c8ff, keyI: 0.95, keyDir: [0.55, 0.6, 0.3], hemiSky: 0x5a74d0, hemiGround: 0x3a2f6e, hemiI: 1.0,
       rimCol: 0xffa064, rimI: 0.5, rimDir: [-0.6, 0.3, 0.55], exposure: 1.15,
     },
     aurora: {
@@ -110,7 +110,7 @@
     "  float rim = 1.0 - smoothstep(0.0, 0.12, f - thr);",
     "  vec3 c = mix(uMidC, uShadow, shade * 0.85 * (1.0 - lit * 0.5));",
     "  c = mix(c, uLit, lit * (1.0 - shade * 0.55));",
-    "  c *= 0.78 + 0.34 * d + 0.18 * fbm(uv * 4.0);",
+    "  c *= 0.86 + 0.24 * d + 0.07 * fbm(uv * 4.0);",
     "  c += uRim * rim * (0.25 + 0.5 * lit);",
     "  c = mix(c, uMidC * 0.9 + uLit * 0.1, haze);",
     "  return vec4(c * a, a); }",
@@ -119,9 +119,9 @@
     "  vec2 sp = vec2(vN.x * uAspect, vN.y) * k; float hz = uHorizon * k;",
     "  vec4 acc = vec4(0.0);",
     "  vec4 l;",
-    "  l = layer(sp, hz + 0.22 * k, 1.4, 0.004, 3.0, 1.0, 0.45); acc = acc * (1.0 - l.a) + l;",
-    "  l = layer(sp, hz + 0.06 * k, 2.0, 0.0075, 11.0, 0.8, 0.2); acc = acc * (1.0 - l.a) + l;",
-    "  l = layer(sp, hz - 0.14 * k, 2.9, 0.012, 27.0, 0.7, 0.0); acc = acc * (1.0 - l.a) + l;",
+    "  l = layer(sp, hz + 0.22 * k, 1.2, 0.004, 3.0, 1.0, 0.45); acc = acc * (1.0 - l.a) + l;",
+    "  l = layer(sp, hz + 0.06 * k, 1.7, 0.0075, 11.0, 0.8, 0.2); acc = acc * (1.0 - l.a) + l;",
+    "  l = layer(sp, hz - 0.14 * k, 2.3, 0.012, 27.0, 0.7, 0.0); acc = acc * (1.0 - l.a) + l;",
     "  if (acc.a < 0.002) discard;",
     "  gl_FragColor = vec4(acc.rgb / acc.a, acc.a); }",
   ].join("\n");
@@ -233,8 +233,8 @@
 
   let T = null, renderer = null, scene = null, camera = null;
   let root = null;
-  const S = {}; // internal state
-  const tmpV2 = { x: 0, y: 0 };
+  const S = {}; World._S = S; // internal state (exposed for tests)
+  let tmpV2 = null;
 
   function makeCur() {
     const o = {};
@@ -591,6 +591,7 @@
       approach(1 - Math.exp(-dt * 2.2));
 
       // screen size
+      if (!tmpV2) tmpV2 = new T.Vector2();
       renderer.getSize(tmpV2);
       const w = Math.max(1, tmpV2.x), h = Math.max(1, tmpV2.y);
       S.aspect = w / h; S.pxRatio = renderer.getPixelRatio();
@@ -644,7 +645,7 @@
       S.uMist.uAmt.value = c.mist;
       updateSprites(dt * rm);
       aimLights(false);
-    } catch (e) { /* never break the frame loop */ }
+    } catch (e) { if (!S.warned) { S.warned = 1; console.error("World.update", e); } }
   };
 
   World.dispose = function () {
