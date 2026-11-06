@@ -1,0 +1,4 @@
+Seamless tileable material texture, perfectly flat straight-on orthographic view of a weathered pale warm sandstone ashlar wall filling the entire square frame edge to edge, evenly lit with no directional shadows, no vignette, no perspective, no text. Large rectangular cut sandstone blocks of VARYING widths laid in STAGGERED horizontal courses (running bond, about 4 courses tall, each block between 1 and 2 times as wide as it is tall), thin pale cream mortar joints, slightly chipped and weathered block edges, fine grain and pitting. Colour: soft peach, cream and ochre variation between blocks, from #e8c9a0 to #cf9b68, shadows leaning faint plum. Clearly NOT brick: big blocks, pale warm stone. Match the colour and mood of the reference image's sandstone masonry. Square image.
+
+
+refs: /home/user/my-first-repo/spirelight/art-src/style/style-1.png
