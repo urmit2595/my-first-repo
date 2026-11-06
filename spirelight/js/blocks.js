@@ -15,9 +15,9 @@
 
   // ---- material table: texture file, world units per texture tile, PBR constants, plain fallback colour ----------
   const MAT = {
-    sandstone: { tex: "sandstone", scale: 2.0, rough: 0.92, metal: 0.0, color: 0xf2dcc4, fb: 0xc98c55, nrm: 1.0 },
+    sandstone: { tex: "sandstone", scale: 2.0, rough: 0.92, metal: 0.0, color: 0xffeedd, fb: 0xc98c55, nrm: 1.0 },
     brick:     { tex: "brick",     scale: 2.6, rough: 0.88, metal: 0.0, color: 0xf0d8d0, fb: 0xa5503a, nrm: 1.1 },
-    marble:    { tex: "marble",    scale: 2.4, rough: 0.34, metal: 0.0, color: 0xfff4e6, fb: 0xeee2d0, nrm: 0.5 },
+    marble:    { tex: "marble",    scale: 2.4, rough: 0.34, metal: 0.0, color: 0xe6dccc, fb: 0xeee2d0, nrm: 0.5 },
     darkstone: { tex: "darkstone", scale: 2.0, rough: 0.95, metal: 0.0, color: 0xe6d8e8, fb: 0x4a4056, nrm: 1.2 },
     brass:     { tex: "brass",     scale: 2.0, rough: 0.42, metal: 0.55, color: 0xffeccc, fb: 0xc8963e, nrm: 0.9 },
     copper:    { tex: "copper",    scale: 2.4, rough: 0.55, metal: 0.35, color: 0xf2fff8, fb: 0x4fa597, nrm: 0.9 },
@@ -25,7 +25,7 @@
     wood:      { tex: "wood",      scale: 2.0, rough: 0.82, metal: 0.0, color: 0xf5e2d0, fb: 0x8a5a34, nrm: 1.0 },
     moss:      { tex: "moss",      scale: 1.5, rough: 1.0,  metal: 0.0, color: 0xe8f0d8, fb: 0x6f8f3a, nrm: 1.0 },
     hedge:     { tex: "hedge",     scale: 1.5, rough: 0.82, metal: 0.0, color: 0xeaf4e0, fb: 0x4d8a2c, nrm: 0.8 },
-    paver:     { tex: "paver",     scale: 1.7, rough: 0.74, metal: 0.0, color: 0xfff6e4, fb: 0xefe2c6, nrm: 0.8 },
+    paver:     { tex: "paver",     scale: 1.7, rough: 0.74, metal: 0.0, color: 0xe4d3b4, fb: 0xefe2c6, nrm: 0.8 },
     brassTrim: { tex: "brass",     scale: 0.6, rough: 0.34, metal: 0.6, color: 0xffe2a0, fb: 0xc8963e, nrm: 0.0 },
     grate:     { canvas: "grate",  scale: 1.0, rough: 0.5,  metal: 0.6, color: 0xffffff, fb: 0x6a4a22, nrm: 0.0 },
     iron:      { scale: 1, rough: 0.5, metal: 0.7, color: 0x4a4048, fb: 0x4a4048, nrm: 0.0 },
@@ -423,7 +423,7 @@
     if (!walkTop && draw[3]) {
       // rough top: mossy for stone styles, roof tiles / metal / planks otherwise
       let tm = body;
-      if (style === "sandstone" || style === "brick" || style === "marble" || style === "darkstone") tm = this.h(3, 80) < 0.7 ? "moss" : body;
+      if (style === "sandstone" || style === "brick" || style === "marble" || style === "darkstone") tm = this.h(3, 80) < 0.5 ? "moss" : body;
       mats[3] = tm;
     }
     this.box([c[0], c[1], c[2]], [c[0] + 1, c[1] + 1, c[2] + 1], this.low ? 0.03 : 0.035, mats, draw, 0, { tint });

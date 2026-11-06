@@ -276,7 +276,7 @@
     var g = this._need(gid);
     if (v === undefined) v = g.value;
     if (g.kind === "rotor") return { R: rotMat(g.axis, v), pivot: g.pivot.slice(), offset: [0, 0, 0], angle: v, axis: g.axis };
-    if (g.kind === "slider") { var a = AXES[g.axis]; return { R: rotMat(null, 0), pivot: [0, 0, 0], offset: [a[0] * v, a[1] * v, a[2] * v], angle: 0, axis: g.axis }; }
+    if (g.kind === "slider") { var a = AXES[g.axis]; return { R: rotMat(null, 0), pivot: [0, 0, 0], offset: [z0(a[0] * v), z0(a[1] * v), z0(a[2] * v)], angle: 0, axis: g.axis }; }
     return { R: rotMat(null, 0), pivot: [0, 0, 0], offset: [0, 0, 0], angle: 0, axis: null };
   };
   // map a reference-pose POINT of a group to world space at value v (default current)

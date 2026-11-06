@@ -157,27 +157,33 @@ test("tile is not standable when the cell above is occupied", () => {
 console.log("raycast and picking");
 test("raycast faces: +y, +x, +z", () => {
   const w = G.load(lvl([at(0, 0, 0, "a"), at(1, 0, 0, "b")]));
-  assert.strictEqual(w.raycast(0.5, 0.5).face, "+y");       // top centre of (0,0,0)
-  assert.strictEqual(w.raycast(0.5, 0.5).walkableId, "base:0,0,0");
-  assert.strictEqual(w.raycast(2.2, 0.5).face, "+x");       // right face of (1,0,0): p in (1..2+..)
-  assert.strictEqual(w.raycast(0.2, 1.5).face, "+z");
+  // top centre of (0,0,0) is (0.5,1,0.5) -> (p,q) = (-0.5,-0.5)
+  assert.deepStrictEqual(w.project([0.5, 1, 0.5]), [-0.5, -0.5]);
+  assert.strictEqual(w.raycast(-0.5, -0.5).face, "+y");
+  assert.strictEqual(w.raycast(-0.5, -0.5).walkableId, "base:0,0,0");
+  assert.strictEqual(w.raycast(1.5, 0).face, "+x");          // centre of +x face of (1,0,0): (2,.5,.5)
+  assert.strictEqual(w.raycast(0, 0.5).face, "+z");          // centre of +z face of (0,0,0): (.5,.5,1)
+  assert.strictEqual(w.raycast(0, 0.5).walkableId, null);
   assert.strictEqual(w.raycast(5, 5), null);
 });
 test("pick: direct hit, tolerance ring (0.35), and miss", () => {
   const w = G.load(lvl([at(0, 0, 0, "a"), at(3, 0, 0, "b")]));
-  assert.strictEqual(w.pick(0.5, 0.5), "base:0,0,0");
-  // on +x side face just below the top edge: ring finds the top
-  const [p, q] = (() => { const pq = w.screenToPQ(0, -0.2); return [1.5 + pq[0] * 0 + 0, 0.5]; })();
-  assert.strictEqual(w.raycast(1.1, 0.5).face, "+x");
-  assert.strictEqual(w.pick(1.1, 0.5), "base:0,0,0");
-  assert.strictEqual(w.pick(1.8, 0.5), null);
-  assert.strictEqual(w.pick(p + 10, q), null);
+  assert.strictEqual(w.pick(-0.5, -0.5), "base:0,0,0");
+  // a point on the +z face 0.2 screen units below the front top corner region: ring reaches the top
+  const front = w.project([0.5, 1, 1]);             // front (+z) top edge midpoint
+  const d = w.screenToPQ(0, -0.2);                   // 0.2 below on screen
+  const p = front[0] + d[0], q = front[1] + d[1];
+  assert.strictEqual(w.raycast(p, q).face, "+z");
+  assert.strictEqual(w.pick(p, q), "base:0,0,0");
+  const d2 = w.screenToPQ(0, -0.6);                  // too far below the edge
+  assert.strictEqual(w.pick(front[0] + d2[0], front[1] + d2[1]), null);
+  assert.strictEqual(w.pick(10, 10), null);
 });
 test("pick ignores a hidden tile (frontmost hit wins) and veils", () => {
   const w = G.load(lvl([at(0, 0, 0, "a"), at(1, 1, 0, "b"), at(2, 2, 1, null, { kind: "veil" })]));
   const s = w.project(w.walkable("b").stand);
   assert.strictEqual(w.pick(s[0], s[1]), null);
-  assert.strictEqual(w.pick(0.5, 0.5), "base:0,0,0");
+  assert.strictEqual(w.pick(-0.5, -0.5), "base:0,0,0");
 });
 
 console.log("paths");
@@ -213,7 +219,7 @@ test("rotor turns a bridge into an impossible join only at one angle (k != 0)", 
   assert.strictEqual(conn(w, "m", "b").length, 0);
 });
 test("compute() is cached by state key and fast", () => {
-  const blocks = [{ box: [0, 0, 0, 9, 3, 9], walk: true }, at(0, 4, 0, "a"), at(9, 4, 9, "b")];
+  const blocks = [{ box: [0, 0, 0, 9, 3, 9], walk: true }, at(0, 3, 0, "a"), at(9, 3, 9, "b")];
   const w = G.load(lvl(blocks));
   const t0 = Date.now(); for (let i = 0; i < 20; i++) { w._cache.clear(); w._state = null; w.compute(); }
   const ms = (Date.now() - t0) / 20;
@@ -244,15 +250,17 @@ test("plates truncate walks that pass over them (solution must account for it)",
   assert.ok(r.ok, JSON.stringify(r.errors)); assert.deepStrictEqual(r.actions, [["walk", "p"], ["walk", "g"]]);
 });
 test("solver: riding a y-rotor, locking on an x rotor, glimmers, dead ends", () => {
-  // Wick stands on a turntable (y rotor) and turns it to face the goal
-  const def = lvl([at(0, 0, 0, "a"), at(0, 0, 3, "g"), at(3, 0, 0, "gl")], { start: "a", goal: "g", glimmers: ["gl"] });
-  def.groups.push({ id: "t", rotor: { axis: "y", pivot: [1.5, 0, 1.5], angles: [0, 90, 180, 270] }, handle: { type: "crank", at: [1, 0, 1], face: "+y", on: "base" },
-    blocks: [at(1, 0, 0, "t0"), at(1, 0, 1), at(2, 0, 1)] });
+  // a turntable (y rotor, 3 cells along x, pivot at the middle cell) must be turned to reach the goal; Wick rides it
+  const def = lvl([at(0, 0, 1, "a"), at(2, 0, 3, "g"), at(4, 0, 1, "gl")], { start: "a", goal: "g", glimmers: ["gl"] });
+  def.groups.push({ id: "t", rotor: { axis: "y", pivot: [2.5, 0, 1.5], angles: [0, 90] }, handle: { type: "crank", at: [2, 0, 1], face: "+y", on: "self" },
+    blocks: [at(1, 0, 1, "t0"), at(2, 0, 1, "tm"), at(3, 0, 1)] });
+  def.solution = [["walk", "t0"], ["mech", "t", 90], ["walk", "g"]];  // ride the end cell round to (2,0,2)
   const w = G.load(def);
+  w.setValue("t", 90); assert.deepStrictEqual(w.walkable("t0").cell, [2, 0, 2]); w.reset();
   const r = G.solve(def);
-  assert.ok(r.ok, JSON.stringify(r.errors));
+  assert.ok(r.ok, JSON.stringify(r.errors)); assert.strictEqual(r.solutionOk, true);
   assert.deepStrictEqual(r.reachableGlimmers, ["gl"]);
-  assert.ok(r.actions.some(a => a[0] === "mech"));
+  assert.strictEqual(r.actions.length, 3); assert.ok(r.actions.some(a => a[0] === "mech"));
   // x-rotor lock
   const d2 = lvl([at(0, 0, 0, "a"), at(5, 0, 0, "g")], { start: "a", goal: "g" });
   d2.groups.push({ id: "x", rotor: { axis: "x", pivot: [0, 0.5, 0.5], angles: [0, 180] }, handle: { type: "wheel", at: [1, 0, 0], face: "+y", on: "base" }, blocks: [at(1, 0, 0, "x0"), at(2, 0, 0)] });
