@@ -2,6 +2,12 @@
 // node tests/engine-interact.js [W H] ; shots in design/qa/engine/
 const path = require("path"), fs = require("fs");
 const { open, ROOT } = require("../tools/harness");
+{ // regenerate tests/engine-index.html from index.html (base href so relative paths work)
+  let html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8").replace("<head>", '<head><base href="../">');
+  const lv = path.join(ROOT, "levels/levels.js");
+  if (!fs.existsSync(lv) || fs.statSync(lv).size < 50) html = html.replace("levels/levels.js", "tests/engine-levels.js");
+  fs.writeFileSync(path.join(ROOT, "tests/engine-index.html"), html);
+}
 const out = path.join(ROOT, "design/qa/engine"); fs.mkdirSync(out, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const W = +(process.argv[2] || 960), H = +(process.argv[3] || 540), tag = W < H ? "portrait" : "landscape";

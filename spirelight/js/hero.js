@@ -53,7 +53,7 @@
     var env = new THREE.CubeTexture(faces); env.encoding = THREE.sRGBEncoding; env.needsUpdate = true; textures.push(env);
     function linear(hex) { return new THREE.Color(hex).convertSRGBToLinear(); }
     var brass = mat(new THREE.MeshStandardMaterial({ color: linear(0xc79540), metalness: 0.75, roughness: 0.45,
-      map: metalMap, bumpMap: grainMap, bumpScale: 0.00035, envMap: env, envMapIntensity: 1.4 }));
+      map: metalMap, bumpMap: grainMap, bumpScale: 0.00035, envMap: env, envMapIntensity: 1.6 }));
     var dark = mat(new THREE.MeshStandardMaterial({ color: linear(0x5c4931), metalness: 0.85, roughness: 0.53, envMap: env }));
     var patina = mat(new THREE.MeshStandardMaterial({ color: linear(0x4fa597), metalness: 0.65, roughness: 0.55, envMap: env }));
     var knitCanvas = canvas(128, 128), kc = knitCanvas.getContext("2d");
@@ -168,25 +168,25 @@
     part(torso, geo(new THREE.TorusGeometry(0.088, 0.043, 12, radial)), scarfMat,
       0, 0.263, 0, 1, 1, 0.8, Math.PI / 2);
     ring(torso, 0, 0.242, 0, 0.096, Math.PI / 2, scarfMat);
-    ball(torso, -0.094, 0.262, 0.093, 0.038, 0.035, 0.035, scarfMat);
+    ball(torso, -0.111, 0.262, 0.103, 0.038, 0.035, 0.035, scarfMat);
     rod(torso, 0, 0.295, 0, 0.073, 0.065);
     var head = group(torso, "head", 0, 0.32, 0);
-    var globe = lathe([[0.114,0.008],[0.145,0.03],[0.173,0.067],[0.183,0.111],
-      [0.184,0.151],[0.18,0.22],[0.16,0.275],[0.155,0.285]]);
+    var globe = lathe([[0.114,0.008],[0.145,0.03],[0.177,0.075],[0.191,0.115],
+      [0.194,0.14],[0.191,0.18],[0.181,0.23],[0.162,0.29],[0.143,0.34]]);
     var glass = new THREE.Mesh(globe, glassMat); glass.name = "lantern glass"; glass.renderOrder = 3; head.add(glass);
     rod(head, 0, 0.009, 0, 0.12, 0.014);
     part(head, geo(new THREE.TorusGeometry(0.115, 0.0045, 8, radial)), brass, 0, 0.017, 0, 1, 1, 1, Math.PI / 2);
     // Convex spun dome, seated directly on the globe, with a rolled rim.
-    var dome = lathe([[0,0.248],[0.163,0.248],[0.17,0.254],[0.168,0.265],
-      [0.156,0.283],[0.136,0.305],[0.108,0.324],[0.074,0.339],[0.035,0.348],[0,0.35]]);
-    part(head, dome, brass, 0, 0.035, 0);
-    part(head, geo(new THREE.TorusGeometry(0.164, 0.006, 8, radial)), brass, 0, 0.29, 0, 1, 1, 1, Math.PI / 2);
-    rod(head, 0, 0.392, 0, 0.025, 0.018);
-    ball(head, 0, 0.406, 0, 0.017);
-    part(head, geo(new THREE.TorusGeometry(0.05, 0.012, 8, radial)), brass, 0, 0.452, 0);
+    var dome = lathe([[0,0.338],[0.145,0.338],[0.151,0.344],[0.145,0.352],
+      [0.127,0.365],[0.1,0.378],[0.065,0.387],[0.028,0.391],[0,0.392]]);
+    part(head, dome, brass);
+    part(head, geo(new THREE.TorusGeometry(0.146, 0.005, 8, radial)), brass, 0, 0.344, 0, 1, 1, 1, Math.PI / 2);
+    rod(head, 0, 0.399, 0, 0.025, 0.018);
+    ball(head, 0, 0.412, 0, 0.017);
+    part(head, geo(new THREE.TorusGeometry(0.055, 0.01, 8, radial)), brass, 0, 0.465, 0);
     for (i = 0; i < 4; i++) {
       angle = Math.PI / 4 + i * Math.PI / 2;
-      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.181,.078],[.188,.117],[.188,.16],[.183,.22],[.16,.288]];
+      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.181,.078],[.195,.117],[.198,.14],[.195,.18],[.185,.23],[.166,.29],[.146,.34]];
       for (j = 0; j < ribProfile.length; j++) {
         ribs.push(new THREE.Vector3(Math.sin(angle) * ribProfile[j][0], ribProfile[j][1], Math.cos(angle) * ribProfile[j][0]));
       }
@@ -194,33 +194,36 @@
     }
     for (i = 0; i < 16; i++) {
       angle = i * Math.PI / 8;
-      ball(head, Math.sin(angle) * 0.16, 0.313, Math.cos(angle) * 0.16, 0.005);
+      ball(head, Math.sin(angle) * 0.139, 0.357, Math.cos(angle) * 0.139, 0.005);
       ball(head, Math.sin(angle) * 0.117, 0.013, Math.cos(angle) * 0.117, 0.005);
-      if (i % 2 === 0) ball(head, Math.sin(angle) * 0.16, 0.309, Math.cos(angle) * 0.16, 0.006, 0.002, 0.006, patina);
+      if (i % 2 === 0) ball(head, Math.sin(angle) * 0.139, 0.354, Math.cos(angle) * 0.139, 0.006, 0.002, 0.006, patina);
     }
-    var flame = group(head, "living flame", 0, 0.031, 0.045);
-    var flameShape = lathe([[0,0],[0.045,0.008],[0.074,0.03],[0.079,0.057],[0.066,0.083],
-      [0.044,0.111],[0.027,0.137],[0.019,0.158],[0.009,0.178],[0,0.197]]);
+    var flame = group(head, "living flame", 0, 0.019, 0.022);
+    var flameShape = lathe([[0,0],[0.062,0.008],[0.098,0.033],[0.112,0.065],[0.109,0.096],
+      [0.091,0.133],[0.064,0.172],[0.039,0.211],[0.022,0.247],[0.012,0.274],[0,0.29]]);
     var fp = flameShape.attributes.position, colors = new Float32Array(fp.count * 3), color = new THREE.Color();
     for (i = 0; i < fp.count; i++) {
-      var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.097);
-      fp.setX(i, fp.getX(i) + Math.sin(bend * 6.8) * 0.038 * bend);
-      fp.setZ(i, fp.getZ(i) + bend * 0.08);
-      fp.setY(i, fy * 1.1);
-      var heat = fy / 0.197;
+      var fy = fp.getY(i), bend = Math.max(0, (fy - 0.13) / 0.16);
+      fp.setX(i, fp.getX(i) + Math.sin(bend * 6.8) * 0.034 * bend);
+      fp.setZ(i, fp.getZ(i) - bend * 0.012);
+      var heat = fy / 0.29;
       var faceDim = 1 - 0.25 * Math.exp(-Math.pow((heat - 0.36) / 0.18, 2));
       color.setRGB(faceDim, Math.max(0.018, 0.5 * Math.pow(1 - heat, 2)) * faceDim, 0.004);
       colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
     }
     flameShape.setAttribute("color", new THREE.BufferAttribute(colors, 3)); flameShape.computeVertexNormals();
+    var flameRest = new Float32Array(fp.array); fp.setUsage(THREE.DynamicDrawUsage);
     var outer = new THREE.Mesh(flameShape, flameMat); flame.add(outer);
     var core = new THREE.Mesh(flameShape, coreMat); core.scale.set(0.49, 0.51, 0.48); core.position.set(0, 0.003, 0.038); flame.add(core);
     var tongue = new THREE.Mesh(flameShape, tipMat); tongue.scale.set(1.09, 1.03, 1.09); tongue.position.set(0, 0, -0.003); flame.add(tongue);
-    var eyes = group(flame, "eyes", 0, 0.078, 0.078);
+    var eyes = group(flame, "eyes", 0, 0.105, 0.106);
     ball(eyes, -0.023, 0, 0, 0.007, 0.0175, 0.006, eyeMat);
     ball(eyes, 0.023, 0, 0, 0.007, 0.0175, 0.006, eyeMat);
     var light = new THREE.PointLight(0xffb35a, 1.4, 4, 2); light.name = "Wick flame light";
     light.castShadow = false; root.add(light);
+    var uplight = new THREE.PointLight(0xffc389, 0.32, 1.1, 2);
+    uplight.name = "Wick warm bounce"; uplight.position.set(0, 0.06, 0.28);
+    uplight.castShadow = false; root.add(uplight);
     var halo = null;
     if (!low) {
       var hc = canvas(128, 128), hctx = hc.getContext("2d"), hg = hctx.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -247,11 +250,11 @@
       for (j = 0; j < 3; j++) ball(el, (j - 1) * 0.014, -0.111, 0.01, 0.008, 0.016, 0.01);
       ball(el, -sign * 0.027, -0.088, 0.014, 0.01, 0.017, 0.011);
       var hip = group(hips, "hip." + side, sign * 0.065, 0, 0); legHips.push(hip);
-      ball(hip, 0, 0, 0, 0.023); rod(hip, 0, -0.043, 0, 0.014, 0.069);
+      ball(hip, 0, 0, 0, 0.02645); rod(hip, 0, -0.043, 0, 0.0161, 0.069);
       var knee = group(hip, "knee." + side, 0, -0.085, 0); knees.push(knee);
-      ball(knee, 0, 0, 0, 0.019); rod(knee, 0, -0.036, 0, 0.014, 0.06);
+      ball(knee, 0, 0, 0, 0.02185); rod(knee, 0, -0.036, 0, 0.0161, 0.06);
       var ankle = group(knee, "ankle." + side, 0, -0.071, 0); ankles.push(ankle);
-      ball(ankle, 0, 0, 0, 0.019);
+      ball(ankle, 0, 0, 0, 0.02185);
       rod(ankle, 0, -0.004, 0, 0.026, 0.012);
       ball(ankle, 0, -0.034, 0.024, 0.051, 0.032, 0.075);
       ball(ankle, 0, -0.058, 0.025, 0.054, 0.008, 0.077, dark);
@@ -272,7 +275,7 @@
     });
     batches.length = 0;
     // Two world-space Verlet ribbons. Every buffer/vector used below is persistent.
-    var tails = [], nodes = low ? 4 : 7, segment = low ? 0.122 : 0.061;
+    var tails = [], nodes = low ? 4 : 7, segment = 0.28 / (nodes - 1);
     for (i = 0; i < 2; i++) {
       var ribbon = geo(new THREE.BufferGeometry()), positions = new Float32Array(nodes * 6 + 72), uv = new Float32Array(nodes * 4 + 48), indices = [];
       for (j = 0; j < nodes; j++) {
@@ -293,7 +296,7 @@
       var tailMesh = new THREE.Mesh(ribbon, scarfMat); tailMesh.name = "scarf tail " + i; tailMesh.castShadow = true; tailMesh.frustumCulled = false; root.add(tailMesh);
       var current = [], previous = [];
       for (j = 0; j < nodes; j++) { current.push(new THREE.Vector3()); previous.push(new THREE.Vector3()); }
-      tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.09 - i * 0.045, 0.259, 0.124 - i * 0.008),
+      tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.116 - i * 0.032, 0.25, 0.13 - i * 0.035),
         pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.94 : 1) });
     }
     var rootWorld = new THREE.Vector3(), lastWorld = new THREE.Vector3(), movement = new THREE.Vector3();
@@ -309,6 +312,7 @@
       movement.subVectors(rootWorld, lastWorld);
       var teleport = movement.lengthSq() > 0.64;
       rootInverse.copy(root.matrixWorld).invert(); torsoInverse.copy(torso.matrixWorld).invert();
+      var worldScale = temp.setFromMatrixScale(torso.matrixWorld).x;
       for (var arm = 0; arm < 2; arm++) {
         armCapsules[arm * 2].a.setFromMatrixPosition(shoulders[arm].matrixWorld);
         armCapsules[arm * 2].b.setFromMatrixPosition(elbows[arm].matrixWorld);
@@ -319,30 +323,31 @@
       var speedX = dt > 0 ? movement.x / dt : 0, speedZ = dt > 0 ? movement.z / dt : 0;
       for (var ti = 0; ti < 2; ti++) {
         var tail = tails[ti], cur = tail.current, prev = tail.previous;
+        var restLength = tail.length * worldScale;
         tail.pin.copy(tail.anchor).applyMatrix4(torso.matrixWorld);
         tail.width.set(1, 0, 0).transformDirection(torso.matrixWorld);
         if (!scarfInitialized || teleport) for (var ni = 0; ni < nodes; ni++) {
-          cur[ni].set(tail.anchor.x - ni * (ti ? 0.012 : 0.002), tail.anchor.y - ni * tail.length, tail.anchor.z + ni * 0.009).applyMatrix4(torso.matrixWorld);
+          cur[ni].set(tail.anchor.x, tail.anchor.y - ni * tail.length, tail.anchor.z).applyMatrix4(torso.matrixWorld);
           prev[ni].copy(cur[ni]);
         }
         for (var sub = 0; sub < steps; sub++) {
           if (h > 0) for (ni = 1; ni < nodes; ni++) {
-            temp.subVectors(cur[ni], prev[ni]).multiplyScalar(Math.exp(-9 * h) * h / tail.lastDt); prev[ni].copy(cur[ni]); cur[ni].add(temp);
-            cur[ni].x += (-speedX * 1.6 + (low ? 0 : Math.sin(t * 3 + ni) * 0.07)) * h * h;
-            cur[ni].y -= 2.4 * h * h; cur[ni].z -= speedZ * 1.6 * h * h;
+            temp.subVectors(cur[ni], prev[ni]).multiplyScalar(Math.exp(-11 * h) * h / tail.lastDt); prev[ni].copy(cur[ni]); cur[ni].add(temp);
+            cur[ni].x -= speedX * 2.2 * h * h;
+            cur[ni].y -= 8.5 * worldScale * h * h; cur[ni].z -= speedZ * 2.2 * h * h;
           }
           for (var pass = 0; pass < 6; pass++) {
             cur[0].copy(tail.pin);
             for (ni = 1; ni < nodes; ni++) {
               correction.subVectors(cur[ni], cur[ni - 1]); var len = correction.length();
-              correction.multiplyScalar((len - tail.length) / Math.max(len, 0.00001));
+              correction.multiplyScalar((len - restLength) / Math.max(len, 0.00001));
               if (ni === 1) cur[ni].sub(correction);
               else { correction.multiplyScalar(0.5); cur[ni].sub(correction); cur[ni - 1].add(correction); }
               // Rounded torso capsule, expanded by half the ribbon width.
               local.copy(cur[ni]).applyMatrix4(torsoInverse);
               var capsuleY = Math.max(0.115, Math.min(0.14, local.y));
               local.y -= capsuleY;
-              var d = Math.sqrt(local.x * local.x / 0.038 + local.y * local.y / 0.0196 + local.z * local.z / 0.038);
+              var d = Math.sqrt(local.x * local.x / 0.0306 + local.y * local.y / 0.0144 + local.z * local.z / 0.0306);
               if (d < 1) local.multiplyScalar(1 / Math.max(d, 0.0001));
               local.y += capsuleY;
               // Clearance around the projecting gauge and its bezel.
@@ -357,18 +362,28 @@
                 var projection = Math.max(0, Math.min(1, temp.dot(correction) / Math.max(0.000001, correction.lengthSq())));
                 temp.addScaledVector(correction, -projection);
                 var clearance = temp.length();
-                if (clearance < 0.06) cur[ni].addScaledVector(temp, (0.06 - clearance) / Math.max(0.0001, clearance));
+                var armClearance = 0.05 * worldScale;
+                if (clearance < armClearance) cur[ni].addScaledVector(temp, (armClearance - clearance) / Math.max(0.0001, clearance));
               }
             }
           }
           cur[0].copy(tail.pin);
+          // Limit every link to a 70-degree cone around world-down. Project
+          // after collision solving so a pumping arm cannot flip a tail upward.
+          for (ni = 1; ni < nodes; ni++) {
+            correction.subVectors(cur[ni], cur[ni - 1]);
+            var horizontal = Math.sqrt(correction.x * correction.x + correction.z * correction.z);
+            correction.y = Math.min(correction.y, -horizontal / 2.747477);
+            if (correction.lengthSq() < 0.00000001) correction.set(0, -1, 0);
+            correction.setLength(restLength); cur[ni].copy(cur[ni - 1]).add(correction);
+          }
           if (h > 0) tail.lastDt = h;
         }
         var array = tail.geometry.attributes.position.array;
         for (ni = 0; ni < nodes; ni++) {
           var along = ni / (nodes - 1), twist = 0.25 + along * (ti ? -0.85 : 0.65);
           tail.width.set(Math.cos(twist), 0.12 * Math.sin(along * 3), Math.sin(twist)).transformDirection(torso.matrixWorld);
-          var half = 0.041 * (1 - 0.19 * along);
+          var half = 0.03 * worldScale * (1 - 0.12 * along);
           local.copy(cur[ni]).addScaledVector(tail.width, -half).applyMatrix4(rootInverse);
           local2.copy(cur[ni]).addScaledVector(tail.width, half).applyMatrix4(rootInverse);
           var at = ni * 6; array[at] = local.x; array[at + 1] = local.y; array[at + 2] = local.z;
@@ -489,11 +504,18 @@
         flame.scale.set(flameSize * (2 - flicker), Math.min(1.04, flameSize * flicker), Math.min(1.15, flameSize));
         flame.rotation.z = Math.sin(t * 11) * 0.025 + gait * s * 0.03;
         outer.scale.x = 1 + Math.sin(t * 13) * 0.025;
+        // Only the upper tongue curls; the broad base and face stay anchored.
+        // All three emissive layers share this buffer (and need no normal rebuild).
+        for (var vertex = 0; vertex < fp.count; vertex++) {
+          var fi = vertex * 3, curl = Math.max(0, (flameRest[fi + 1] - 0.13) / 0.16);
+          fp.array[fi] = flameRest[fi] + Math.sin(t * 12 + curl * 3) * 0.012 * curl * curl;
+        }
+        fp.needsUpdate = true;
         tongue.scale.y = 1.03 + Math.sin(t * 19) * 0.025;
         flameMat.emissiveIntensity = 1.85 * (0.65 + glow * 0.35) * flicker;
         if (halo) { halo.scale.setScalar(1.1 * (0.85 + glow * 0.15)); halo.material.opacity = 0.75 * glow; }
         updateScarf(dt, t);
-        temp.set(0, 0.105, 0).applyMatrix4(head.matrixWorld).applyMatrix4(rootInverse); light.position.copy(temp);
+        temp.set(0, 0.15, 0).applyMatrix4(head.matrixWorld).applyMatrix4(rootInverse); light.position.copy(temp);
         light.intensity = 1.4 * glow * flicker;
       },
       dispose: function () {
