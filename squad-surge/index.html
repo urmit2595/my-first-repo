@@ -200,7 +200,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPrefere
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
 const BASE_FOV = 52;
-const CAM = { h: 12.5, back: 12, ahead: 16 }; // chase camera: height, distance behind the squad, aim point ahead of it
+const CAM = { h: 9, back: 12, ahead: 24 }; // chase camera: height, distance behind the squad, aim point ahead of it
 const camera = new THREE.PerspectiveCamera(BASE_FOV, 9 / 16, 0.5, 400);
 const loader = new THREE.TextureLoader();
 const TEX = {};
