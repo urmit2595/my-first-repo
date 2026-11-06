@@ -15,6 +15,7 @@
   // colours are sRGB hex values (the backdrop shaders write display colours directly, untouched by tone mapping).
   const DATA = {
     dusk: {
+      topDark: 0.55,
       skyTop: 0x14123a, skyMid: 0x5a3f86, skyLow: 0xff9a6a, gain: 0.78,
       sunUv: [0.03, 0.54], focusX: 0.25,
       cloudLit: 0xffa05e, cloudMid: 0xd46f86, cloudShadow: 0x4a3278, cloudRim: 0xffd2a0, cloudCover: 0.44,
@@ -25,6 +26,7 @@
       cloudGain: 0.86,
     },
     night: {
+      topDark: 0.6,
       skyTop: 0x0d1030, skyMid: 0x141848, skyLow: 0x1f4660, gain: 0.72,
       sunUv: [0.935, 0.92], focusX: 0.72,
       cloudLit: 0x6fbcc0, cloudMid: 0x3f6f98, cloudShadow: 0x1c1f5a, cloudRim: 0xcff6ff, cloudCover: 0.44,
@@ -35,6 +37,7 @@
       cloudGain: 0.62,
     },
     aurora: {
+      topDark: 0.62,
       skyTop: 0x050d24, skyMid: 0x123a4e, skyLow: 0x1d6a66, gain: 0.85,
       sunUv: [0.5, 0.2], focusX: 0.5,
       cloudLit: 0x56b8a0, cloudMid: 0x2f6482, cloudShadow: 0x1a1f58, cloudRim: 0xc8ffe8, cloudCover: 0.46,
@@ -45,6 +48,7 @@
       cloudGain: 0.6,
     },
     dawn: {
+      topDark: 0.72,
       skyTop: 0x6f93d0, skyMid: 0xc6a4c8, skyLow: 0xffc08a, gain: 0.88,
       sunUv: [0.935, 0.17], focusX: 0.7,
       cloudLit: 0xf0b078, cloudMid: 0xd08486, cloudShadow: 0x75689c, cloudRim: 0xfff0d0, cloudCover: 0.44,
@@ -56,7 +60,7 @@
     },
   };
 
-  const NUM_KEYS = ["gain", "cloudGain", "glare", "rays", "stars", "aurora", "mist", "cloudCover", "keyI", "hemiI", "rimI", "exposure"];
+  const NUM_KEYS = ["topDark", "gain", "cloudGain", "glare", "rays", "stars", "aurora", "mist", "cloudCover", "keyI", "hemiI", "rimI", "exposure"];
   const COL_KEYS = ["skyTop", "skyMid", "skyLow", "cloudLit", "cloudMid", "cloudShadow", "cloudRim", "sunCol", "mistCol",
     "puff", "bird", "wisp", "keyCol", "hemiSky", "hemiGround", "rimCol"];
 
@@ -72,7 +76,7 @@
   ].join("\n");
   const FS_BACKDROP = [
     "precision highp float; varying vec2 vN;",
-    "uniform sampler2D uTexA, uTexB; uniform float uHasA, uHasB, uMix, uGain, uImgAspect, uAspect, uZoom, uFocusX;",
+    "uniform sampler2D uTexA, uTexB; uniform float uHasA, uHasB, uMix, uGain, uTopDark, uImgAspect, uAspect, uZoom, uFocusX;",
     "uniform vec2 uDrift; uniform vec3 uTop, uMid, uLow;",
     "vec2 cover(vec2 n){ vec2 uv = n * 0.5 + 0.5; float s = uAspect, ia = uImgAspect;",
     "  if (s > ia) uv.y = (uv.y - 0.5) * (ia / s) + 0.5; else uv.x = (uv.x - 0.5) * (s / ia) + 0.5 + (uFocusX - 0.5) * (1.0 - s / ia);",
@@ -82,7 +86,8 @@
     "  vec3 g = mix(uLow, uMid, smoothstep(0.0, 0.5, y)); g = mix(g, uTop, smoothstep(0.45, 1.0, y));",
     "  vec3 a = texture2D(uTexA, uv).rgb, b = texture2D(uTexB, uv).rgb;",
     "  a = mix(g, a, uHasA); b = mix(g, b, uHasB);",
-    "  gl_FragColor = vec4(mix(a, b, uMix) * uGain, 1.0); }",
+    "  vec3 col = mix(a, b, uMix) * uGain; col *= mix(1.0, uTopDark, smoothstep(0.1, 1.0, y)); col = pow(max(col, 0.0), vec3(1.18));",
+    "  gl_FragColor = vec4(col, 1.0); }",
   ].join("\n");
 
   // Fallback cloud sea (used only until/unless the painted cloud bands load): soft, low-contrast, domain-warped.
@@ -457,7 +462,7 @@
       S.uBack = {
         uTexA: { value: null }, uTexB: { value: null }, uHasA: { value: 0 }, uHasB: { value: 0 }, uMix: { value: 1 }, uGain: { value: 1 },
         uImgAspect: { value: S.imgAspect }, uAspect: { value: 1.6 }, uZoom: { value: S.zoom }, uFocusX: { value: 0.5 },
-        uDrift: { value: S.drift }, uTop: { value: S.cur.skyTop }, uMid: { value: S.cur.skyMid }, uLow: { value: S.cur.skyLow },
+        uDrift: { value: S.drift }, uTopDark: { value: 1 }, uTop: { value: S.cur.skyTop }, uMid: { value: S.cur.skyMid }, uLow: { value: S.cur.skyLow },
       };
       const mBack = blend(new T.ShaderMaterial({ uniforms: S.uBack, vertexShader: VS_FULL, fragmentShader: FS_BACKDROP }), "none");
       root.add(fullMesh(mBack, -1000));
@@ -694,7 +699,7 @@
       const tm = S.time;
       S.drift.set(Math.sin(tm * 0.021) * 0.0075 + Math.sin(tm * 0.047) * 0.002, Math.cos(tm * 0.017) * 0.005);
       const U = S.uBack;
-      U.uAspect.value = S.aspect; U.uGain.value = c.gain; U.uFocusX.value = c.focusX;
+      U.uAspect.value = S.aspect; U.uGain.value = c.gain; U.uTopDark.value = c.topDark; U.uFocusX.value = c.focusX;
 
       // sun / moon on screen, glued to the painting
       uvToNdc(c.sunUv.x, c.sunUv.y, S.sunNdc);
