@@ -6,7 +6,8 @@ Live build: https://claude.ai/artifact/SEBMEHUprzu5sKRYzyigLA (private until sha
 
 Run locally: `python3 -m http.server` in this folder, then open `index.html`.
 
-## Progression
-- **Coins** buy Weapon, Fire Speed and Earnings upgrades.
-- **Gems** (1–3 stars per level) buy the **Squad** upgrade (+2 starting soldiers per tier) and one **Revive** per run (3 gems).
-- Weapon cases drop Rifle → Shotgun → Minigun, and from level 4 the **Bazooka** (splash damage).
+## How it plays
+- Free and plain: no shop, no currency, no upgrades.
+- Grow the squad with blue gates and +blocks; avoid red gates and unbroken obstacles.
+- Weapon crates switch your gun for the rest of the level: Rifle, Shotgun, Minigun, and from level 4 the Bazooka (splash damage).
+- Beat the boss at the end of each level to unlock the next one.

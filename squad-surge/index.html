@@ -19,7 +19,6 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 /* HUD */
 .hud{position:absolute;left:0;right:0;top:0;padding:max(10px,env(safe-area-inset-top)) 12px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;z-index:4;pointer-events:none}
 .hud>*{pointer-events:auto}
-.wallet{display:grid;gap:6px}
 .chip{display:flex;align-items:center;gap:6px;min-width:84px;height:30px;padding:0 10px 0 4px;border-radius:16px;background:linear-gradient(#3d8bff,#1f5fd6);border:2px solid #0f3a8f;box-shadow:0 3px 0 #0f3a8f;font:18px 'Lilita One',sans-serif}
 .chip img{width:26px;height:26px;object-fit:contain;margin-left:-2px}
 .chip span{flex:1;text-align:right}
@@ -54,19 +53,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .hint .line{width:170px;height:2px;background:#fff;position:relative}.hint .line:before,.hint .line:after{content:'';position:absolute;top:-4px;border:5px solid transparent}.hint .line:before{left:-6px;border-right-color:#fff}.hint .line:after{right:-6px;border-left-color:#fff}
 .hand{width:34px;height:34px;animation:swipe 1.4s ease-in-out infinite;margin-top:-4px}
 @keyframes swipe{0%,100%{transform:translateX(-70px)}50%{transform:translateX(70px)}}
-.cards{display:flex;justify-content:center;gap:8px;padding:0 10px max(18px,env(safe-area-inset-bottom))}
-.card{flex:1 1 0;min-width:0;max-width:118px;border-radius:12px;padding:6px 6px 0;border:3px solid #0d1630;box-shadow:0 4px 0 #0d1630;display:grid;gap:4px;justify-items:center;color:#fff;position:relative}
-.card.w{background:linear-gradient(#a274ff,#6a3ad6)}.card.s{background:linear-gradient(#5be07a,#239a42)}.card.f{background:linear-gradient(#4fa3ff,#2160d8)}.card.e{background:linear-gradient(#ffc04a,#e48a12)}
-.card h3{margin:0;font:clamp(11px,3.3vw,14px) 'Lilita One',sans-serif;white-space:nowrap}
-.card .art{height:58px;display:grid;place-items:center}.card .art img{max-height:56px;max-width:90%}
-.card .lvl{width:100%;height:14px;border-radius:7px;background:#0d1630;font:11px 'Lilita One',sans-serif;display:grid;place-items:center}
-.card .eff{font:12px 'Lilita One',sans-serif;opacity:.95}
-.card button{width:calc(100% + 12px);margin:0 -6px;border-radius:0 0 9px 9px;padding:4px 0 6px;background:#2a1b5a;color:#fff;font-size:12px;display:grid;justify-items:center;gap:1px;min-height:44px}
-.card.f button{background:#123477}.card.s button{background:#0f5a26}.card.e button{background:#7a3d05}
-.card button .cost{display:flex;align-items:center;gap:4px;font-size:16px}.card button .cost img{width:18px}
-.card button:disabled{filter:grayscale(.7) brightness(.8);cursor:default}
-.card button.max{background:#2bb64c}
-.tap{align-self:center;font:22px 'Lilita One',sans-serif;animation:pulse 1.2s ease-in-out infinite;margin-bottom:10px}
+.tap{align-self:center;font:22px 'Lilita One',sans-serif;animation:pulse 1.2s ease-in-out infinite;margin-bottom:max(48px,env(safe-area-inset-bottom))}
 @keyframes pulse{50%{transform:scale(1.08)}}
 /* Modals */
 .modal{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:20px;background:#0b1328b0}
@@ -75,11 +62,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .panel .sub{color:#bcd0ff;font-weight:800;margin:6px 0 12px}
 .stars{display:flex;justify-content:center;gap:4px;margin:6px 0 4px}
 .stars svg{width:54px;height:54px}.stars svg:nth-child(2){transform:translateY(-10px);width:64px;height:64px}
-.reward{display:flex;justify-content:center;gap:10px;margin:10px 0 14px}
-.reward .chip{min-width:96px;justify-content:center}
 .btn{display:block;width:100%;padding:14px;border-radius:14px;font-size:22px;color:#fff;margin-top:10px;min-height:52px}
 .btn.go{background:linear-gradient(#5be07a,#2bb64c);box-shadow:0 5px 0 #157a2f;border:2px solid #0d1630}
-.btn.gem{background:linear-gradient(#e08bff,#9a3ad6);box-shadow:0 5px 0 #5a1a8a;border:2px solid #0d1630;display:flex;align-items:center;justify-content:center;gap:8px}.btn.gem img{width:26px;height:26px}.btn.gem small{font-size:15px;opacity:.9}
 .btn.alt{background:linear-gradient(#5ab0ff,#2f7bff);box-shadow:0 5px 0 #0f3a8f;border:2px solid #0d1630}
 .btn:active{transform:translateY(3px)}
 .bigpct{font:54px/1 'Lilita One',sans-serif;color:#ffd84a}
@@ -98,10 +82,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
   <div class="count" id="count" hidden><img src="assets/i-helmet.png" alt=""><span id="countN">1</span></div>
 
   <div class="hud" id="hud">
-    <div class="wallet" id="wallet">
-      <div class="chip"><img src="assets/coin.png" alt="Coins"><span id="coins">0</span></div>
-      <div class="chip"><img src="assets/i-gem.png" alt="Gems"><span id="gems">0</span></div>
-    </div>
+    <div></div>
     <button class="round" id="pauseBtn" aria-label="Pause" hidden><svg viewBox="0 0 24 24" fill="#fff"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
     <button class="round" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="#fff"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L15 3.5h-4L10.7 6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
   </div>
@@ -119,7 +100,6 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
       <div class="hint"><div class="pill">HOLD &amp; DRAG <span class="arrows"><i>◀</i><i>▶</i></span></div><div class="line"></div>
         <svg class="hand" viewBox="0 0 24 24" fill="#fff" stroke="#0d1630" stroke-width="1.2"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10h.5V8.5a1.5 1.5 0 0 1 3 0V10h.5v-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.6 14a1.5 1.5 0 0 1 2.4-1.8L9 14z"/></svg></div>
       <div class="tap stroke" style="text-align:center">TAP &amp; DRAG TO PLAY</div>
-      <div class="cards" id="cards"></div>
     </div>
   </div>
 
@@ -127,7 +107,6 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
     <h2 id="winTitle" class="stroke">LEVEL COMPLETE!</h2>
     <div class="stars" id="stars"></div>
     <div class="sub" id="winSub"></div>
-    <div class="reward"><div class="chip"><img src="assets/coin.png" alt="Coins"><span id="winCoins">0</span></div><div class="chip"><img src="assets/i-gem.png" alt="Gems"><span id="winGems">0</span></div></div>
     <button class="btn go" id="nextBtn">NEXT LEVEL</button>
   </div></div>
 
@@ -136,10 +115,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
     <div class="sub">You reached</div>
     <div class="bigpct stroke" id="losePct">0%</div>
     <div class="sub" id="loseBest"></div>
-    <div class="reward"><div class="chip"><img src="assets/coin.png" alt="Coins"><span id="loseCoins">0</span></div></div>
-    <button class="btn gem" id="reviveBtn" hidden></button>
     <button class="btn go" id="retryBtn">TRY AGAIN</button>
-    <button class="btn alt" id="upgradeBtn">UPGRADE SQUAD</button>
   </div></div>
 
   <div class="modal" id="pauseModal" hidden><div class="panel" role="dialog" aria-labelledby="pauseTitle">
@@ -159,8 +135,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 // ---------- persistence ----------
 const SAVE_KEY = "squad-surge-v1";
 const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
-Object.assign(save, { coins: 0, gems: 0, level: 1, up: { weapon: 0, fire: 0, earn: 0, squad: 0 }, best: {}, sound: true, vibe: true, ...save });
-save.up = { weapon: 0, fire: 0, earn: 0, squad: 0, ...save.up };
+Object.assign(save, { level: 1, best: {}, sound: true, vibe: true, ...save });
+for (const k of ["coins", "gems", "up"]) delete save[k]; // drop old shop data from earlier builds
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
 
 // ---------- constants ----------
@@ -168,15 +144,6 @@ const ROAD = 6;               // road half-width
 const SPEED = 8.5;            // squad forward speed (units/s)
 const BULLET_SPEED = 72, BULLET_RANGE = 46;
 const MAX_SHOOTERS = 48;
-const UPG = {
-  weapon: { name: "WEAPON", cls: "w", img: "assets/w-pistol.png", base: 20, eff: t => `DMG x${(1 + t * 0.3).toFixed(1)}` },
-  fire:   { name: "FIRE SPEED", cls: "f", img: "assets/ammo.png", base: 20, eff: t => `RATE x${(1 / Math.pow(0.86, t)).toFixed(1)}` },
-  earn:   { name: "EARNINGS", cls: "e", img: "assets/i-coins.png", base: 50, eff: t => `COINS x${(1 + t * 0.5).toFixed(1)}` },
-  squad:  { name: "SQUAD", cls: "s", img: "assets/i-helmet.png", gems: true, eff: t => `START ${startSquad(t)}` },
-};
-const upgCost = (k, t) => UPG[k].gems ? 2 * (t + 1) : Math.round(UPG[k].base * Math.pow(1.9, t));
-const startSquad = t => 1 + t * 2;
-const REVIVE_COST = 3;
 const WEAPONS = [
   { name: "PISTOL", img: "assets/w-pistol.png", dmg: 1, rate: 1, spread: 1 },
   { name: "RIFLE", img: "assets/w-rifle.png", dmg: 1.4, rate: 1.35, spread: 1 },
@@ -303,7 +270,7 @@ function sfx(type) {
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
-    const cfg = { shot: [520, 180, 0.03, 0.035, "square"], hit: [220, 90, 0.05, 0.05, "triangle"], gate: [500, 1000, 0.18, 0.12, "sine"], bad: [300, 110, 0.25, 0.12, "sawtooth"], boom: [120, 40, 0.35, 0.2, "sawtooth"], coin: [900, 1500, 0.1, 0.08, "sine"], rocket: [180, 70, 0.12, 0.06, "sawtooth"], revive: [330, 990, 0.4, 0.14, "triangle"], win: [440, 880, 0.5, 0.15, "triangle"] }[type];
+    const cfg = { shot: [520, 180, 0.03, 0.035, "square"], hit: [220, 90, 0.05, 0.05, "triangle"], gate: [500, 1000, 0.18, 0.12, "sine"], bad: [300, 110, 0.25, 0.12, "sawtooth"], boom: [120, 40, 0.35, 0.2, "sawtooth"], coin: [900, 1500, 0.1, 0.08, "sine"], rocket: [180, 70, 0.12, 0.06, "sawtooth"], win: [440, 880, 0.5, 0.15, "triangle"] }[type];
     o.type = cfg[4]; o.frequency.setValueAtTime(cfg[0], t); o.frequency.exponentialRampToValueAtTime(cfg[1], t + cfg[2]);
     g.gain.setValueAtTime(cfg[3], t); g.gain.exponentialRampToValueAtTime(0.0001, t + cfg[2]);
     o.connect(g).connect(actx.destination); o.start(t); o.stop(t + cfg[2] + 0.02);
@@ -488,7 +455,7 @@ function generateLevel(level) {
         for (let i = 0; i < 3; i++) solids.push(makeSolid("blockYellow", 4.5, z - 3 - i * 2.8, 18 + d * 6, { reward: 10 + d * 5 }));
         horde(z - 2, 14 + d * 7, 2.4, n * 2.6); z -= n * 2.6 + 18;
       } else if (seg === "tyres") {
-        for (const x of [-3.6, 0, 3.6]) if (r() < 0.75) solids.push(makeSolid("tyres", x, z, 10 + d * 5, { coins: 3 + d }));
+        for (const x of [-3.6, 0, 3.6]) if (r() < 0.75) solids.push(makeSolid("tyres", x, z, 10 + d * 5, {}));
         z -= 18;
       } else if (seg === "case") {
         solids.push(makeSolid("weaponCase", (r() < 0.5 ? -1 : 1) * 3.3, z, 30 + d * 18, { weapon: 1 + Math.floor(r() * (level >= 4 ? 4 : 3)) }));
@@ -536,10 +503,10 @@ let resumeState = "play";
 function startLevel(level) {
   floatsEl.innerHTML = "";
   L = generateLevel(level);
-  Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, coinsRun: 0, gemsRun: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, reached: 0, peak: 0, revived: false, shield: 0, winT: 0, lostIn: null, pendingCoins: 0 });
-  addSoldiers(startSquad(save.up.squad));
+  Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, reached: 0, winT: 0 });
+  addSoldiers(1);
   $("levelName").textContent = L.theme.name; $("levelNo").textContent = `Level ${level}`;
-  setWeapon(0); updateHud();
+  setWeapon(0);
 }
 function setWeapon(i) { L.weapon = i; $("weaponImg").src = WEAPONS[i].img; $("weaponName").textContent = WEAPONS[i].name; }
 function show(id, on) { $(id).hidden = !on; }
@@ -547,26 +514,8 @@ function setState(s) {
   state = s;
   const playing = s === "play" || s === "boss";
   show("home", s === "home"); show("progress", playing || s === "paused"); show("pauseBtn", playing); show("settingsBtn", s === "home");
-  show("wallet", s === "home" || s === "win" || s === "lose"); show("weaponTag", playing); show("count", playing);
+  show("weaponTag", playing); show("count", playing);
   show("bossbar", s === "boss"); show("winModal", s === "win"); show("loseModal", s === "lose"); show("pauseModal", s === "paused");
-  if (s === "home") renderCards();
-}
-function updateHud() { $("coins").textContent = save.coins; $("gems").textContent = save.gems; }
-function renderCards() {
-  const wrap = $("cards"); wrap.innerHTML = "";
-  for (const k of ["weapon", "fire", "earn", "squad"]) {
-    const u = UPG[k], t = save.up[k], cost = upgCost(k, t), max = t >= 5, cur = u.gems ? "gems" : "coins", icon = u.gems ? "assets/i-gem.png" : "assets/coin.png";
-    const card = document.createElement("div"); card.className = `card ${u.cls}`;
-    card.innerHTML = `<h3 class="stroke">${u.name}</h3><div class="art"><img src="${u.img}" alt=""></div><div class="lvl">${t}/5</div><div class="eff stroke">${u.eff(t)}</div>`;
-    const b = document.createElement("button");
-    b.innerHTML = max ? "MAX" : `UPGRADE<span class="cost"><img src="${icon}" alt="">${cost}</span>`;
-    if (max) b.classList.add("max");
-    b.disabled = max || save[cur] < cost;
-    b.setAttribute("aria-label", max ? `${u.name} maxed` : `Upgrade ${u.name} for ${cost} ${cur}`);
-    b.addEventListener("pointerdown", e => e.stopPropagation());
-    b.addEventListener("click", e => { e.stopPropagation(); if (save[cur] < cost || max) return; save[cur] -= cost; save.up[k]++; persist(); sfx("coin"); updateHud(); renderCards(); });
-    card.appendChild(b); wrap.appendChild(card);
-  }
 }
 
 // ---------- input ----------
@@ -599,9 +548,7 @@ $("pauseBtn").onclick = togglePause; $("settingsBtn").onclick = () => { resumeSt
 $("resumeBtn").onclick = () => setState(resumeState);
 $("quitBtn").onclick = () => { startLevel(save.level); setState("home"); };
 $("nextBtn").onclick = () => { startLevel(save.level); setState("home"); };
-$("retryBtn").onclick = () => { settleLoss(); startLevel(save.level); setState("play"); };
-$("upgradeBtn").onclick = () => { settleLoss(); startLevel(save.level); setState("home"); };
-$("reviveBtn").onclick = revive;
+$("retryBtn").onclick = () => { startLevel(save.level); setState("play"); };
 function syncToggles() {
   for (const [id, k] of [["soundBtn", "sound"], ["vibeBtn", "vibe"]]) { $(id).setAttribute("aria-pressed", save[k]); $(id).textContent = save[k] ? "ON" : "OFF"; }
 }
@@ -611,8 +558,8 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && (st
 
 // ---------- simulation ----------
 const ENEMY_ASPECT = { zombie: 0.86, grunt: 0.787, brute: 0.946 };
-function fireRate() { return (1 / (0.34 * Math.pow(0.86, save.up.fire))) * WEAPONS[L.weapon].rate; }
-function damage() { return (1 + save.up.weapon * 0.3) * WEAPONS[L.weapon].dmg; }
+function fireRate() { return (1 / 0.34) * WEAPONS[L.weapon].rate; }
+function damage() { return WEAPONS[L.weapon].dmg; }
 
 function step(dt) {
   L.time += dt;
@@ -702,7 +649,7 @@ function step(dt) {
     if (hit || b.life <= 0) L.bullets.splice(i, 1);
   }
   // enemies
-  L.peak = Math.max(L.peak, L.soldiers.length); L.shield = Math.max(0, L.shield - dt); L.boomSfx -= dt;
+  L.boomSfx -= dt;
   const R = squadRadius(L.soldiers.length);
   for (const e of L.enemies) {
     if (e.state === "dead") continue;
@@ -714,7 +661,7 @@ function step(dt) {
     const dx = L.sx - e.x; e.x += Math.sign(dx) * Math.min(Math.abs(dx), dt * e.sp * 0.35);
     // separation
     if (L.soldiers.length && Math.hypot(e.x - L.sx, (e.z - L.sz) * 1.2) < R + e.r) {
-      if (L.shield <= 0) killSoldiers(e.dmg, e.x); e.hp = 0; e.state = "dying"; e.dieT = 0.3;
+      killSoldiers(e.dmg, e.x); e.hp = 0; e.state = "dying"; e.dieT = 0.3;
       L.fx.push({ x: e.x, y: 0.8, z: e.z, f: 5, t: 0, dur: 0.3, size: 1.4 }); vibe(20);
       if (e.type === "brute") { flashRed(); L.shake = 0.3; floatText(e.x, 2.5, e.z, `-${e.dmg}`, "#ff6a5a"); }
     }
@@ -728,10 +675,10 @@ function step(dt) {
     if (b0.slamT > 2.6) {
       b0.slamT = 0; L.shake = 0.4; sfx("boom"); vibe(120);
       const dist = L.sz - b0.z;
-      if (dist < 12 && L.shield <= 0) { const k = 2 + L.level; killSoldiers(k); flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); }
+      if (dist < 12) { const k = 2 + L.level; killSoldiers(k); flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); }
       L.fx.push({ x: b0.x, y: 0.5, z: b0.z + 2, f: 9, t: 0, dur: 0.5, size: 5 });
     }
-    if (b0.z + 2.6 > L.sz - R) { if (L.shield > 0) b0.z = L.sz - R - 8; else killSoldiers(L.soldiers.length); }
+    if (b0.z + 2.6 > L.sz - R) killSoldiers(L.soldiers.length);
     $("bossFill").style.width = `${Math.max(0, b0.hp / b0.maxHp) * 100}%`;
   }
   if (L.winT > 0) { L.winT -= dt; if (L.winT <= 0) win(); }
@@ -755,14 +702,13 @@ function breakSolid(o, earned) {
   if (!earned) return;
   sfx("hit");
   if (o.reward) { addSoldiers(o.reward); floatText(o.x, 2.2, o.z, `+${o.reward}`, "#7fd0ff"); L.fx.push({ x: o.x, y: 1.4, z: o.z, f: 14, t: 0, dur: 0.4, size: 1.8 }); }
-  if (o.coins) { L.coinsRun += o.coins; floatText(o.x, 2.2, o.z, `+${o.coins}`, "#ffd84a"); L.fx.push({ x: o.x, y: 1.4, z: o.z, f: 15, t: 0, dur: 0.4, size: 1.8 }); sfx("coin"); }
   if (o.weapon) { if (o.weapon > L.weapon) setWeapon(o.weapon); floatText(o.x, 2.6, o.z, WEAPONS[L.weapon].name + "!", "#ffe066"); sfx("win"); vibe(60); }
 }
 function hitEnemy(e, dmg) {
   e.hp -= dmg; e.flash = 0.07;
   if (e.hp <= 0) {
     e.state = "dying"; e.dieT = 0;
-    if (e.type === "brute") { L.fx.push({ x: e.x, y: 0.5, z: e.z, f: 9, t: 0, dur: 0.45, size: 3 }); L.shake = 0.2; sfx("boom"); L.coinsRun += 2; }
+    if (e.type === "brute") { L.fx.push({ x: e.x, y: 0.5, z: e.z, f: 9, t: 0, dur: 0.45, size: 3 }); L.shake = 0.2; sfx("boom"); }
     else if (Math.random() < 0.3) L.fx.push({ x: e.x, y: 0.9, z: e.z, f: 6, t: 0, dur: 0.3, size: 1 });
   }
 }
@@ -773,15 +719,12 @@ function bossDown() {
 }
 let flashTimer = 0;
 function flashRed() { const f = $("flash"); f.style.opacity = 1; clearTimeout(flashTimer); flashTimer = setTimeout(() => f.style.opacity = 0, 140); }
-function earnMult() { return 1 + save.up.earn * 0.5; }
 function win() {
   if (state !== "boss") return;
   const n = L.soldiers.length, stars = n >= 30 + L.level * 10 ? 3 : n >= 10 + L.level * 3 ? 2 : 1;
-  const coins = Math.round((40 + L.level * 25 + L.coinsRun + n) * earnMult()), gems = stars;
-  save.coins += coins; save.gems += gems; save.best[L.level] = 1; save.level = L.level + 1; persist(); updateHud();
+  save.best[L.level] = 1; save.level = L.level + 1; persist();
   $("stars").innerHTML = [0, 1, 2].map(i => `<svg viewBox="0 0 24 24"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.6 5.8 21l1.4-7L2 9.3l7-.8z" fill="${i < stars ? "#ffd84a" : "#3a4a78"}" stroke="#0d1630" stroke-width="1.5"/></svg>`).join("");
   $("winSub").textContent = `${n} soldiers survived · ${L.theme.name}`;
-  $("winCoins").textContent = `+${coins}`; $("winGems").textContent = `+${gems}`;
   sfx("win"); setState("win");
 }
 function explode(x, z, dmg, radius, skip = null) {
@@ -793,29 +736,11 @@ function explode(x, z, dmg, radius, skip = null) {
   }
 }
 function lose() {
-  const pct = Math.floor(L.reached * 100), coins = Math.round((10 + pct * 0.4 + L.coinsRun) * earnMult());
-  L.lostIn = state; L.pendingCoins = coins; // paid out by settleLoss(), so a revive doesn't double-pay
+  const pct = Math.floor(L.reached * 100);
   const prev = save.best[L.level] || 0; save.best[L.level] = Math.max(prev, L.reached); persist();
-  const rb = $("reviveBtn"), canRevive = !L.revived;
-  rb.hidden = !canRevive; rb.disabled = save.gems < REVIVE_COST;
-  rb.innerHTML = `REVIVE <img src="assets/i-gem.png" alt="">${REVIVE_COST}<small>· +${reviveCount()} SOLDIERS</small>`;
-  rb.setAttribute("aria-label", `Revive with ${reviveCount()} soldiers for ${REVIVE_COST} gems`);
   $("losePct").textContent = state === "boss" ? "BOSS" : `${pct}%`;
   $("loseBest").textContent = prev && prev < 1 ? `Best: ${Math.floor(prev * 100)}%` : "";
-  $("loseCoins").textContent = `+${coins}`; sfx("bad"); vibe(200); setState("lose");
-}
-function reviveCount() { return Math.max(8, Math.round(L.peak * 0.4)); }
-function settleLoss() { if (L && L.pendingCoins) { save.coins += L.pendingCoins; L.pendingCoins = 0; persist(); updateHud(); } }
-function revive() {
-  if (state !== "lose" || L.revived || save.gems < REVIVE_COST) return;
-  save.gems -= REVIVE_COST; persist(); updateHud();
-  L.revived = true; L.pendingCoins = 0; L.shield = 2; L.bullets.length = 0;
-  for (const e of L.enemies) if (e.state !== "dead" && e.z > L.sz - 16 && e.z < L.sz + 12) { e.hp = 0; e.state = "dying"; e.dieT = 0.3; }
-  if (L.lostIn === "boss") { L.boss.z = Math.min(L.boss.z, L.sz - 26); L.boss.slamT = 0; }
-  addSoldiers(reviveCount());
-  L.fx.push({ x: L.sx, y: 0.5, z: L.sz, f: 14, t: 0, dur: 0.6, size: 4 });
-  floatText(L.sx, 2.5, L.sz, `REVIVED +${L.soldiers.length}`, "#e08bff");
-  sfx("revive"); vibe(80); setState(L.lostIn || "play");
+  sfx("bad"); vibe(200); setState("lose");
 }
 
 // ---------- render ----------
@@ -830,7 +755,7 @@ function render(dt) {
   const firing = state === "play" || state === "boss";
   for (const s of L.soldiers) {
     s.ph += dt * 11; const f = Math.floor(s.ph) % 4 + (firing ? 4 : 0);
-    sold.push(s.x, 0, s.z, 1.3 * 0.518, 1.3, f, 1, L.shield > 0 && Math.floor(L.time * 10) % 2 ? 0.45 : 0); shadow.push(s.x, s.z, 0.8);
+    sold.push(s.x, 0, s.z, 1.3 * 0.518, 1.3, f); shadow.push(s.x, s.z, 0.8);
   }
   const eTex = L.theme.enemy;
   for (const e of L.enemies) {
@@ -900,14 +825,13 @@ function frame(now) {
   };
   const enemyLayers = { zombie: new SpriteLayer(TEX.zombie, 4, 2, 900), grunt: new SpriteLayer(TEX.grunt, 4, 2, 900) };
   Object.defineProperty(layers, "enem", { get: () => { const k = L.theme.enemy; const other = k === "zombie" ? "grunt" : "zombie"; enemyLayers[other].begin(); enemyLayers[other].end(); return enemyLayers[k]; } });
-  resize(); syncToggles(); updateHud();
+  resize(); syncToggles();
   startLevel(save.level); setState("home");
   $("loading").hidden = true;
   requestAnimationFrame(frame);
 })();
-addEventListener("pagehide", () => { if (state === "lose") settleLoss(); });
 // test hooks (read by the headless playtest bot)
-window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, save, revive, settleLoss };
+window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, save };
 </script>
 
 </body></html>
