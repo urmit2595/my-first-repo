@@ -667,7 +667,7 @@
   }
 
   function loadLevel(def, isTitle) {
-    cam.title = !!isTitle;
+    cam.title = !!isTitle; Game.loadT = Game.time;
     disposeLevel();
     var w = SpireGeom.load(def); Game.geom = w; Game.level = def;
     var theme = def.theme || "dusk";
@@ -1290,6 +1290,17 @@
     return { ok: ok, ms: Math.round(performance.now() - t0), why: why };
   };
   Game._internals = function () { return { scene: scene, levelRoot: levelRoot, heroPivot: heroPivot, fxRoot: fxRoot, renderer: renderer, composer: composer, camera: camera, sceneStats: sceneStats }; };
+  // Test hook: true once the level intro zoom, the theme fade and asset loading are done (tests wait for this, not a fixed time).
+  Object.defineProperty(Game, "settled", { enumerable: true, get: function () {
+    if (!Game.ready || !Game.level || Game.state === "loading") return false;
+    if (cam.zoomK > 1) return false;                         // intro zoom still easing in
+    if (Game.time - (Game.loadT || 0) < 2.2) return false;  // game time since load: counts frames, so slow machines wait longer
+    if (window.World && mods.world && World.ready === false) return false;
+    if (window.World && mods.world && World.fading) return false;
+    if (window.Blocks && mods.blocks && Blocks.ready === false) return false;
+    if (window.Decor && mods.decor && Decor.ready === false) return false;
+    return true;
+  } });
   Game.handleScreen = function (id) { var g = Game.groups[id]; if (!g || !g.handle) return null; var o = [0, 0, 0]; handleRefWorld(g, g.cur, o); return worldToScreen(o, {}); };
   Game.heroScreen = function () { return worldToScreen([heroW.pos.x, heroW.pos.y + 0.4, heroW.pos.z], {}); };
   Game.debug = function () {
