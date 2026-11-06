@@ -2075,3 +2075,409 @@ index 5dd6ca1f3dabb0a1afa492d04f8a2a85ca5f9d77..8845414d8852edc22d277fdd20895546
    }
    function wind() {
 
+apply patch
+patch: completed
+/home/user/my-first-repo/spirelight/tests/fx.html
+diff --git a/spirelight/js/fx.js b/spirelight/js/fx.js
+index 5dd6ca1f3dabb0a1afa492d04f8a2a85ca5f9d77..8845414d8852edc22d277fdd208955464f21c391
+--- a/spirelight/js/fx.js
++++ b/spirelight/js/fx.js
+@@ -43,7 +43,7 @@
+     out.set(x, y, z); return true;
+   }
+   function point(value, out) {
+-    if (typeof value !== "string") return readPoint(value, out);
++    if (typeof value !== "string") return false;
+     if (!G.geom || typeof G.geom.walkable !== "function") return false;
+     var w = G.geom.walkable(value);
+     if (!w || !readPoint(w.stand, out)) return false;
+@@ -60,7 +60,9 @@
+   }
+   function decorPoint(d, out) {
+     try {
+-      if (d && typeof d.worldPos === "function" && readPoint(d.worldPos(), out)) return true;
++      if (d && typeof d.worldPos === "function") {
++        out.copy(d.worldPos(out)); return true;
++      }
+       if (d && d.object3D && d.object3D.getWorldPosition) {
+         d.object3D.getWorldPosition(out); return true;
+       }
+@@ -74,9 +76,12 @@
+     obj.getWorldPosition(out); return true;
+   }
+   function heroPoint(out) {
+-    return !!(G.hero && G.hero.object3D && readPoint(G.hero.object3D.position, out));
++    var obj = G.hero && G.hero.object3D;
++    if (!obj || !obj.getWorldPosition) return false;
++    obj.getWorldPosition(out); return true;
+   }
+   function tapPoint(d, out) {
++    if (readPoint(d.pos, out)) return true;
+     if (d.tile != null && point(d.tile, out)) return true;
+     if (!G.camera || !G.root || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return false;
+     // Event coordinates are CSS pixels within root, per the Game contract.
+@@ -234,6 +239,7 @@
+     beaconPoint[0] = a.x; beaconPoint[1] = a.y; beaconPoint[2] = a.z;
+     cascade.length = 0;
+     for (var k = 0; k < decor.length; k++) {
++      if (decor[k].item && decor[k].item.type === "beacon") continue;
+       var obj = decor[k].object3D;
+       if (obj && obj.userData && typeof obj.userData.setLit === "function" && decorPoint(decor[k], b)) {
+         cascade.push({ decor: decor[k], distance: b.distanceToSquared(a), at: 0 });
+@@ -282,11 +288,7 @@
+     sound("footstep"); step++;
+     if (step % 3 === 0 && heroPoint(a)) burst(a, 5, SAND, 0.5, 0.3, 1, 0.03);
+     if (Number.isFinite(d.k) && d.k !== 0) {
+-      // Keep the first point in scalar storage: tile transforms use b/c as scratch vectors.
+-      var from = point(d.from, a), x = a.x, y = a.y, z = a.z;
+-      var to = point(d.to, a);
+-      if (from && to) a.set((x + a.x) / 2, (y + a.y) / 2, (z + a.z) / 2);
+-      else if (!heroPoint(a)) return;
++      if (!readPoint(d.at, a) && !point(d.from, a) && !heroPoint(a)) return;
+       burst(a, 8, TEAL, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
+     }
+   }
+@@ -294,7 +296,8 @@
+     if (name === "mechTick") sound("tick");
+     if (name === "mechSnap") sound("snap");
+     if (name === "mechLocked") sound("locked");
+-    if (!handlePoint(d.id, a)) return;
++    var positioned = readPoint(d.pos, a);
++    if (!positioned && !handlePoint(d.id, a)) return;
+     if (name === "mechGrab") burst(a, 3, BRASS, 0.45, 0.45, 0);
+     if (name === "mechMove") {
+       if (moveFrame === frameId) return; moveFrame = frameId;
+@@ -303,13 +306,14 @@
+     if (name === "mechTick") { burst(a, 3, SAND, 0.35, 0.25, 1); burst(a, 1, BRASS, 0.3, 0.6, 0); }
+     if (name === "mechSnap") {
+       burst(a, 10, BRASS, 0.65, 0.8, 0); burst(a, 7, SAND, 0.6, 0.4, 1);
+-      var g = G.groups[d.id]; if (g.pivotNode) g.pivotNode.getWorldPosition(a);
++      var g = G.groups && G.groups[d.id];
++      if (!positioned && g && g.pivotNode && g.pivotNode.getWorldPosition) g.pivotNode.getWorldPosition(a);
+       ring(a, GOLD, 1, 0.65, 0.5);
+     }
+     if (name === "mechLocked") burst(a, 4, 0xa38e7b, 0.4, 0.2, 1);
+   }
+   function plate(d) {
+-    sound("plate"); if (!point(d.tile, a)) return;
++    sound("plate"); if (!readPoint(d.pos, a) && !point(d.tile, a)) return;
+     ring(a, 0xffbd68, 1.5, 0.8, 0.6);
+     var count = scaled(16);
+     for (var i = 0; i < count; i++) {
+@@ -340,7 +344,10 @@
+       bind(name, function (d) { mechanism(name, d); });
+     });
+     bind("plate", plate);
+-    bind("glimmer", function (d) { sound("glimmer"); if (point(d.tile, a)) burst(a, 20, TEAL, 1.6, 1.4, 0, 0.023); });
++    bind("glimmer", function (d) {
++      sound("glimmer");
++      if (readPoint(d.pos, a) || point(d.tile, a)) burst(a, 20, TEAL, 1.6, 1.4, 0, 0.023);
++    });
+     bind("beacon", beacon); bind("levelComplete", complete);
+     bind("restart", function () { clearTransient(false); });
+     bind("levelStart", function (d) {
+@@ -427,13 +434,14 @@
+   }
+   function sound(name) {
+     try {
+-      if (!G || !unlocked || !ctx || ctx.state !== "running" || G.save && G.save.sound === false ||
+-        !Object.prototype.hasOwnProperty.call(played, name)) return;
++      if (!Object.prototype.hasOwnProperty.call(played, name)) return;
++      // Count requests, including locked, muted and rate-limited calls; playback still needs a gesture.
++      played[name]++;
++      if (!G || !unlocked || !ctx || ctx.state !== "running" || G.save && G.save.sound === false) return;
+       var now = ctx.currentTime;
+       if (name === "footstep" && now - lastStep < 0.08 || name === "tick" && now - lastTick < 0.03) return;
+       if (name === "footstep") lastStep = now;
+       if (name === "tick") lastTick = now;
+-      played[name]++;
+       var at = now + 0.005;
+       if (name === "click") tone(1600, at, 0.025, 0.08);
+       else if (name === "footstep") {
+@@ -488,10 +496,11 @@
+     try {
+       if (!G) return;
+       unlocked = true; if (!ctx) makeAudio();
++      poll = 0;
+       if (ctx && ctx.state === "suspended") {
+-        var promise = ctx.resume(); if (promise && promise.catch) promise.catch(report);
++        return ctx.resume().then(function () { audioFrame(); }, report);
+       }
+-      poll = 0;
++      audioFrame();
+     } catch (e) { report(e); }
+   }
+   function wind() {
+diff --git a/spirelight/tests/fx.html b/spirelight/tests/fx.html
+index bca9202da7fe71c2850134ad71290cb6f95c3e3e..92e9105a063236000f8c91d2526e73b7729550d5
+--- a/spirelight/tests/fx.html
++++ b/spirelight/tests/fx.html
+@@ -9,6 +9,7 @@
+ html,body{margin:0;overflow:hidden}#fx-test-root{position:fixed;inset:0;overflow:hidden;pointer-events:none}
+ #fx-test-ui{position:absolute;inset:0;pointer-events:none;color:#efe2c6;font:12px monospace}
+ #status{position:absolute;left:16px;bottom:16px;white-space:pre-line;opacity:.7}
++#unlock{position:absolute;right:16px;bottom:16px;min-height:44px;pointer-events:auto}
+ </style>
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+ <script src="testbed.js"></script>
+@@ -32,6 +33,13 @@
+     var root = document.createElement("div"), ui = document.createElement("div"), status = document.createElement("div");
+     root.id = "fx-test-root"; ui.id = "fx-test-ui"; status.id = "status";
+     ui.appendChild(status); root.appendChild(ui); document.body.appendChild(root);
++    var unlock = document.createElement("button"); unlock.id = "unlock"; unlock.textContent = "Unlock audio";
++    unlock.addEventListener("click", function () {
++      Promise.resolve(FX.unlock()).then(function () {
++        unlock.textContent = "Audio: " + FX.debug().audio;
++      }).catch(window.__fxReportError);
++    });
++    ui.appendChild(unlock);
+     var listeners = Object.create(null);
+     var bus = {
+       on: function (name, fn) { (listeners[name] || (listeners[name] = [])).push(fn); },
+@@ -63,6 +71,9 @@
+       start: { stand: [1.5, 0.58, 3.5], group: "base", ref: [1, 0, 3] },
+       middle: { stand: [3, 0.58, 3.5], group: "base", ref: [3, 0, 3] },
+       plate: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
++      p1: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
++      g1: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
++      bridge_1: { stand: [5, 0.58, 3], group: "bridge", ref: [5, 0, 3] },
+       stair: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+       goal: { stand: [4.5, 3.12, 1.5], group: "bridge", ref: [4, 3, 1] }
+     };
+@@ -93,35 +104,37 @@
+       [3.7, 0.85, 4.5], [2.3, 0.85, 4.4], [0.6, 0.85, 4.3]];
+     lanterns.forEach(function (pos, i) {
+       var mat = new T.MeshStandardMaterial({ color: 0x9c783d, emissive: 0xffb35a, emissiveIntensity: 0.02, roughness: 0.5 });
+-      var obj = box(pos[0], pos[1], pos[2], 0.19, 0.32, 0.19, mat), world = new T.Vector3(), arr = [0, 0, 0];
++      var obj = box(pos[0], pos[1], pos[2], 0.19, 0.32, 0.19, mat), world = new T.Vector3();
+       obj.userData.target = 0.02;
+       obj.userData.setLit = function (on, instant) {
+         obj.userData.target = on ? 3 : 0.02;
+         if (instant) mat.emissiveIntensity = obj.userData.target;
+         if (on) window.__fxLit.push({ index: i, time: Game.time, instant: !!instant });
+       };
+-      Game.decor.push({ item: { type: "lantern" }, object3D: obj, worldPos: function () {
+-        obj.getWorldPosition(world);
+-        // Deliberately exercise both contract-compatible return shapes.
+-        if (i % 2) { arr[0] = world.x; arr[1] = world.y; arr[2] = world.z; return arr; }
+-        return world;
++      Game.decor.push({ item: { type: "lantern" }, object3D: obj, worldPos: function (target) {
++        return obj.getWorldPosition(target || world);
+       } });
+     });
+     var beaconWorld = new T.Vector3();
+     Game.decor.push({ item: { type: "beacon" }, object3D: beacon,
+-      worldPos: function () { return beacon.getWorldPosition(beaconWorld); } });
++      worldPos: function (target) { return beacon.getWorldPosition(target || beaconWorld); } });
+     FX.setup(Game); FX.setup(Game); // Repeated boot must not duplicate roots, listeners, or ambient particles.
+     var defaults = {
+-      tap: { tile: "middle", reachable: true }, tapUnreachable: { tile: "plate", reachable: false },
++      tap: { x: 0, y: 0, tile: "middle", reachable: true, pos: tiles.middle.stand },
++      tapUnreachable: { x: 0, y: 0, tile: "p1", reachable: false, pos: tiles.p1.stand },
+       path: { points: [tiles.start.stand, tiles.middle.stand, tiles.plate.stand] },
+-      heroStep: { from: "start", to: "middle", k: 0 }, junction: { from: tiles.start.stand, to: tiles.middle.stand, k: 1 },
++      heroStep: { from: "start", to: "middle", k: 0, at: tiles.start.stand },
++      junction: { from: "middle", to: "bridge_1", k: 1, at: tiles.middle.stand },
+       mechGrab: { id: "bridge" }, mechMove: { id: "bridge", value: 15, delta: 1 },
+-      mechTick: { id: "bridge" }, mechSnap: { id: "bridge", value: 90 }, mechLocked: { id: "bridge" },
+-      plate: { tile: "plate", group: "bridge" }, glimmer: { tile: "stair" }, beacon: { pos: [4.5, 3.55, 1.5] },
++      mechTick: { id: "bridge", pos: [5, 1.08, 3] }, mechSnap: { id: "bridge", value: 90, pos: [5, 1.08, 3] },
++      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "base", pos: tiles.p1.stand },
++      glimmer: { tile: "g1", count: 1, total: 3, pos: tiles.g1.stand }, beacon: { index: 0, pos: [4.5, 3.95, 1.5] },
+       levelComplete: { index: 0 }, levelStart: { index: 0, level: Game.level }, pause: { paused: true },
+       quality: { level: "low" }
+     };
+     var beaconOn = false;
++    window.__fxIgnitions = 0;
++    beacon.userData.ignite = function () { beaconOn = true; window.__fxIgnitions++; };
+     window.__fxFire = function (name, data) {
+       try {
+         var payload = Object.assign({}, defaults[name] || {}, data || {}), event = name;
+@@ -135,7 +148,7 @@
+         if (event === "pause") Game.state = payload.paused ? "paused" : "play";
+         if (event === "quality") Game.quality = payload.level;
+         if (event === "levelComplete") Game.state = "complete";
+-        if (event === "beacon") beaconOn = true; // Fake engine owns the beacon's ignition.
++        if (event === "beacon") beacon.userData.ignite(); // Fake engine owns the beacon's ignition.
+         status.textContent = "FX test · " + name + "\n__fxFire(name, data) · FX.debug()";
+         bus.emit(event, payload); return FX.debug();
+       } catch (e) { window.__fxReportError(e); throw e; }
+@@ -146,6 +159,7 @@
+       [10, "beacon"], [14, "levelComplete"]];
+     var only = query.get("only"), scripted = query.get("script") !== "0", cursor = 0;
+     if (only) schedule = [[0.4, only]];
++    if (only === "heroStep") schedule = [[0.4, only], [0.5, only], [0.6, only]];
+     if (scripted && only !== "title") window.__fxFire("levelStart");
+     status.textContent = "FX test · " + (only || (scripted ? "sequence" : "manual")) + "\nClick or press a key to unlock audio";
+     tb.onFrame(function (dt, t) {
+
+exec
+/bin/bash -lc "node --check js/fx.js; sed -n '350,410p' js/fx.js; cat tests/testbed.js; node -e \"console.log(require.resolve('playwright')); console.log(require('./tools/harness').VENDOR)\"" in /home/user/my-first-repo/spirelight
+ succeeded in 462ms:
+    });
+    bind("beacon", beacon); bind("levelComplete", complete);
+    bind("restart", function () { clearTransient(false); });
+    bind("levelStart", function (d) {
+      paused = false; changeTheme(d.level && d.level.theme || G.level && G.level.theme); rebuild(false); resetBed();
+    });
+    bind("title", function () { paused = false; changeTheme("dusk"); rebuild(true); resetBed(); });
+    bind("pause", function (d) { paused = !!d.paused; poll = 0; });
+    bind("quality", function (d) { low = d.level === "low"; rebuild(G.state === "title"); });
+  }
+
+  // Audio sources are tracked in reusable slots; cancellation includes future notes and wind/LFOs.
+  function frequency(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+  function scaleNote(index) {
+    var s = scales[theme], octave = Math.floor(index / 5), n = ((index % 5) + 5) % 5;
+    return frequency(s[n] + octave * 12);
+  }
+  function track(source, nodes, end, music) {
+    for (var i = 0; i < voices.length; i++) {
+      if (!voices[i].source) {
+        voices[i].source = source; voices[i].nodes = nodes; voices[i].end = end; voices[i].music = music; return;
+      }
+    }
+    // This is a hard ceiling, even under hostile event spam.
+    try { source.stop(); source.disconnect(); for (var j = 0; j < nodes.length; j++) nodes[j].disconnect(); } catch (e) { report(e); }
+  }
+  function cleanVoices(musicOnly, all) {
+    if (!ctx) return;
+    for (var i = 0; i < voices.length; i++) {
+      var v = voices[i];
+      if (v.source && (all || musicOnly && v.music || v.end < ctx.currentTime)) {
+        try {
+          v.source.stop(); v.source.disconnect();
+          for (var j = 0; j < v.nodes.length; j++) v.nodes[j].disconnect();
+        } catch (e) { report(e); }
+        v.source = null; v.nodes = null;
+      }
+    }
+  }
+  function route(node, music, wet) {
+    node.connect(music ? musicBus : sfxBus);
+    if (wet) node.connect(music ? musicSend : sfxSend);
+  }
+  function tone(hz, at, duration, gain, type, music, wet, endHz, attack, filterHz, detune) {
+    var source = ctx.createOscillator(), env = ctx.createGain(), filter = null;
+    source.type = type || "sine"; source.frequency.setValueAtTime(hz, at);
+    if (endHz) source.frequency.exponentialRampToValueAtTime(endHz, at + duration);
+    source.detune.value = detune || 0;
+    env.gain.setValueAtTime(0.00001, at);
+    env.gain.linearRampToValueAtTime(gain, at + (attack || 0.004));
+    if (attack >= 1) {
+      env.gain.setValueAtTime(gain, at + duration - 3);
+      env.gain.linearRampToValueAtTime(0.00001, at + duration);
+    } else env.gain.exponentialRampToValueAtTime(0.00001, at + duration);
+    source.connect(env);
+    if (filterHz) {
+      filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = filterHz;
+      env.connect(filter); route(filter, music, wet);
+    } else route(env, music, wet);
+    source.start(at); source.stop(at + duration + 0.03);
+    track(source, filter ? [env, filter] : [env], at + duration + 0.05, music);
+// Spirelight testbed: a minimal true-isometric three.js scene for testing one module on its own.
+// Include three.min.js (and any examples/js you need) first, then this file, then your module, then:
+//
+//   Testbed.start({ height: 10, center: [0, 1, 0], bg: 0x241a3a, lights: true, grid: true }, (tb) => {
+//     // tb.THREE, tb.scene, tb.camera, tb.renderer, tb.key (DirectionalLight), tb.hemi, tb.time
+//     tb.scene.add(myObject);
+//     tb.onFrame((dt, t) => { ... });      // per-frame callback
+//     return promiseOrNothing;             // window.__ready becomes true after it settles (and 2 frames rendered)
+//   });
+//
+// Camera: orthographic, looking along -(1,1,1) with +y up, exactly the game's projection (design.md section 4).
+(function () {
+  "use strict";
+  const Testbed = {};
+  Testbed.start = function (opts, setup) {
+    opts = opts || {};
+    const THREE = window.THREE;
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;display:block";
+    document.body.style.margin = "0";
+    document.body.style.background = "#000";
+    document.body.appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = opts.exposure || 1.0;
+    renderer.shadowMap.enabled = opts.shadows !== false;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(opts.bg != null ? opts.bg : 0x241a3a);
+    const H = opts.height || 10, c = opts.center || [0, 0, 0];
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -200, 400);
+    camera.position.set(c[0] + 50, c[1] + 50, c[2] + 50);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(c[0], c[1], c[2]);
+    const tb = { THREE, scene, camera, renderer, canvas, time: 0, frames: [], onFrame(fn) { this.frames.push(fn); } };
+    if (opts.lights !== false) {
+      tb.hemi = new THREE.HemisphereLight(0xb9c7ff, 0x5a3a52, 0.55);
+      scene.add(tb.hemi);
+      tb.key = new THREE.DirectionalLight(0xffd2a0, 1.6);
+      tb.key.position.set(c[0] - 12, c[1] + 20, c[2] + 8);
+      tb.key.target.position.set(c[0], c[1], c[2]);
+      tb.key.castShadow = true;
+      tb.key.shadow.mapSize.set(2048, 2048);
+      const s = tb.key.shadow.camera; s.left = -H; s.right = H; s.top = H; s.bottom = -H; s.near = 0.5; s.far = 80;
+      tb.key.shadow.bias = -0.0005;
+      scene.add(tb.key, tb.key.target);
+    }
+    if (opts.grid) {
+      const g = new THREE.GridHelper(20, 20, 0x6a5a8a, 0x3a2f55);
+      g.position.set(c[0], 0, c[2]);
+      scene.add(g);
+    }
+    function resize() {
+      const w = window.innerWidth, h = window.innerHeight, a = w / h;
+      renderer.setSize(w, h, false);
+      camera.left = -H * a / 2; camera.right = H * a / 2; camera.top = H / 2; camera.bottom = -H / 2;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener("resize", resize);
+    resize();
+    let last = performance.now(), rendered = 0;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; tb.time += dt;
+      for (const f of tb.frames) { try { f(dt, tb.time); } catch (e) { console.error(e); } }
+      renderer.render(scene, camera);
+      rendered++;
+      requestAnimationFrame(frame);
+    }
+    window.Testbed.tb = tb;
+    Promise.resolve().then(() => setup && setup(tb)).then(() => {
+      requestAnimationFrame(frame);
+      const wait = () => (rendered >= 2 ? (window.__ready = true) : requestAnimationFrame(wait));
+      wait();
+    }).catch(e => { console.error(e); window.__ready = true; window.__error = String(e && e.message || e); });
+    return tb;
+  };
+  window.Testbed = Testbed;
+})();
+/opt/node-tools/node_modules/playwright/index.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor
+
+exec
+/bin/bash -lc "node tools/shot.js 'tests/fx.html?script=0' /tmp/spirelight-fx-plate.png --wait 100 --eval '(() => { const before = FX.debug(); const after = __fxFire(\"plate\", { tile: \"missing\", pos: [3, 0.58, 3.5] }); return { before, after, errors: __fxErrors }; })()'" in /home/user/my-first-repo/spirelight
+ exited 1 in 250ms:
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v22.23.4
+

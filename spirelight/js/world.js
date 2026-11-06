@@ -224,6 +224,7 @@
     lights: null,
     theme: null,
     exposure: 1.05,
+    envMap: null,
     base: BASE,
     ready: false,
     reducedMotion: false,
@@ -507,6 +508,37 @@
     S.uBack.uImgAspect.value = S.imgAspect;
   }
 
+
+  // PMREM environment for the theme: dim gradient dome with a brighter patch on the key-light side.
+  // Makes brass/copper gleam; kept low so matte stone stays matte.
+  function buildEnv(name) {
+    try {
+      if (!renderer || !T.PMREMGenerator) return;
+      const d = DATA[name];
+      const lin = (h) => new T.Color(h).convertSRGBToLinear();
+      const kd = new T.Vector3(d.keyDir[0], d.keyDir[1], d.keyDir[2]).normalize();
+      const mat = new T.ShaderMaterial({
+        side: T.BackSide, depthWrite: false, toneMapped: false,
+        uniforms: { uTop: { value: lin(d.skyTop).lerp(lin(d.hemiSky), 0.5) }, uMid: { value: lin(d.skyMid) }, uLow: { value: lin(d.skyLow) },
+          uGround: { value: lin(d.hemiGround) }, uSun: { value: kd }, uSunCol: { value: lin(d.keyCol) } },
+        vertexShader: "varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+        fragmentShader: "precision highp float; varying vec3 vD; uniform vec3 uTop, uMid, uLow, uGround, uSun, uSunCol;" +
+          "void main(){ vec3 n = normalize(vD); float y = n.y;" +
+          " vec3 c = mix(uLow, uMid, smoothstep(0.0, 0.35, y)); c = mix(c, uTop, smoothstep(0.3, 0.9, y));" +
+          " c = mix(c, uGround, smoothstep(0.0, -0.4, y));" +
+          " float s = max(dot(n, uSun), 0.0); c += uSunCol * (pow(s, 24.0) * 2.2 + pow(s, 4.0) * 0.35);" +
+          " gl_FragColor = vec4(c * 0.8, 1.0); }",
+      });
+      const es = new T.Scene(); es.add(new T.Mesh(new T.SphereGeometry(50, 32, 16), mat));
+      if (!S.pmrem) S.pmrem = new T.PMREMGenerator(renderer);
+      const rt = S.pmrem.fromScene(es, 0.02);
+      es.children[0].geometry.dispose(); mat.dispose();
+      const old = S.envRT; S.envRT = rt;
+      scene.environment = rt.texture; World.envMap = rt.texture;
+      if (old) old.dispose();
+    } catch (e) { console.error("World env", e); }
+  }
+
   World.setTheme = function (name, instant) {
     try {
       if (!DATA[name]) name = "dusk";
@@ -525,6 +557,7 @@
         const t = S.textures[name] || null;
         S.uBack.uTexB.value = t; S.uBack.uHasB.value = t ? 1 : 0;
       }
+      if (prev !== name || first) buildEnv(name);
       World.exposure = DATA[name].exposure;
       if (renderer && instant === "apply") renderer.toneMappingExposure = World.exposure;
       if (S.lastBounds) World.fit(S.lastBounds);
@@ -655,6 +688,7 @@
         scene.remove(root);
       }
       if (World.lights) { scene.remove(World.lights.key, World.lights.key.target, World.lights.hemi, World.lights.rim, World.lights.rim.target); }
+      if (S.envRT) { S.envRT.dispose(); S.envRT = null; if (scene.environment === World.envMap) scene.environment = null; World.envMap = null; }
       for (const n in S.textures) if (S.textures[n]) S.textures[n].dispose();
     } catch (e) { /* */ }
     World.ready = false;

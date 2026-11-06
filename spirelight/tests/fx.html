@@ -9,6 +9,7 @@
 html,body{margin:0;overflow:hidden}#fx-test-root{position:fixed;inset:0;overflow:hidden;pointer-events:none}
 #fx-test-ui{position:absolute;inset:0;pointer-events:none;color:#efe2c6;font:12px monospace}
 #status{position:absolute;left:16px;bottom:16px;white-space:pre-line;opacity:.7}
+#unlock{position:absolute;right:16px;bottom:16px;min-height:44px;pointer-events:auto}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="testbed.js"></script>
@@ -32,6 +33,13 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
     var root = document.createElement("div"), ui = document.createElement("div"), status = document.createElement("div");
     root.id = "fx-test-root"; ui.id = "fx-test-ui"; status.id = "status";
     ui.appendChild(status); root.appendChild(ui); document.body.appendChild(root);
+    var unlock = document.createElement("button"); unlock.id = "unlock"; unlock.textContent = "Unlock audio";
+    unlock.addEventListener("click", function () {
+      Promise.resolve(FX.unlock()).then(function () {
+        unlock.textContent = "Audio: " + FX.debug().audio;
+      }).catch(window.__fxReportError);
+    });
+    ui.appendChild(unlock);
     var listeners = Object.create(null);
     var bus = {
       on: function (name, fn) { (listeners[name] || (listeners[name] = [])).push(fn); },
@@ -63,6 +71,9 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
       start: { stand: [1.5, 0.58, 3.5], group: "base", ref: [1, 0, 3] },
       middle: { stand: [3, 0.58, 3.5], group: "base", ref: [3, 0, 3] },
       plate: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+      p1: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+      g1: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+      bridge_1: { stand: [5, 0.58, 3], group: "bridge", ref: [5, 0, 3] },
       stair: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
       goal: { stand: [4.5, 3.12, 1.5], group: "bridge", ref: [4, 3, 1] }
     };
@@ -93,35 +104,37 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
       [3.7, 0.85, 4.5], [2.3, 0.85, 4.4], [0.6, 0.85, 4.3]];
     lanterns.forEach(function (pos, i) {
       var mat = new T.MeshStandardMaterial({ color: 0x9c783d, emissive: 0xffb35a, emissiveIntensity: 0.02, roughness: 0.5 });
-      var obj = box(pos[0], pos[1], pos[2], 0.19, 0.32, 0.19, mat), world = new T.Vector3(), arr = [0, 0, 0];
+      var obj = box(pos[0], pos[1], pos[2], 0.19, 0.32, 0.19, mat), world = new T.Vector3();
       obj.userData.target = 0.02;
       obj.userData.setLit = function (on, instant) {
         obj.userData.target = on ? 3 : 0.02;
         if (instant) mat.emissiveIntensity = obj.userData.target;
         if (on) window.__fxLit.push({ index: i, time: Game.time, instant: !!instant });
       };
-      Game.decor.push({ item: { type: "lantern" }, object3D: obj, worldPos: function () {
-        obj.getWorldPosition(world);
-        // Deliberately exercise both contract-compatible return shapes.
-        if (i % 2) { arr[0] = world.x; arr[1] = world.y; arr[2] = world.z; return arr; }
-        return world;
+      Game.decor.push({ item: { type: "lantern" }, object3D: obj, worldPos: function (target) {
+        return obj.getWorldPosition(target || world);
       } });
     });
     var beaconWorld = new T.Vector3();
     Game.decor.push({ item: { type: "beacon" }, object3D: beacon,
-      worldPos: function () { return beacon.getWorldPosition(beaconWorld); } });
+      worldPos: function (target) { return beacon.getWorldPosition(target || beaconWorld); } });
     FX.setup(Game); FX.setup(Game); // Repeated boot must not duplicate roots, listeners, or ambient particles.
     var defaults = {
-      tap: { tile: "middle", reachable: true }, tapUnreachable: { tile: "plate", reachable: false },
+      tap: { x: 0, y: 0, tile: "middle", reachable: true, pos: tiles.middle.stand },
+      tapUnreachable: { x: 0, y: 0, tile: "p1", reachable: false, pos: tiles.p1.stand },
       path: { points: [tiles.start.stand, tiles.middle.stand, tiles.plate.stand] },
-      heroStep: { from: "start", to: "middle", k: 0 }, junction: { from: tiles.start.stand, to: tiles.middle.stand, k: 1 },
+      heroStep: { from: "start", to: "middle", k: 0, at: tiles.start.stand },
+      junction: { from: "middle", to: "bridge_1", k: 1, at: tiles.middle.stand },
       mechGrab: { id: "bridge" }, mechMove: { id: "bridge", value: 15, delta: 1 },
-      mechTick: { id: "bridge" }, mechSnap: { id: "bridge", value: 90 }, mechLocked: { id: "bridge" },
-      plate: { tile: "plate", group: "bridge" }, glimmer: { tile: "stair" }, beacon: { pos: [4.5, 3.55, 1.5] },
+      mechTick: { id: "bridge", pos: [5, 1.08, 3] }, mechSnap: { id: "bridge", value: 90, pos: [5, 1.08, 3] },
+      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "base", pos: tiles.p1.stand },
+      glimmer: { tile: "g1", count: 1, total: 3, pos: tiles.g1.stand }, beacon: { index: 0, pos: [4.5, 3.95, 1.5] },
       levelComplete: { index: 0 }, levelStart: { index: 0, level: Game.level }, pause: { paused: true },
       quality: { level: "low" }
     };
     var beaconOn = false;
+    window.__fxIgnitions = 0;
+    beacon.userData.ignite = function () { beaconOn = true; window.__fxIgnitions++; };
     window.__fxFire = function (name, data) {
       try {
         var payload = Object.assign({}, defaults[name] || {}, data || {}), event = name;
@@ -135,7 +148,7 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
         if (event === "pause") Game.state = payload.paused ? "paused" : "play";
         if (event === "quality") Game.quality = payload.level;
         if (event === "levelComplete") Game.state = "complete";
-        if (event === "beacon") beaconOn = true; // Fake engine owns the beacon's ignition.
+        if (event === "beacon") beacon.userData.ignite(); // Fake engine owns the beacon's ignition.
         status.textContent = "FX test · " + name + "\n__fxFire(name, data) · FX.debug()";
         bus.emit(event, payload); return FX.debug();
       } catch (e) { window.__fxReportError(e); throw e; }
@@ -146,6 +159,7 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
       [10, "beacon"], [14, "levelComplete"]];
     var only = query.get("only"), scripted = query.get("script") !== "0", cursor = 0;
     if (only) schedule = [[0.4, only]];
+    if (only === "heroStep") schedule = [[0.4, only], [0.5, only], [0.6, only]];
     if (scripted && only !== "title") window.__fxFire("levelStart");
     status.textContent = "FX test · " + (only || (scripted ? "sequence" : "manual")) + "\nClick or press a key to unlock audio";
     tb.onFrame(function (dt, t) {
