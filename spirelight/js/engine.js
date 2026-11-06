@@ -1122,7 +1122,7 @@
           }
           if (m.stand) {
             heroW.crossK = 0;
-            if (arrive(m.tile)) { moving = false; break; }
+            if (arrive(m.tile)) { moving = false; stopHero(); break; }
             if (!heroW.moves.length) { moving = false; stopHero(); break; }
           }
         } else { tmpV.multiplyScalar(1 / dist); pos.addScaledVector(tmpV, sp * remain); remain = 0; }
