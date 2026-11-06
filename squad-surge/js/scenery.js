@@ -264,7 +264,7 @@ window.Scenery = (() => {
     const m = new T.ShaderMaterial({
       uniforms: { top: { value: lin(e[0]) }, mid: { value: lin(e[1]) }, bot: { value: lin(e[2]) }, sun: { value: lin(e[3]) }, sd: { value: new T.Vector3(...cfg.sunPos).normalize() } },
       vertexShader: "varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
-      fragmentShader: "uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 sun; uniform vec3 sd; varying vec3 vD; void main(){ vec3 d = normalize(vD); vec3 c = d.y > 0.0 ? mix(mid, top, smoothstep(0.0, 0.8, d.y)) : mix(mid, bot, smoothstep(0.0, 0.5, -d.y)); float s = max(dot(d, sd), 0.0); c += sun * (pow(s, 12.0) * 1.2 + pow(s, 200.0) * 25.0); gl_FragColor = vec4(c, 1.0); }",
+      fragmentShader: "uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 sun; uniform vec3 sd; varying vec3 vD; void main(){ vec3 d = normalize(vD); vec3 c = d.y > 0.0 ? mix(mid, top, smoothstep(0.0, 0.8, d.y)) : mix(mid, bot, smoothstep(0.0, 0.5, -d.y)); float s = max(dot(d, sd), 0.0); c += sun * (pow(s, 12.0) * 1.2 + pow(s, 200.0) * 25.0); gl_FragColor = linearToOutputTexel(vec4(c, 1.0)); }",
       side: T.BackSide });
     sc.add(new T.Mesh(new T.SphereBufferGeometry(10, 32, 16), m));
     const rt = S.pmrem.fromScene(sc, 0.02);

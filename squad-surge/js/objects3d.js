@@ -235,7 +235,7 @@ window.Obj3D = (() => {
     setC(hs.frame.color, hs.cur.edge); setC(hs.glow.color, hs.cur.glow);
   }
   function gate(g) {
-    ensure(); refreshPipeline(); syncEnv();
+    refreshPipeline(); ensure(); syncEnv();
     const { track } = C, grp = new THREE.Group(); grp.position.set(0, 0, g.z); track.add(grp); GATES.push(grp);
     const posts = new THREE.Mesh(G.posts, M.post); posts.castShadow = true; posts.receiveShadow = true; grp.add(posts);
     for (const h of g.halves) {
@@ -308,8 +308,8 @@ window.Obj3D = (() => {
     return m;
   }
   const SPEC = {
-    blockBlue(v, r) { part(v, r, G.blue, M.blue, 0, 1.05, -0.66); return { y: 1.4, w: 1.7 }; },
-    blockYellow(v, r) { part(v, r, G.yellow, M.yellow, 0, 1.15, -0.71); return { y: 1.5, w: 1.9 }; },
+    blockBlue(v, r) { part(v, r, G.blue, M.blue, 0, 1.05, -0.66); return { y: 1.62, w: 1.7 }; },
+    blockYellow(v, r) { part(v, r, G.yellow, M.yellow, 0, 1.15, -0.71); return { y: 1.7, w: 1.9 }; },
     crate(v, r) { part(v, r, G.crate, M.wood, 0, 1.1, -0.66); part(v, r, G.bracket, M.steel, 0, 0, -0.66, false, false); return { y: 1.1, w: 1.55 }; },
     tyres(v, r) {
       part(v, r, G.tyres, M.tyre, 0, 0, -0.9);
@@ -331,7 +331,7 @@ window.Obj3D = (() => {
     },
   };
   function solid(o) {
-    ensure(); refreshPipeline(); syncEnv();
+    refreshPipeline(); ensure(); syncEnv();
     const spec = SPEC[o.kind] || SPEC.blockBlue, root = new THREE.Group(); root.position.set(o.x, 0, o.z);
     const v = { root, body: [], L: null, text: undefined, pulse: 0, hit: 0, flash: 0, flashed: false, icon: null, dead: false, ph: Math.random() * 6, o };
     const s = spec(v, root, o) || { y: 1, w: 1.7 };
@@ -365,7 +365,7 @@ window.Obj3D = (() => {
     const v = o.vis; if (!v || v.dead) return; ensureDebris(); v.dead = true;
     const d = DEBRIS[o.kind] || DEBRIS.blockBlue, hw = o.hw || 1, top = o.kind === "tyres" ? 2 : o.kind === "ammo" ? 1.6 : o.kind === "weaponCase" ? 2.1 : 2;
     for (let i = 0; i < 10; i++) {
-      const p = POOL[dnext++ % POOL.length], s = d[1] + rnd() * (d[2] - d[1]), hex = d[0][i % 3];
+      const p = POOL[dnext++ % POOL.length], s = (d[1] + rnd() * (d[2] - d[1])) * 1.3, hex = d[0][i % 3];
       p.m.userData.hex.color = hex; paint(p.m); p.m.opacity = o.kind === "weaponCase" && i % 3 === 2 ? 0.55 : 1; p.base = p.m.opacity;
       p.s = s; p.me.scale.set(s, s * (0.6 + rnd() * 0.5), s * (0.8 + rnd() * 0.4)); p.me.visible = true; p.active = true;
       p.me.position.set(o.x + (rnd() - 0.5) * hw * 1.4, 0.3 + rnd() * top, o.z - rnd() * 0.8);

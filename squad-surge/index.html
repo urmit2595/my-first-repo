@@ -55,7 +55,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .hint .line{width:170px;height:2px;background:#fff;position:relative}.hint .line:before,.hint .line:after{content:'';position:absolute;top:-4px;border:5px solid transparent}.hint .line:before{left:-6px;border-right-color:#fff}.hint .line:after{right:-6px;border-left-color:#fff}
 .hand{width:34px;height:34px;animation:swipe 1.4s ease-in-out infinite;margin-top:-4px}
 @keyframes swipe{0%,100%{transform:translateX(-70px)}50%{transform:translateX(70px)}}
-.tap{align-self:center;font:22px 'Lilita One',sans-serif;animation:pulse 1.2s ease-in-out infinite;margin-bottom:max(48px,env(safe-area-inset-bottom))}
+.tap{align-self:center;font:22px 'Lilita One',sans-serif;animation:pulse 1.2s ease-in-out infinite;margin-bottom:calc(max(110px,17vh) + env(safe-area-inset-bottom))} /* sits above the squad */
 @keyframes pulse{50%{transform:scale(1.08)}}
 /* Modals */
 .modal{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:20px;background:#0b1328b0}
