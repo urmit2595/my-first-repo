@@ -476,6 +476,7 @@
       { type: "vines", at: [3, 1, 6], face: "+z", len: 1.5, count: 4 },
       { type: "ivy", at: [3, 0, 6], face: "+z", density: 1.4 },
       { type: "plant", at: [3, 0, 6], face: "+y", variant: "tuft" },
+      { type: "rubble", at: [3, 1, 6], face: "+y" },
       // lanterns, mostly unlit
       { type: "lantern", at: [0, 0, 0], face: "+z" },
       { type: "lantern", at: [5, 0, 3], face: "+x" },

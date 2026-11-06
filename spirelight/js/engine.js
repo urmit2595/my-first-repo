@@ -216,7 +216,7 @@
   var FACES = { "+x": [1, 0, 0], "-x": [-1, 0, 0], "+y": [0, 1, 0], "-y": [0, -1, 0], "+z": [0, 0, 1], "-z": [0, 0, -1] };
   function fallbackDecor(item) {
     var t = item.type, g = new THREE.Group(), f = FACES[item.face || "+y"] || FACES["+y"];
-    var at = item.at;
+    var at = itemAt(item);
     g.position.set(at[0] + 0.5 + f[0] * 0.5, at[1] + 0.5 + f[1] * 0.5, at[2] + 0.5 + f[2] * 0.5);
     g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(f[0], f[1], f[2]));
     var brass = new THREE.MeshStandardMaterial({ color: 0xc8963e, metalness: 0.7, roughness: 0.4 });
