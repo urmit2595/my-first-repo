@@ -10,24 +10,24 @@ window.Scenery = (() => {
 
   // ------------------------------------------------------------------ per-theme look
   const ROWS = {
-    town: { front: 11, depth: [6.5, 9], scale: [0.95, 1.18], roof: "gable", lot: 0.12, alley: 0.1, lotW: [8, 15], hvar: true },
-    ruins: { front: 11.4, depth: [6, 8], scale: [0.62, 0.78], roof: "flat", lot: 0.2, alley: 0.1, lotW: [8, 16], hvar: true, ragged: true },
+    town: { front: 11, stagger: 0.8, depth: [6.5, 9], scale: [0.95, 1.18], roof: "gable", lot: 0.12, alley: 0.1, lotW: [8, 15], hvar: true },
+    ruins: { front: 11.4, stagger: 0.8, depth: [6, 8], scale: [0.62, 0.78], roof: "flat", lot: 0.2, alley: 0.1, lotW: [8, 16], hvar: true, ragged: true },
     arena: { front: 11.6, depth: [4, 4], scale: [1, 1], roof: "stand", lot: 0, alley: 0, lotW: [8, 8], pick: [0, 0, 0, 1] },
     desert: { front: 14.5, depth: [5, 7], scale: [0.9, 1.25], roof: "flat", lot: 0.8, alley: 0, lotW: [30, 80], hvar: false },
     pier: { front: 8.4, depth: [3.2, 3.6], scale: [0.9, 1.1], roof: "gable", lot: 0.93, alley: 0, lotW: [40, 90], hvar: false, shed: true },
   };
   const CFG = {
-    town: { exposure: 1.05, fog: [48, 210], sun: [0xffd29c, 2.0], sunPos: [-7, 18, -4], hemi: [0xbfd2ff, 0xd9a874, 1.0], tint: 0xffffff, rows: "town", walk: [1.4, 4.2], curb: [10, 18], far: null, lotStep: null, ground: 0x8a9a4a, sand: false,
+    town: { exposure: 1.0, fog: [30, 150], sun: [0xffd29c, 2.7], sunPos: [-12, 12, -18], hemi: [0xbfd2ff, 0xd9a874, 0.6], tint: 0xffffff, rows: "town", far2: true, endWall: true, walk: [0.5, 2.0], curb: [10, 18], far: null, lotStep: null, ground: 0x8a9a4a, sand: false,
       env: [0x7da6ff, 0xffd2a0, 0xb98a5c, 0xffc070], plain: 0.82 },
-    ruins: { exposure: 1.05, fog: [34, 160], sun: [0xffc896, 1.5], sunPos: [-7, 18, -4], hemi: [0xb9b5b0, 0x8a7766, 0.95], tint: 0xe6dccf, rows: "ruins", walk: [2.2, 5.5], curb: [12, 22], far: [55, 110, 28, 70], lotStep: null, ground: 0x7a6d5e,
+    ruins: { exposure: 1.0, fog: [28, 135], sun: [0xffc896, 2.3], sunPos: [-12, 12, -18], hemi: [0xb9b5b0, 0x8a7766, 0.7], tint: 0xe6dccf, rows: "ruins", far2: true, endWall: true, walk: [1, 3], curb: [12, 22], far: [55, 110, 28, 70], lotStep: null, ground: 0x7a6d5e,
       env: [0x8d9db0, 0xe0b790, 0x7a6552, 0xffb070], plain: 0.72 },
-    bridge: { exposure: 1.1, fog: [60, 240], sun: [0xfff1dc, 2.2], sunPos: [-7, 18, -4], hemi: [0xc8e4ff, 0x9bb5c8, 0.9], tint: 0xffffff, rows: null, walk: [5, 12], curb: [14, 20], far: [90, 170, 40, 95], lotStep: null, water: { y: -13, deep: 0x1568b0, shallow: [0.30, 0.74, 0.95] }, remapLot: true,
+    bridge: { exposure: 1.05, fog: [60, 200], fogColor: 0x8fcbf2, rhythm: 14, sun: [0xfff1dc, 2.6], sunPos: [-12, 13, -16], hemi: [0xc8e4ff, 0x9bb5c8, 0.7], tint: 0xffffff, rows: null, walk: [4, 10], curb: [14, 20], far: [90, 170, 40, 95], lotStep: null, water: { y: -13, deep: 0x1568b0, shallow: [0.30, 0.74, 0.95] }, remapLot: true,
       env: [0x5fa8f5, 0xdcefff, 0x8fb5d0, 0xfff0d0], plain: 0.9 },
-    pier: { exposure: 1.08, fog: [52, 220], sun: [0xfff0d4, 2.0], sunPos: [-7, 18, -4], hemi: [0xcdeaf5, 0xb3a58f, 0.9], tint: 0xffffff, rows: "pier", walk: [3.4, 7.5], curb: [9, 15], far: null, lotStep: null, water: { y: -3.3, deep: 0x12859d, shallow: [0.33, 0.82, 0.86] }, remapLot: true,
+    pier: { exposure: 1.05, fog: [52, 220], sun: [0xfff0d4, 2.5], sunPos: [-12, 13, -17], hemi: [0xcdeaf5, 0xb3a58f, 0.7], tint: 0xffffff, rows: "pier", walk: [1.5, 4.5], curb: [9, 15], far: null, lotStep: null, water: { y: -3.3, deep: 0x12859d, shallow: [0.33, 0.82, 0.86] }, remapLot: true,
       env: [0x72c9e0, 0xf0ffff, 0xa09078, 0xffeed0], plain: 0.8 },
-    desert: { exposure: 1.05, fog: [46, 200], sun: [0xffc084, 2.2], sunPos: [-7, 17, -4], hemi: [0xffe3b8, 0xd9a068, 0.85], tint: 0xffffff, rows: "desert", walk: [9, 22], curb: [28, 55], far: [70, 140, 55, 110], lotStep: [7, 16], ground: 0xe8a550, sand: true,
+    desert: { exposure: 1.0, fog: [46, 200], sun: [0xffc084, 2.8], sunPos: [-12, 12, -18], hemi: [0xffe3b8, 0xd9a068, 0.6], tint: 0xffffff, rows: "desert", walk: [9, 22], curb: [28, 55], far: [70, 140, 55, 110], lotStep: [7, 16], ground: 0xe8a550, sand: true,
       env: [0xffa86a, 0xffe2b0, 0xd9a068, 0xffc070], plain: 0.85 },
-    arena: { exposure: 0.95, walkTone: 0.32, fog: [40, 175], sun: [0xe9f1ff, 1.8], sunPos: [-4, 20, -3], hemi: [0x5d72b0, 0x2b3458, 0.6], tint: 0xa7b4e0, rows: "arena", walk: [3.5, 8], curb: [16, 28], far: [50, 70, 20, 28], lotStep: null, ground: 0x6a7080, remapLot: true,
+    arena: { exposure: 0.95, walkTone: 0.32, dim: 0.6, endWall: true, fog: [40, 175], sun: [0xe9f1ff, 2.0], sunPos: [-9, 14, -14], hemi: [0x5d72b0, 0x2b3458, 0.5], tint: 0xa7b4e0, rows: "arena", walk: [1.5, 4.5], curb: [16, 28], far: [50, 70, 20, 28], lotStep: null, ground: 0x6a7080, remapLot: true,
       env: [0x16224a, 0x3b4c82, 0x24304f, 0xe8f0ff], plain: 0.7 },
   };
 
@@ -239,7 +239,7 @@ window.Scenery = (() => {
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
     S.hemi = new T.HemisphereLight(0xffffff, 0x888888, 0.8); scene.add(S.hemi);
     const sun = S.sun = new T.DirectionalLight(0xffffff, 1.5); sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048); const sc = sun.shadow.camera; sc.left = -22; sc.right = 22; sc.top = 32; sc.bottom = -32; sc.near = 1; sc.far = 130;
+    sun.shadow.mapSize.set(1024, 1024); const sc = sun.shadow.camera; sc.left = -26; sc.right = 26; sc.top = 30; sc.bottom = -30; sc.near = 1; sc.far = 160;
     sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
     scene.add(sun); scene.add(sun.target);
     S.pmrem = new T.PMREMGenerator(renderer);
@@ -252,9 +252,9 @@ window.Scenery = (() => {
     S.sky = new T.Mesh(new T.SphereBufferGeometry(350, 24, 12), S.skyMat); S.sky.frustumCulled = false; S.sky.renderOrder = -10; scene.add(S.sky);
     // backdrop: far plane showing the theme's panorama; the image row `horizon` sits on the camera's horizon
     S.backMat = new T.ShaderMaterial({
-      uniforms: { map: { value: null }, planeSize: { value: new T.Vector2(1, 1) }, imgSize: { value: new T.Vector2(1, 1) }, hz: { value: 0.5 }, uOff: { value: 0 }, tint: { value: new T.Color(1, 1, 1) } },
+      uniforms: { map: { value: null }, planeSize: { value: new T.Vector2(1, 1) }, imgSize: { value: new T.Vector2(1, 1) }, hz: { value: 0.5 }, fogCol: { value: new T.Color() }, uOff: { value: 0 }, tint: { value: new T.Color(1, 1, 1) } },
       vertexShader: "uniform vec2 planeSize; uniform vec2 imgSize; uniform float hz; uniform float uOff; varying vec2 vUv; void main(){ vec2 p = position.xy * planeSize; vUv = vec2(0.5 + p.x / imgSize.x + uOff, (1.0 - hz) + p.y / imgSize.y); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
-      fragmentShader: "uniform sampler2D map; uniform vec3 tint; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(map, clamp(vUv, 0.003, 0.997)).rgb * tint, 1.0); }",
+      fragmentShader: "uniform sampler2D map; uniform vec3 tint; uniform vec3 fogCol; uniform float hz; varying vec2 vUv; void main(){ vec3 c = texture2D(map, clamp(vUv, 0.003, 0.997)).rgb * tint; float k = 1.0 - smoothstep(1.0 - hz - 0.10, 1.0 - hz + 0.01, vUv.y); gl_FragColor = vec4(mix(c, fogCol, k), 1.0); }",
       depthWrite: false, fog: false });
     S.back = new T.Mesh(new T.PlaneBufferGeometry(1, 1), S.backMat); S.back.frustumCulled = false; S.back.renderOrder = -9; S.back.visible = false; scene.add(S.back);
   }
@@ -333,12 +333,12 @@ window.Scenery = (() => {
     renderer.toneMappingExposure = cfg.exposure;
     S.hemi.color.set(cfg.hemi[0]).convertSRGBToLinear(); S.hemi.groundColor.set(cfg.hemi[1]).convertSRGBToLinear(); S.hemi.intensity = cfg.hemi[2];
     S.sun.color.set(cfg.sun[0]).convertSRGBToLinear(); S.sun.intensity = cfg.sun[1];
-    const haze = K ? K.haze : (theme.fog || 0xcccccc);
+    const haze = cfg.fogColor || (K ? K.haze : (theme.fog || 0xcccccc));
     scene.fog = new T.Fog(haze, cfg.fog[0], cfg.fog[1]); scene.background = new T.Color(haze);
     C.setSpriteTint(cfg.tint);
     S.skyMat.uniforms.top.value.set(theme.sky[0]); S.skyMat.uniforms.bot.value.set(theme.sky[1]);
     S.skyMat.uniforms.sunDir.value.set(...cfg.sunPos).normalize(); S.skyMat.uniforms.sunCol.value.set(cfg.sun[0]).multiplyScalar(0.8);
-    if (K && K.back) { S.backMat.uniforms.map.value = K.back.tex; S.back.visible = true; S.backAspect = K.back.aspect; S.hz = K.horizon; S.backMat.uniforms.hz.value = K.horizon; }
+    if (K && K.back) { S.backMat.uniforms.map.value = K.back.tex; S.back.visible = true; S.backAspect = K.back.aspect; S.hz = K.horizon; S.backMat.uniforms.hz.value = K.horizon; S.backMat.uniforms.fogCol.value.set(haze); }
     else S.back.visible = false;
     makeEnv(cfg);
 
@@ -431,7 +431,11 @@ window.Scenery = (() => {
     // buildings -----------------------------------------------------------------------
     const occ = []; // z ranges occupied by buildings, per side
     const rowCfg = cfg.rows ? ROWS[cfg.rows] : null;
-    if (rowCfg && K && K.facs.length) buildRows(rowCfg, K, rnd, occ, Z0, Z1, tex);
+    if (rowCfg && K && K.facs.length) {
+      const endZ = cfg.endWall ? -length - 50 : undefined, zr = endZ !== undefined ? endZ + 2 : Z1;
+      buildRows(rowCfg, K, rnd, occ, Z0, zr, tex, { endZ });
+      if (cfg.far2) buildRows({ ...rowCfg, front: rowCfg.front + 12, scale: [rowCfg.scale[0] * 1.3, rowCfg.scale[1] * 1.6], lot: 0.15, alley: 0, stagger: 3 }, K, rnd, occ, Z0, zr, tex, { far: true });
+    }
     else if (rowCfg && !(K && K.facs.length)) buildFallbackRows(rowCfg, rnd, occ, Z0, Z1);
 
     // theme extras ----------------------------------------------------------------------
@@ -450,65 +454,104 @@ window.Scenery = (() => {
   }
 
   // ------------------------------------------------------------------ buildings
-  function buildRows(R, K, rnd, occ, Z0, Z1, tex) {
-    const { world } = C, chunks = new Map();
+  function plasterCanvas(seed, base) {
+    const c = mkCanvas(256, 256), x = c.getContext("2d"), r = srand(seed);
+    x.fillStyle = base; x.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 70; i++) { const px = r() * 256, py = r() * 256, rad = 14 + r() * 40, g = x.createRadialGradient(px, py, 0, px, py, rad); const a = 0.06 + r() * 0.08, dark = r() < 0.6;
+      g.addColorStop(0, dark ? `rgba(60,50,40,${a})` : `rgba(255,250,240,${a})`); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 256, 256); }
+    for (let i = 0; i < 1200; i++) { x.fillStyle = r() < 0.5 ? "rgba(0,0,0,.05)" : "rgba(255,255,255,.06)"; x.fillRect(r() * 256, r() * 256, 1 + r() * 3, 1 + r() * 3); }
+    x.fillStyle = "rgba(60,50,40,.12)"; for (let i = 0; i < 6; i++) x.fillRect(0, r() * 256, 256, 1);
+    return c;
+  }
+  function wallTexFor(K, CM) {
+    if (K.tex.wall) return K.tex.wall;
+    const id = K.id;
+    return CM["_wall_" + id] ||= mkTex(plasterCanvas(hashStr(id), id === "arena" ? "#9aa0ae" : id === "ruins" ? "#c9bfb2" : "#f0e6d6"));
+  }
+  const emissiveVC = sh => { sh.fragmentShader = sh.fragmentShader.replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance *= vColor;\n#endif"); };
+
+  function buildRows(R, K, rnd, occ, Z0, Z1, tex, opts = {}) {
+    const { world } = C, chunks = new Map(), CM = cache.common;
     const white = new T.Color(1, 1, 1);
-    const chunk = z => { const k = Math.floor((Z0 - z) / 90); let c = chunks.get(k); if (!c) chunks.set(k, c = { f: new Batch(), r: new Batch() }); return c; };
-    const wfix = K.white, cells = K.facs;
+    const chunk = z => { const k = Math.floor((Z0 - z) / 90); let c = chunks.get(k); if (!c) chunks.set(k, c = { f: new Batch(), r: new Batch(), w: new Batch() }); return c; };
+    const wallTex = wallTexFor(K, CM), wtile = K.tile.wall || 5, cells = K.facs.filter(c => !/gate/.test(c.name || ""));
     const plainCol = (c, k) => new T.Color(c.r * k, c.g * k, c.b * k).convertSRGBToLinear();
-    const wallK = S.cfg.plain;
-    const rr = (a, b) => a + rnd() * (b - a);
-    const rt = tex ? (K.tex.roof || null) : null, rtile = (K.tile.roof || 3);
-    for (const side of [-1, 1]) {
+    const wallK = S.cfg.plain, rr = (a, b) => a + rnd() * (b - a);
+    const rt = K.tex.roof || null, rtile = (K.tile.roof || 3);
+    const wuv = (P, hint) => P.map(p => (Math.abs(hint[2]) > 0.5 ? [p[0] / wtile, p[1] / wtile] : Math.abs(hint[0]) > 0.5 ? [p[2] / wtile, p[1] / wtile] : [p[0] / wtile, p[2] / wtile]));
+    const wq = (ch, P, hint, col) => ch.w.quad(P, wuv(P, hint), col, hint);
+    const wtri = (ch, P, hint, col) => ch.w.tri(P, wuv(P, hint), col, hint);
+    const sides = opts.sides || [-1, 1];
+    for (const side of sides) {
       let z = Z0 + 6 - rnd() * 6, prev = -1;
       while (z > Z1) {
         const r = rnd();
-        if (r < R.lot) { const w = rr(R.lotW[0], R.lotW[1]); occ.push({ side, z0: z, z1: z - w, kind: "lot" }); z -= w; continue; }
-        if (r < R.lot + R.alley) { const w = rr(3, 4.6); occ.push({ side, z0: z, z1: z - w, kind: "alley" }); z -= w; continue; }
+        if (r < R.lot) { const w = rr(R.lotW[0], R.lotW[1]); if (!opts.far) occ.push({ side, z0: z, z1: z - w, kind: "lot" }); z -= w; continue; }
+        if (r < R.lot + R.alley) { const w = rr(3, 4.6); if (!opts.far) occ.push({ side, z0: z, z1: z - w, kind: "alley" }); z -= w; continue; }
         let fi = R.pick ? R.pick[Math.floor(rnd() * R.pick.length)] % cells.length : Math.floor(rnd() * cells.length);
         if (R.shed) fi = 0;
         if (fi === prev && cells.length > 1) fi = (fi + 1) % cells.length;
         prev = fi;
         const f = cells[fi], sc = rr(R.scale[0], R.scale[1]), w = f.w * sc, h = f.h * sc * (R.hvar ? rr(0.94, 1.12) : 1), depth = rr(R.depth[0], R.depth[1]);
-        const z0 = z, z1 = z - w, xf = side * (R.front + (R.hvar ? rnd() * 0.5 : 0)), xb = xf + side * depth, ch = chunk(z0 - w / 2);
-        const avg = f.avg, wall = plainCol(avg, wallK), wallLo = plainCol(avg, wallK * 0.7), roofCol = plainCol(avg, wallK * 0.55);
-        // road-facing wall with the facade texture (u grows to the viewer's right as seen from the road)
-        const zl = side < 0 ? z0 : z1, zr = side < 0 ? z1 : z0;
-        const hTop = R.ragged ? h * 0.97 : h;
+        const z0 = z, z1 = z - w, xf = side * (R.front + (R.stagger ? (rnd() - 0.5) * R.stagger : 0)), xb = xf + side * depth, ch = chunk(z0 - w / 2);
+        const avg = f.avg, vary = 0.9 + rnd() * 0.2, wall = plainCol(avg, wallK * vary), wallLo = plainCol(avg, wallK * 0.7 * vary), roofCol = plainCol(avg, wallK * 0.6);
+        const zl = side < 0 ? z0 : z1, zr = side < 0 ? z1 : z0, hTop = R.ragged ? h * 0.97 : h;
         ch.f.quad([[xf, 0, zl], [xf, 0, zr], [xf, h, zr], [xf, h, zl]], [[f.u0, f.v0], [f.u1, f.v0], [f.u1, f.v1], [f.u0, f.v1]], white, [-side, 0, 0]);
-        ch.f.quad([[xf, 0, z0], [xb, 0, z0], [xb, hTop, z0], [xf, hTop, z0]], [wfix, wfix, wfix, wfix], [wallLo, wallLo, wall, wall], [0, 0, 1]);
-        ch.f.quad([[xf, 0, z1], [xb, 0, z1], [xb, hTop, z1], [xf, hTop, z1]], [wfix, wfix, wfix, wfix], [wallLo, wallLo, wall, wall], [0, 0, -1]);
+        wq(ch, [[xf, 0, z0], [xb, 0, z0], [xb, hTop, z0], [xf, hTop, z0]], [0, 0, 1], [wallLo, wallLo, wall, wall]);
+        wq(ch, [[xf, 0, z1], [xb, 0, z1], [xb, hTop, z1], [xf, hTop, z1]], [0, 0, -1], [wallLo, wallLo, wall, wall]);
+        wq(ch, [[xb, 0, z0], [xb, 0, z1], [xb, hTop, z1], [xb, hTop, z0]], [side, 0, 0], [wallLo, wallLo, wall, wall]);
         if (R.roof === "gable") {
-          const rise = depth * 0.3 + 0.4, xm = (xf + xb) / 2, ov = side * 0.35, yb = hTop - 0.15;
-          const frontEdge = xf - ov, backEdge = xb + ov, rl = Math.hypot(xm - frontEdge, rise) / rtile;
-          const rb = rt ? ch.r : ch.f;
-          const U = (a, b) => (rt ? [a, b] : wfix);
-          rb.quad([[frontEdge, yb, z0 + 0.25], [xm, hTop + rise, z0 + 0.25], [xm, hTop + rise, z1 - 0.25], [frontEdge, yb, z1 - 0.25]], [U((z0 + 0.25) / rtile, 0), U((z0 + 0.25) / rtile, rl), U((z1 - 0.25) / rtile, rl), U((z1 - 0.25) / rtile, 0)], rt ? white : roofCol, [-side * 0.5, 1, 0]);
-          rb.quad([[xm, hTop + rise, z0 + 0.25], [backEdge, yb, z0 + 0.25], [backEdge, yb, z1 - 0.25], [xm, hTop + rise, z1 - 0.25]], [U((z0 + 0.25) / rtile, rl), U((z0 + 0.25) / rtile, 0), U((z1 - 0.25) / rtile, 0), U((z1 - 0.25) / rtile, rl)], rt ? white : roofCol, [side * 0.5, 1, 0]);
-          ch.f.tri([[xf, hTop, z0], [xb, hTop, z0], [xm, hTop + rise, z0]], [wfix, wfix, wfix], wall, [0, 0, 1]);
-          ch.f.tri([[xf, hTop, z1], [xb, hTop, z1], [xm, hTop + rise, z1]], [wfix, wfix, wfix], wall, [0, 0, -1]);
-          ch.f.box(Math.min(xm - 0.35, xm + 0.35), Math.max(xm - 0.35, xm + 0.35) + 0, hTop + rise * 0.3, hTop + rise + 1.1, z0 - w * (0.2 + rnd() * 0.5), z0 - w * (0.2 + rnd() * 0.5) - 0.7, plainCol(new T.Color(0.75, 0.42, 0.3), 1), { fix: wfix });
+          const rise = depth * 0.3 + 0.4, xm = (xf + xb) / 2, ov = side * 0.35, yb = hTop - 0.15, fe = xf - ov, be = xb + ov, rl = Math.hypot(xm - fe, rise) / rtile;
+          const ra = z0 + 0.25, rb2 = z1 - 0.25, rbm = rt ? ch.r : ch.w;
+          const U = (a, b) => [a, b];
+          const tint = rt ? white : roofCol;
+          rbm.quad([[fe, yb, ra], [xm, hTop + rise, ra], [xm, hTop + rise, rb2], [fe, yb, rb2]], [U(ra / rtile, 0), U(ra / rtile, rl), U(rb2 / rtile, rl), U(rb2 / rtile, 0)], tint, [-side * 0.5, 1, 0]);
+          rbm.quad([[xm, hTop + rise, ra], [be, yb, ra], [be, yb, rb2], [xm, hTop + rise, rb2]], [U(ra / rtile, rl), U(ra / rtile, 0), U(rb2 / rtile, 0), U(rb2 / rtile, rl)], tint, [side * 0.5, 1, 0]);
+          wtri(ch, [[xf, hTop, z0], [xb, hTop, z0], [xm, hTop + rise, z0]], [0, 0, 1], wall);
+          wtri(ch, [[xf, hTop, z1], [xb, hTop, z1], [xm, hTop + rise, z1]], [0, 0, -1], wall);
+          const cz = z0 - w * (0.2 + rnd() * 0.5);
+          ch.w.box(xm - 0.35, xm + 0.35, hTop + rise * 0.3, hTop + rise + 1.1, cz - 0.7, cz, plainCol(new T.Color(0.75, 0.42, 0.3), 1), { tile: wtile });
         } else {
-          const roofC = plainCol(avg, wallK * 0.55), pc = plainCol(avg, wallK * 0.9), t = 0.3, ph = 0.45;
-          ch.f.box(Math.min(xf, xb), Math.max(xf, xb), hTop - 0.4, hTop, z1, z0, roofC, { fix: wfix, top: roofC });
-          ch.f.box(Math.min(xf, xf + side * t), Math.max(xf, xf + side * t), hTop, hTop + ph, z1, z0, pc, { fix: wfix });
-          ch.f.box(Math.min(xf, xb), Math.max(xf, xb), hTop, hTop + ph, z0 - t, z0, pc, { fix: wfix });
-          ch.f.box(Math.min(xf, xb), Math.max(xf, xb), hTop, hTop + ph, z1, z1 + t, pc, { fix: wfix });
-          if (rnd() < 0.5) { const cx = xf + side * depth * 0.55, cz = z0 - w * (0.25 + 0.4 * rnd()); ch.f.box(Math.min(cx, cx + 1.3), Math.max(cx, cx + 1.3), hTop, hTop + 0.9 + rnd() * 0.7, cz - 1.1, cz, plainCol(avg, wallK * 0.6), { fix: wfix }); }
-          if (R.roof === "stand") { // second, taller tier behind the front tier
-            const x2 = xb, x3 = xb + side * 5.5, hh = hTop + 3.2, sc2 = plainCol(new T.Color(0.16, 0.2, 0.34), 1);
-            ch.f.box(Math.min(x2, x3), Math.max(x2, x3), 0, hh, z1, z0, sc2, { fix: wfix, top: plainCol(new T.Color(0.25, 0.3, 0.45), 1) });
+          const roofC = plainCol(avg, wallK * 0.62 * vary), pc = plainCol(avg, wallK * 0.9 * vary), t = 0.3, ph = 0.45;
+          ch.w.box(Math.min(xf, xb), Math.max(xf, xb), hTop - 0.4, hTop, z1, z0, roofC, { tile: wtile, top: roofC });
+          ch.w.box(Math.min(xf, xf + side * t), Math.max(xf, xf + side * t), hTop, hTop + ph, z1, z0, pc, { tile: wtile });
+          ch.w.box(Math.min(xf, xb), Math.max(xf, xb), hTop, hTop + ph, z0 - t, z0, pc, { tile: wtile });
+          ch.w.box(Math.min(xf, xb), Math.max(xf, xb), hTop, hTop + ph, z1, z1 + t, pc, { tile: wtile });
+          if (rnd() < 0.5) { const cx = xf + side * depth * 0.55, cz = z0 - w * (0.25 + 0.4 * rnd()); ch.w.box(Math.min(cx, cx + 1.3), Math.max(cx, cx + 1.3), hTop, hTop + 0.9 + rnd() * 0.7, cz - 1.1, cz, plainCol(avg, wallK * 0.6), { tile: wtile }); }
+          if (R.roof === "stand") {
+            const x2 = xb, x3 = xb + side * 5.5, hh = hTop + 3.2, sc2 = plainCol(new T.Color(0.3, 0.34, 0.5), 1);
+            ch.w.box(Math.min(x2, x3), Math.max(x2, x3), 0, hh, z1, z0, sc2, { tile: wtile, top: plainCol(new T.Color(0.4, 0.45, 0.6), 1) });
           }
         }
-        occ.push({ side, z0, z1, kind: R.shed ? "shed" : "bld" });
-        z -= w + (R.roof === "stand" ? 0 : 0.05);
+        if (!opts.far) occ.push({ side, z0, z1, kind: R.shed ? "shed" : "bld" });
+        z -= w + 0.05;
       }
     }
-    const fm = new T.MeshLambertMaterial({ map: K.facTex, vertexColors: true, alphaTest: 0.5, emissive: new T.Color(1, 1, 1), emissiveMap: K.facTex, emissiveIntensity: S.themeId === "arena" ? 0.35 : 0.42 });
-    fm.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance *= vColor;\n#endif"); };
+    // a wall of buildings across the end of the street, closing the vista
+    if (opts.endZ !== undefined) {
+      const zE = opts.endZ, gate = K.facs.find(c => /gate/.test(c.name || "")), flat = R.roof === "stand";
+      const place = (f, xa, sc, hMul = 1) => {
+        const w = f.w * sc, h = f.h * sc * hMul, ch = chunk(zE), xb = xa + w, avg = f.avg, wall = plainCol(avg, wallK);
+        ch.f.quad([[xa, 0, zE], [xb, 0, zE], [xb, h, zE], [xa, h, zE]], [[f.u0, f.v0], [f.u1, f.v0], [f.u1, f.v1], [f.u0, f.v1]], white, [0, 0, 1]);
+        wq(ch, [[xa, h, zE], [xb, h, zE], [xb, h, zE - 8], [xa, h, zE - 8]], [0, 1, 0], plainCol(avg, wallK * 0.6));
+        wq(ch, [[xa, 0, zE], [xa, 0, zE - 8], [xa, h, zE - 8], [xa, h, zE]], [-1, 0, 0], wall);
+        wq(ch, [[xb, 0, zE], [xb, 0, zE - 8], [xb, h, zE - 8], [xb, h, zE]], [1, 0, 0], wall);
+        return xb;
+      };
+      const sc = R.scale[0] * 1.15 * (flat ? 1.1 : 1);
+      let xl = gate ? -gate.w * (sc * 1.0) / 2 : -cells[0].w * sc / 2, xr = xl;
+      if (gate) xr = place(gate, xl, sc * 1.0);
+      let k = 0, xx = xr; while (xx < 52) xx = place(cells[(k++ + 1) % cells.length], xx, sc, 1);
+      xx = xl; k = 2; while (xx > -52) { const f = cells[(k++) % cells.length]; xx -= f.w * sc; place(f, xx, sc, 1); }
+      if (!gate && cells.length) { /* centre piece covered by the loops above */ }
+    }
+    const fm = new T.MeshLambertMaterial({ map: K.facTex, vertexColors: true, alphaTest: 0.5, emissive: new T.Color(1, 1, 1), emissiveMap: K.facTex, emissiveIntensity: S.themeId === "arena" ? 0.4 : 0.42 });
+    fm.onBeforeCompile = emissiveVC;
     const rm = new T.MeshLambertMaterial({ map: rt, vertexColors: true });
+    const wm = new T.MeshLambertMaterial({ map: wallTex, vertexColors: true, emissive: new T.Color(1, 1, 1), emissiveIntensity: 0.18 }); wm.onBeforeCompile = emissiveVC;
     for (const c of chunks.values()) {
       const m = new T.Mesh(c.f.geometry(), fm); m.castShadow = true; world.add(m);
+      if (!c.w.empty) { const m3 = new T.Mesh(c.w.geometry(), wm); m3.castShadow = true; world.add(m3); }
       if (!c.r.empty) { const m2 = new T.Mesh(c.r.geometry(), rm); m2.castShadow = true; world.add(m2); }
     }
   }
@@ -573,11 +616,11 @@ window.Scenery = (() => {
 
   // ------------------------------------------------------------------ props (one instanced mesh per atlas)
   function buildProps(cfg, K, rnd, occ, Z0, Z1, waterY) {
-    const { world } = C, items = K.items, aw = K.atlasImg.width, ah = K.atlasImg.height;
+    const { world } = C, items = K.items.filter(i => (i.weight ?? 1) > 0), aw = K.atlasImg.width, ah = K.atlasImg.height;
     const rr = (a, b) => a + rnd() * (b - a);
     const zoneOf = it => (it.zone === "lot" && cfg.remapLot ? "walk" : it.zone);
     const by = {}; for (const it of items) (by[zoneOf(it)] ||= []).push(it);
-    const pick = list => { let t = 0; for (const i of list) t += i.weight || 1; let q = rnd() * t; for (const i of list) { q -= i.weight || 1; if (q <= 0) return i; } return list[0]; };
+    const pick = list => { let t = 0; for (const i of list) t += i.weight ?? 1; let q = rnd() * t; for (const i of list) { q -= i.weight ?? 1; if (q <= 0) return i; } return list[0]; };
     const list = [], blobs = [];
     const blocked = (side, z, w) => occ.some(o => o.side === side && o.kind !== "lot" && o.kind !== "alley" && z < o.z0 + w / 2 && z > o.z1 - w / 2);
     const inGap = (side, z) => occ.some(o => o.side === side && (o.kind === "lot" || o.kind === "alley") && z <= o.z0 && z >= o.z1);
@@ -637,7 +680,7 @@ window.Scenery = (() => {
   // ------------------------------------------------------------------ per frame
   function updateSun() {
     const L = C.L, cfg = S.cfg; if (!cfg || !S.sun) return;
-    const sx = L ? L.sx : 0, sz = L ? L.sz : 0, tx = sx * 0.4, tz = sz - 8;
+    const sx = L ? L.sx : 0, sz = L ? L.sz : 0, tx = sx * 0.4, tz = sz - 14;
     S.sun.target.position.set(tx, 0, tz);
     S.sun.position.set(tx + cfg.sunPos[0] * 4.2, cfg.sunPos[1] * 4.2, tz + cfg.sunPos[2] * 4.2);
     S.sun.target.updateMatrixWorld();

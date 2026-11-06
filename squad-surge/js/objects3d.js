@@ -58,16 +58,16 @@ window.Obj3D = (() => {
     if (mode === envMode) return; envMode = mode;
     if (mode === "own" && !fbEnv) fbEnv = buildEnv();
     const e = mode === "own" ? fbEnv : null;
-    for (const m of MATS.concat(LEVELMATS)) if (m.isMeshStandardMaterial) { m.envMap = e; m.needsUpdate = true; }
+    for (const m of MATS.concat(LEVELMATS)) if (m.isMeshStandardMaterial && !m.userData.keepEnv) { m.envMap = e; m.needsUpdate = true; }
   }
   // small sky + warm sun + soft boxes environment for PBR reflections when the scene has none
   function buildEnv() {
     const gen = new THREE.PMREMGenerator(C.renderer), sc = new THREE.Scene();
     const sg = new THREE.SphereBufferGeometry(60, 32, 20), pos = sg.attributes.position, col = [];
-    const top = new THREE.Color(0.3, 0.5, 0.95), hor = new THREE.Color(0.95, 0.8, 0.6), bot = new THREE.Color(0.05, 0.045, 0.045), c = new THREE.Color();
+    const top = new THREE.Color(0.3, 0.5, 0.95), hor = new THREE.Color(0.95, 0.8, 0.6), bot = new THREE.Color(0.01, 0.01, 0.012), c = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i) / 60;
-      if (y > 0) c.copy(hor).lerp(top, Math.pow(y, 0.6)); else c.copy(hor).lerp(bot, Math.min(1, -y * 5));
+      if (y > 0) c.copy(hor).lerp(top, Math.pow(y, 0.6)); else c.copy(hor).lerp(bot, Math.min(1, -y * 14));
       col.push(c.r, c.g, c.b);
     }
     sg.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
@@ -145,18 +145,15 @@ window.Obj3D = (() => {
   function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
   // ---------------------------------------------------------------- specs
-  const GOOD = { panel: new THREE.Color(0x1676ff), edge: new THREE.Color(0x7fdcff), glow: new THREE.Color(0x3aa8ff) };
-  const BAD = { panel: new THREE.Color(0xf0242a), edge: new THREE.Color(0xffa088), glow: new THREE.Color(0xff4a3a) };
+  const GOOD = { panel: new THREE.Color(0x1a78ff), edge: new THREE.Color(0x9ff0ff), glow: new THREE.Color(0x2f9bff) };
+  const BAD = { panel: new THREE.Color(0xff2b2b), edge: new THREE.Color(0xffb4a0), glow: new THREE.Color(0xff4a3a) };
   const PW = 5.2, PH = 2.7, PD = 0.36, PY = 1.65;       // gate panel size and centre height
 
   function build() {
     // ---- textures
-    { // glass panel: brighter rim, soft centre, diagonal sheen (greyscale: used as map, alphaMap and emissiveMap)
+    { // glass panel: vertical emissive gradient, top 1.0 to bottom 0.6 (greyscale emissiveMap)
       const c = cvs(256, 128), g = c.getContext("2d");
-      g.fillStyle = "#b8b8b8"; g.fillRect(0, 0, 256, 128);
-      const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, "rgba(255,255,255,.35)"); gr.addColorStop(0.5, "rgba(255,255,255,0)"); gr.addColorStop(1, "rgba(255,255,255,.2)"); g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
-      g.save(); g.rotate(-0.38); for (const [x, w, a] of [[40, 34, 0.22], [95, 12, 0.18], [135, 50, 0.12]]) { g.fillStyle = `rgba(255,255,255,${a})`; g.fillRect(x, -60, w, 300); } g.restore();
-      g.lineWidth = 16; g.strokeStyle = "#ffffff"; g.shadowColor = "#fff"; g.shadowBlur = 18; rrect(g, 3, 3, 250, 122, 18); g.stroke();
+      const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, "#ffffff"); gr.addColorStop(1, "#999999"); g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
       X.panel = tex(c, false);
     }
     { const c = cvs(128, 64), g = c.getContext("2d"); g.scale(2, 1); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, "rgba(255,255,255,.95)"); gr.addColorStop(0.5, "rgba(255,255,255,.4)"); gr.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); X.glow = tex(c, true); }
@@ -203,7 +200,8 @@ window.Obj3D = (() => {
     G.gold = (() => { const parts = [{ g: roundedBox(2.55, 0.16, 1.3, 0.07, 2), y: 2.03 }]; for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push({ g: roundedBox(0.14, 1.5, 0.14, 0.05, 2), x: sx * 1.2, y: 1.25, z: sz * 0.56 }); return merge(parts); })();
 
     // ---- materials
-    M.post = mat("MeshStandardMaterial", { color: 0xf4f7ff, metalness: 1, roughness: 0.1, envMapIntensity: 1.9 });
+    if (!fbEnv) fbEnv = buildEnv();
+    M.post = mat("MeshStandardMaterial", { color: 0xd9e2ee, metalness: 1, roughness: 0.05, envMapIntensity: 2.5 }); M.post.envMap = fbEnv; M.post.userData.keepEnv = true;
     M.blue = mat("MeshPhysicalMaterial", { color: 0x1c5cf0, roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, emissive: 0x000000, envMapIntensity: 1 });
     M.yellow = mat("MeshPhysicalMaterial", { color: 0xffb400, roughness: 0.26, metalness: 0.15, clearcoat: 1, clearcoatRoughness: 0.1, emissive: 0x5a3300, emissiveIntensity: 0.25, envMapIntensity: 1.1 });
     M.wood = mat("MeshStandardMaterial", { color: 0xffffff, map: X.wood, roughness: 0.7, metalness: 0 });
@@ -229,9 +227,19 @@ window.Obj3D = (() => {
     return { lab, mesh, w: worldW };
   }
 
+  // number on a dark pill (or plain), white with navy stroke; redrawn on demand (e.g. after the web font loads)
+  function drawNum(lab, text, color, pill, force) {
+    const key = text + "|" + color; if (!force && lab.last === key) return; lab.last = key;
+    const g = lab.ctx, c = lab.c; g.clearRect(0, 0, c.width, c.height);
+    g.font = `${Math.round(c.height * 0.74)}px 'Lilita One', sans-serif`; g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+    if (pill) { const w = Math.min(c.width - 6, g.measureText(text).width + c.height * 0.55), h = c.height * 0.88; g.fillStyle = "rgba(10,18,44,.82)"; rrect(g, (c.width - w) / 2, (c.height - h) / 2, w, h, h / 2); g.fill(); }
+    g.lineWidth = c.height * 0.13; g.strokeStyle = "#0d1630"; g.strokeText(text, c.width / 2, c.height * 0.54); g.fillStyle = color; g.fillText(text, c.width / 2, c.height * 0.54);
+    lab.tex.needsUpdate = true;
+  }
+
   // ---------------------------------------------------------------- gates
   function paintHalf(hs) {
-    setC(hs.panel.emissive, hs.cur.panel); setC(hs.panel.color, hs.cur.panel).multiplyScalar(0.5);
+    setC(hs.panel.emissive, hs.cur.panel); setC(hs.panel.color, hs.cur.panel).multiplyScalar(0.25); setC(hs.halo.color, hs.cur.glow);
     setC(hs.frame.color, hs.cur.edge); setC(hs.glow.color, hs.cur.glow);
   }
   function gate(g) {
@@ -240,14 +248,16 @@ window.Obj3D = (() => {
     const posts = new THREE.Mesh(G.posts, M.post); posts.castShadow = true; posts.receiveShadow = true; grp.add(posts);
     for (const h of g.halves) {
       const body = new THREE.Group(); body.position.set(h.x, PY, 0); grp.add(body);
-      const panel = mat("MeshStandardMaterial", { color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.6, map: X.panel, alphaMap: X.panel, emissiveMap: X.panel, transparent: true, opacity: 0.92, roughness: 0.1, metalness: 0, depthWrite: false, envMapIntensity: 0.7 }, true);
+      const panel = mat("MeshStandardMaterial", { color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.2, emissiveMap: X.panel, transparent: true, opacity: 0.8, roughness: 0.1, metalness: 0, depthWrite: false, envMapIntensity: 0.7 }, true);
       const frame = mat("MeshBasicMaterial", { color: 0xffffff, transparent: true, toneMapped: false }, true);
       const glow = mat("MeshBasicMaterial", { color: 0xffffff, map: X.glow, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }, true);
       const pm = new THREE.Mesh(G.panel, panel); pm.renderOrder = 2; pm.castShadow = false; pm.receiveShadow = false; body.add(pm);
       const fm = new THREE.Mesh(G.frame, frame); fm.renderOrder = 3; fm.castShadow = false; body.add(fm);
+      const halo = mat("MeshBasicMaterial", { color: 0xffffff, map: X.glow, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }, true);
+      const hm = new THREE.Mesh(G.plane, halo); hm.scale.set(PW * 1.15, PH * 1.15, 1); hm.position.z = -PD / 2 - 0.03; hm.renderOrder = 1; body.add(hm);
       const gm = new THREE.Mesh(G.floor, glow); gm.scale.set(PW * 0.95, 1, 2.6); gm.position.set(h.x, 0.03, 1.1); gm.renderOrder = 1; grp.add(gm);
       const L = newLabel(384, 192, 3.7, 5); L.mesh.position.set(0, 0.02, PD / 2 + 0.05); body.add(L.mesh);
-      const hs = { grp, body, panel, frame, glow, L, cur: { panel: new THREE.Color(), edge: new THREE.Color(), glow: new THREE.Color() }, src: null, dst: null, bt: 1, good: undefined, text: undefined, pulse: 0, flash: 0, ph: Math.random() * 6, used: false, ut: 0, chosen: false, done: false, gm };
+      const hs = { grp, body, panel, frame, glow, halo, L, cur: { panel: new THREE.Color(), edge: new THREE.Color(), glow: new THREE.Color() }, src: null, dst: null, bt: 1, good: undefined, text: undefined, pulse: 0, flash: 0, ph: Math.random() * 6, used: false, ut: 0, chosen: false, done: false, gm };
       h.vis = hs; HALVES.push(hs);
     }
   }
@@ -274,7 +284,7 @@ window.Obj3D = (() => {
     hs.pulse = Math.max(0, hs.pulse - dt * 4.5); hs.flash = Math.max(0, hs.flash - dt * 2.5);
     const br = Math.sin(T * 2.3 + hs.ph);
     let f = 0, s = 1 + 0.4 * hs.pulse * hs.pulse + 0.15 * Math.sin(hs.pulse * Math.PI);
-    let em = 0.8 + 0.15 * br + 1.1 * hs.flash;
+    let em = 1.2 + 0.12 * br + 1.1 * hs.flash;
     let gs = 1;
     if (hs.used) {
       hs.ut += dt; const u = hs.ut / 0.42; f = ease(Math.max(0, Math.min(1, (hs.ut - 0.1) / 0.32)));
@@ -286,7 +296,7 @@ window.Obj3D = (() => {
     hs.body.scale.setScalar(gs);
     hs.L.mesh.scale.set(hs.L.w * s, hs.L.w * s, 1);
     hs.panel.emissiveIntensity = em;
-    hs.panel.opacity = 0.92 * (1 - f); hs.frame.opacity = (0.88 + 0.12 * br) * (1 - f); hs.glow.opacity = 0.85 * (1 + 0.1 * br) * (1 - f);
+    hs.panel.opacity = 0.8 * (1 - f); hs.halo.opacity = 0.6 * (1 + 0.12 * br) * (1 - f); hs.frame.opacity = (1 - f); hs.glow.opacity = 0.85 * (1 + 0.1 * br) * (1 - f);
     hs.L.mesh.material.opacity = 1 - f;
   }
 
@@ -308,18 +318,18 @@ window.Obj3D = (() => {
     return m;
   }
   const SPEC = {
-    blockBlue(v, r) { part(v, r, G.blue, M.blue, 0, 1.05, -0.66); return { y: 1.62, w: 1.7 }; },
-    blockYellow(v, r) { part(v, r, G.yellow, M.yellow, 0, 1.15, -0.71); return { y: 1.7, w: 1.9 }; },
-    crate(v, r) { part(v, r, G.crate, M.wood, 0, 1.1, -0.66); part(v, r, G.bracket, M.steel, 0, 0, -0.66, false, false); return { y: 1.1, w: 1.55 }; },
+    blockBlue(v, r) { part(v, r, G.blue, M.blue, 0, 1.05, -0.66); return { y: 1.62, w: 2.0 }; },
+    blockYellow(v, r) { part(v, r, G.yellow, M.yellow, 0, 1.15, -0.71); return { y: 1.7, w: 2.1 }; },
+    crate(v, r) { part(v, r, G.crate, M.wood, 0, 1.1, -0.66); part(v, r, G.bracket, M.steel, 0, 0, -0.66, false, false); return { y: 1.1, w: 2.0, pill: true }; },
     tyres(v, r) {
       part(v, r, G.tyres, M.tyre, 0, 0, -0.9);
-      return { y: 2.9, w: 1.7 };
+      return { y: 3.0, w: 3.0, pill: true };
     },
     ammo(v, r) {
       part(v, r, G.ammo, M.ammo, 0, 0, 0);
       const d = new THREE.Mesh(G.plane, M.decal); d.scale.set(1.78, 0.89, 1); d.position.set(0, 0.66, 0.025); r.add(d);
       part(v, r, G.latches, M.steel, 0, 0, 0, false, false);
-      return { y: 2.2, w: 1.9 };
+      return { y: 2.35, w: 2.8, pill: true };
     },
     weaponCase(v, r, o) {
       part(v, r, G.caseBase, M.caseBase, 0, 0.25, -0.65);
@@ -327,7 +337,7 @@ window.Obj3D = (() => {
       const back = new THREE.Mesh(G.plane, M.back); back.scale.set(2.3, 1.4, 1); back.position.set(0, 1.25, -1.1); r.add(back);
       const ic = weaponIcon(o.weapon || 1), im = new THREE.Mesh(G.plane, ic.mat); im.position.set(0, 1.25, -0.42); im.renderOrder = 2; fitIcon(im, ic.aspect); ic.meshes.push(im); r.add(im); v.icon = im; v.iconY = 1.25;
       const gl = new THREE.Mesh(G.glass, M.glass); gl.position.set(0, 1.25, -0.65); gl.renderOrder = 3; r.add(gl);
-      return { y: 2.75, w: 2.2 };
+      return { y: 2.95, w: 3.0, pill: true };
     },
   };
   function solid(o) {
@@ -336,13 +346,13 @@ window.Obj3D = (() => {
     const v = { root, body: [], L: null, text: undefined, pulse: 0, hit: 0, flash: 0, flashed: false, icon: null, dead: false, ph: Math.random() * 6, o };
     const s = spec(v, root, o) || { y: 1, w: 1.7 };
     const onFront = o.kind === "blockBlue" || o.kind === "blockYellow" || o.kind === "crate";
-    v.L = newLabel(256, 128, s.w, 5); v.L.mesh.position.set(0, s.y, onFront ? 0.08 : 0.1); if (!onFront) v.L.mesh.renderOrder = 6; root.add(v.L.mesh);
+    v.pill = !!s.pill; v.L = newLabel(256, 128, s.w, 5); v.L.mesh.position.set(0, s.y, onFront ? 0.08 : 0.1); if (!onFront) v.L.mesh.renderOrder = 6; root.add(v.L.mesh);
     C.track.add(root); SOLIDS.push(v); o.vis = v;
   }
   function solidLabel(o, text, color) {
     const v = o.vis; if (!v || v.dead) return;
     if (v.text !== text) { if (v.text !== undefined) v.pulse = 1; v.text = text; }
-    C.drawLabel(v.L.lab, text, color || "#fff", 0.74);
+    v.color = color || "#fff"; drawNum(v.L.lab, text, v.color, v.pill);
   }
   function solidHit(o) { const v = o.vis; if (!v || v.dead) return; v.hit = 1; v.flash = 0.1; }
   function setFlash(v, on) { if (v.flashed === on) return; v.flashed = on; for (const b of v.body) b.mesh.material = on ? b.fl : b.base; }
@@ -394,7 +404,13 @@ window.Obj3D = (() => {
   }
 
   // ---------------------------------------------------------------- lifecycle
-  function setup(ctx) { C = ctx; }
+  function setup(ctx) {
+    C = ctx;
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
+      for (const v of SOLIDS) if (v.text !== undefined) drawNum(v.L.lab, v.text, v.color, v.pill, true);
+      for (const hs of HALVES) if (hs.text !== undefined) { hs.L.lab.last = null; C.drawLabel(hs.L.lab, hs.text, "#ffffff", 0.74); }
+    }).catch(() => {});
+  }
   function clear() {
     if (!C) return;
     const t = C.track;

@@ -313,5 +313,10 @@
     "flip": true
    }
   ]
+ },
+ "landmark": {
+  "file": "facades/town-gate.png",
+  "w": 16.48,
+  "h": 14
  }
 }

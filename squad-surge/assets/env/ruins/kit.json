@@ -12,6 +12,10 @@
   "roof": {
    "file": "roof.jpg",
    "tile": 4
+  },
+  "wall": {
+   "file": "wall.jpg",
+   "tile": 4
   }
  },
  "facades": [

@@ -14,12 +14,12 @@
   {
    "file": "facades/stand-a.png",
    "w": 14,
-   "h": 6.4
+   "h": 5.5
   },
   {
    "file": "facades/stand-b.png",
    "w": 14,
-   "h": 5.3
+   "h": 3.0
   }
  ],
  "props": {

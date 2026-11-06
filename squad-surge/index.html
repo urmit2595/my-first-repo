@@ -3,8 +3,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>Squad Surge</title>
 <link rel="icon" href="data:,">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@800;900&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Lilita One';src:url(assets/fonts/lilita-one.woff2) format('woff2');font-weight:400;font-display:block}
+@font-face{font-family:'Nunito';src:url(assets/fonts/nunito-800.woff2) format('woff2');font-weight:800;font-display:block}
+@font-face{font-family:'Nunito';src:url(assets/fonts/nunito-900.woff2) format('woff2');font-weight:900;font-display:block}
+</style>
 <style>
 :root{--navy:#14213d;--ink:#0d1630;--blue:#2f7bff;--blue-d:#1a4fc4;--red:#e8392f;--yellow:#ffc928;--gold:#ffb300;--green:#38c95b;--card:#fff;--muted:#6b7591;--panel:#1b2a52}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -34,9 +37,10 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .count{position:absolute;z-index:3;transform:translate(-50%,-100%);pointer-events:none;display:flex;align-items:center;gap:4px;padding:2px 10px 2px 4px;border-radius:14px;background:#1f5fd6;border:2px solid #0d1630;font:18px 'Lilita One',sans-serif;box-shadow:0 3px 0 #0d1630}
 .count img{width:22px;height:22px}
 .bossbar{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);width:min(70vw,300px);z-index:4;text-align:center}
-.bossbar .bar{height:16px;border-radius:8px;background:#3b0f12;border:2px solid #0d1630;overflow:hidden}
-.bossbar .bar i{display:block;height:100%;width:100%;background:linear-gradient(#ff6a5a,#d0251c)}
-.bossbar .label{font:15px 'Lilita One',sans-serif;margin-bottom:2px}
+.bossbar .bar{height:18px;border-radius:9px;background:#3b0f12;border:3px solid #0d1630;overflow:hidden;box-shadow:0 3px 0 #0d1630}
+.bossbar .bar i{display:block;height:100%;width:100%;background:linear-gradient(#ff8a6a,#e0352a 55%,#b81c14);box-shadow:inset 0 3px 0 #ffffff55;transition:width .15s}
+.bossbar .label{font:16px 'Lilita One',sans-serif;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:6px}
+.bossbar .label svg{width:20px;height:20px;flex:none}
 .floats{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
 .float{position:absolute;transform:translate(-50%,-50%);font:22px 'Lilita One',sans-serif;white-space:nowrap;animation:rise .9s ease-out forwards}
 @keyframes rise{from{opacity:1;transform:translate(-50%,-50%) scale(.7)}25%{transform:translate(-50%,-90%) scale(1.15)}to{opacity:0;transform:translate(-50%,-180%) scale(1)}}
@@ -45,8 +49,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 /* Home */
 .home{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
 .home>*{pointer-events:auto}
-.logo{margin:calc(max(10px,env(safe-area-inset-top)) + 92px) auto 0;text-align:center;line-height:.9;transform:rotate(-4deg)}
-.logo img{display:block;width:84%;max-width:360px;margin:0 auto;filter:drop-shadow(0 8px 12px #0d163066)}
+.logo{margin:calc(max(10px,env(safe-area-inset-top)) + 58px) auto 0;text-align:center;line-height:.9;transform:rotate(-4deg)}
+.logo img{display:block;width:80%;max-width:340px;margin:0 auto;filter:drop-shadow(0 8px 12px #0d163066)}
 .logo.has-img{transform:none}.logo.has-img b{display:none}
 .logo b{display:block;font:clamp(44px,15vw,72px) 'Lilita One',sans-serif;color:#fff;background:linear-gradient(#fff 30%,#bfe3ff 60%,#5fb4ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 4px 0 #0d1630) drop-shadow(0 -2px 0 #0d1630) drop-shadow(2px 0 0 #0d1630) drop-shadow(-2px 0 0 #0d1630)}
 .hint{align-self:center;display:grid;justify-items:center;gap:6px;pointer-events:none}
@@ -55,7 +59,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .hint .line{width:170px;height:2px;background:#fff;position:relative}.hint .line:before,.hint .line:after{content:'';position:absolute;top:-4px;border:5px solid transparent}.hint .line:before{left:-6px;border-right-color:#fff}.hint .line:after{right:-6px;border-left-color:#fff}
 .hand{width:34px;height:34px;animation:swipe 1.4s ease-in-out infinite;margin-top:-4px}
 @keyframes swipe{0%,100%{transform:translateX(-70px)}50%{transform:translateX(70px)}}
-.tap{align-self:center;font:22px 'Lilita One',sans-serif;animation:pulse 1.2s ease-in-out infinite;margin-bottom:calc(max(110px,17vh) + env(safe-area-inset-bottom))} /* sits above the squad */
+.btn.playbtn{width:min(62%,250px);margin:14px auto calc(max(150px,20vh) + env(safe-area-inset-bottom));font-size:32px;padding:10px 0 14px;animation:pulse 1.2s ease-in-out infinite} /* sits above the squad */
 @keyframes pulse{50%{transform:scale(1.08)}}
 /* Modals */
 .modal{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:20px;background:#0b1328b0}
@@ -87,7 +91,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .lvtile.cur{background:linear-gradient(#5be07a,#2bb64c)}
 .lvtile:disabled{background:#2a3760;color:#8090b8;box-shadow:none;cursor:default}
 .flash{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(transparent 50%,#ff1e1e88);opacity:0;transition:opacity .25s}
-@media (prefers-reduced-motion:reduce){.hand,.tap,.loading .loadbar i{animation:none}.float{animation-duration:.01s}}
+@media (prefers-reduced-motion:reduce){.hand,.playbtn,.loading .loadbar i{animation:none}.float{animation-duration:.01s}}
 </style>
 <div id="game">
   <canvas id="view" aria-label="Squad Surge game view"></canvas>
@@ -105,7 +109,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
     <div class="lv" id="levelNo">Level 1</div>
     <div class="progress" id="progress" hidden><i id="progFill"></i><b id="progPct">0%</b><span class="flag"></span></div>
   </div>
-  <div class="bossbar" id="bossbar" hidden><div class="label stroke" id="bossLabel">OGRE WARLORD</div><div class="bar"><i id="bossFill"></i></div></div>
+  <div class="bossbar" id="bossbar" hidden><div class="label stroke" id="bossLabel"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" stroke="#0d1630" stroke-width="1.6" d="M12 2C7 2 3.5 5.6 3.5 10.2c0 2.6 1.2 4.6 3 5.8V19a1 1 0 0 0 1 1h1.5v-2h2v2h2v-2h2v2h1.5a1 1 0 0 0 1-1v-3c1.8-1.2 3-3.2 3-5.8C20.5 5.6 17 2 12 2z"/><circle cx="8.7" cy="11" r="2.1" fill="#0d1630"/><circle cx="15.3" cy="11" r="2.1" fill="#0d1630"/></svg>OGRE WARLORD</div><div class="bar"><i id="bossFill"></i></div></div>
   <div class="weapon-tag" id="weaponTag" hidden><img id="weaponImg" src="assets/w-pistol.png" alt=""><span id="weaponName">PISTOL</span></div>
 
   <div class="home" id="home">
@@ -113,7 +117,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
     <div>
       <div class="hint"><div class="pill">HOLD &amp; DRAG <span class="arrows"><i>◀</i><i>▶</i></span></div><div class="line"></div>
         <svg class="hand" viewBox="0 0 24 24" fill="#fff" stroke="#0d1630" stroke-width="1.2"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10h.5V8.5a1.5 1.5 0 0 1 3 0V10h.5v-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.6 14a1.5 1.5 0 0 1 2.4-1.8L9 14z"/></svg></div>
-      <div class="tap stroke" style="text-align:center">TAP &amp; DRAG TO PLAY</div>
+      <button class="btn go playbtn stroke" id="playBtn">PLAY</button>
     </div>
   </div>
 
@@ -199,8 +203,8 @@ const gameEl = $("game"), canvas = $("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
-const BASE_FOV = 52;
-const CAM = { h: 9, back: 12, ahead: 24 }; // chase camera: height, distance behind the squad, aim point ahead of it
+const BASE_FOV = 60;
+const CAM = { h: 9.5, back: 10, ahead: 20 }; // chase camera: height, distance behind the squad, aim point ahead of it
 const camera = new THREE.PerspectiveCamera(BASE_FOV, 9 / 16, 0.5, 400);
 const loader = new THREE.TextureLoader();
 const TEX = {};
@@ -282,7 +286,7 @@ class ShadowLayer {
   constructor(max) {
     const c = document.createElement("canvas"); c.width = c.height = 64;
     const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gr.addColorStop(0, "rgba(0,0,0,.45)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+    gr.addColorStop(0, "rgba(0,0,0,.62)"); gr.addColorStop(0.35, "rgba(0,0,0,.5)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
     const base = new THREE.PlaneBufferGeometry(1, 1); base.rotateX(-Math.PI / 2);
     this.mesh = new THREE.InstancedMesh(base, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }), max);
     this.mesh.frustumCulled = false; this.mesh.renderOrder = 0; this.max = max; this.m = new THREE.Matrix4(); scene.add(this.mesh);
@@ -350,6 +354,8 @@ const slamCenter = b => [b.x, b.z + 7];
 let layers = null;          // sprite layers
 const floatsEl = $("floats");
 const tmpV = new THREE.Vector3(), lookAt = new THREE.Vector3();
+const CHAR_K = 1.15, SOLDIER_H = 1.3 * CHAR_K, BOSS_H = 9.5; // visual sizes only; hit boxes are unchanged
+const SHADOW_DX = 0.25, SHADOW_DZ = 0.3;                        // blob shadows lean away from the sun
 
 const LEVEL_NAMES = ["OLD TOWN", "RED BRIDGE", "SALT PIER", "BROKEN BLOCKS", "DUNE ROAD", "IRON ARENA", "MARKET STREET", "STORM BRIDGE", "FOG HARBOR", "ASH DISTRICT", "SUN CANYON", "LAST STAND"];
 function levelName(level) { const lap = Math.ceil(level / LEVEL_NAMES.length); return LEVEL_NAMES[(level - 1) % LEVEL_NAMES.length] + (lap > 1 ? ` ${lap}` : ""); }
@@ -524,6 +530,7 @@ function togglePause() {
   else if (state === "paused") setState(resumeState);
 }
 $("pauseBtn").onclick = togglePause; $("settingsBtn").onclick = () => { resumeState = "home"; setState("paused"); };
+$("playBtn").onclick = () => { if (state === "home") { setState("play"); sfx("gate"); } };
 $("levelsBtn").onclick = () => setState("levels"); $("levelsClose").onclick = () => setState("home");
 $("resumeBtn").onclick = () => setState(resumeState);
 $("quitBtn").onclick = () => goLevel(save.level, "home");
@@ -774,7 +781,7 @@ function render(dt) {
   for (const s of L.soldiers) {
     s.ph += dt * 11; const f = Math.floor(s.ph) % 4 + (firing ? 4 : 0);
     const age = s.born === undefined ? 1 : (L.time - s.born) / 0.25, k = age >= 1 ? 1 : popScale(Math.max(0, age));
-    sold.push(s.x, 0, s.z, 1.3 * 0.512 * k, 1.3 * k, f); shadow.push(s.x, s.z, 0.8 * k);
+    sold.push(s.x, 0, s.z, SOLDIER_H * 0.512 * k, SOLDIER_H * k, f); shadow.push(s.x + SHADOW_DX, s.z + SHADOW_DZ, 1.0 * k);
   }
   const eTex = L.theme.enemy;
   for (const e of L.enemies) {
@@ -783,14 +790,15 @@ function render(dt) {
     if (e.state === "dying") { f = 4 + Math.min(3, Math.floor(e.dieT / 0.15)); a = e.dieT > 0.6 ? 1 - (e.dieT - 0.6) / 0.3 : 1; }
     else f = e.state === "walk" ? Math.floor(e.t * 8) % 4 : 0;
     const layer = e.type === "brute" ? brute : enem;
-    layer.push(e.x, 0, e.z, e.h * ENEMY_ASPECT[e.type === "brute" ? "brute" : eTex], e.h, f, a, e.flash > 0 ? 0.7 : 0);
-    if (e.state !== "dying") shadow.push(e.x, e.z, e.r * 2.2);
+    layer.push(e.x, 0, e.z, e.h * CHAR_K * ENEMY_ASPECT[e.type === "brute" ? "brute" : eTex], e.h * CHAR_K, f, a, e.flash > 0 ? 0.7 : 0);
+    if (e.state !== "dying") shadow.push(e.x + SHADOW_DX, e.z + SHADOW_DZ, e.r * 2.5);
   }
   const b = L.boss;
   if (b.hp > 0 || b.state === "down") {
     let f = b.state === "down" ? 5 : b.slamT > 2.2 ? 4 : b.slamT > 1.8 ? 3 : Math.floor(b.t * 4) % 3;
     if (b.state === "wait") f = 3;
-    boss.push(b.x, 0, b.z, 7, 7, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); // brief flicker, not a constant white wash under heavy fire shadow.push(b.x, b.z, 6);
+    // boss flickers when hit instead of washing out white under heavy fire
+    boss.push(b.x, 0, b.z, BOSS_H, BOSS_H, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); shadow.push(b.x + SHADOW_DX * 3, b.z + SHADOW_DZ * 3, 8);
   }
   for (const bl of L.bullets) bl.splash ? fx.push(bl.x, 0.85, bl.z, 0.6, 2.4, 12, 1) : fx.push(bl.x, 1.0, bl.z, 0.3, 1.6, 12, 1);
   for (const f of L.fx) {
@@ -811,7 +819,7 @@ function render(dt) {
   renderer.render(scene, camera);
   // squad count badge above the squad
   if (!$("count").hidden) {
-    tmpV.set(L.sx, 1.6 + R * 0.3, L.sz).project(camera);
+    tmpV.set(L.sx, 1.95 + R * 0.3, L.sz).project(camera);
     const c = $("count"); c.style.left = `${(tmpV.x * 0.5 + 0.5) * 100}%`; c.style.top = `${(-tmpV.y * 0.5 + 0.5) * 100}%`;
   }
 }
