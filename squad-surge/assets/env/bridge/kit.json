@@ -2,7 +2,7 @@
  "theme": "bridge",
  "textures": {},
  "props": {
-  "atlas": "props.png",
+  "atlas": "props.webp",
   "items": [
    {
     "name": "bridge-lamp",

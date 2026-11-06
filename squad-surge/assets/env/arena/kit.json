@@ -12,18 +12,18 @@
  },
  "facades": [
   {
-   "file": "facades/stand-a.png",
+   "file": "facades/stand-a.webp",
    "w": 14,
    "h": 5.5
   },
   {
-   "file": "facades/stand-b.png",
+   "file": "facades/stand-b.webp",
    "w": 14,
    "h": 3.0
   }
  ],
  "props": {
-  "atlas": "props.png",
+  "atlas": "props.webp",
   "items": [
    {
     "name": "floodlight-tower",

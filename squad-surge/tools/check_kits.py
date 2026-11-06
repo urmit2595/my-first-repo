@@ -37,7 +37,7 @@ for theme in sorted(p for p in ENV.iterdir() if p.is_dir() and p.name != "common
     n = len(props.get("items", [])) if props else 0
     print(f"{theme.name}: {n} props, {len(kit.get('facades') or [])} facades, textures {sorted((kit.get('textures') or {}).keys())}")
 common = ENV / "common"
-for f in ["road.jpg", "decals.png", "decals.json"]:
+for f in ["road.jpg", "decals.webp", "decals.json"]:
     if not (common / f).exists(): problems.append(f"common: {f} missing")
 print("\n".join(problems) if problems else "all kits OK")
 sys.exit(1 if problems else 0)

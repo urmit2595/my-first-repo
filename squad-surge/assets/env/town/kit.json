@@ -16,28 +16,33 @@
  },
  "facades": [
   {
-   "file": "facades/townhouse-a.png",
+   "file": "facades/townhouse-a.webp",
    "w": 7.05,
    "h": 9.5
   },
   {
-   "file": "facades/corner-shop.png",
+   "file": "facades/corner-shop.webp",
    "w": 5.46,
    "h": 6.5
   },
   {
-   "file": "facades/narrow-house.png",
+   "file": "facades/narrow-house.webp",
    "w": 4.89,
    "h": 9.5
   },
   {
-   "file": "facades/townhouse-ruined.png",
+   "file": "facades/townhouse-ruined.webp",
    "w": 7.31,
    "h": 9.5
+  },
+  {
+   "file": "facades/town-gate.webp",
+   "w": 16.48,
+   "h": 14
   }
  ],
  "props": {
-  "atlas": "props.png",
+  "atlas": "props.webp",
   "items": [
    {
     "name": "street-lamp",
@@ -315,7 +320,7 @@
   ]
  },
  "landmark": {
-  "file": "facades/town-gate.png",
+  "file": "facades/town-gate.webp",
   "w": 16.48,
   "h": 14
  }

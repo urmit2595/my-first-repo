@@ -22,7 +22,9 @@ Run locally: `python3 -m http.server` in this folder, then open `index.html`.
   - `js/scenery.js`: colour pipeline, lights and shadows, sky and backdrop, road, curbs, sidewalks, buildings and roadside props per theme.
   - `js/objects3d.js`: the 3D gates, blocks, crates, tyres, weapon cases and ammo boxes.
   - `js/juice.js`: camera moves, banners, HUD pops, modal and star animations, confetti (written by Codex).
-- Characters are pre-rendered sprite sheets in `assets/*.png`, drawn as instanced billboards.
+- Characters are pre-rendered sprite sheets (`assets/*.webp`), drawn as instanced billboards.
+- Images ship as WebP (`python3 tools/webpify.py FILE...` converts PNGs). Fonts (Lilita One, Nunito; SIL Open Font License) are self-hosted in `assets/fonts/`.
+- Adaptive quality: if play stays under ~45 fps, the game turns shadows off, then lowers resolution, and remembers it per device. Add `?hq` to the URL to keep full quality.
 
 ## Art pipeline
 - Target look: `art-src/style/style-a.png`, generated from the game's own character sprites.

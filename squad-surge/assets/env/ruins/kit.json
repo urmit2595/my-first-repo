@@ -20,23 +20,23 @@
  },
  "facades": [
   {
-   "file": "facades/apartment-block.png",
+   "file": "facades/apartment-block.webp",
    "w": 12.41,
    "h": 15
   },
   {
-   "file": "facades/collapsed-block.png",
+   "file": "facades/collapsed-block.webp",
    "w": 12.39,
    "h": 15
   },
   {
-   "file": "facades/bombed-shop.png",
+   "file": "facades/bombed-shop.webp",
    "w": 6.59,
    "h": 6.5
   }
  ],
  "props": {
-  "atlas": "props.png",
+  "atlas": "props.webp",
   "items": [
    {
     "name": "rubble-a",

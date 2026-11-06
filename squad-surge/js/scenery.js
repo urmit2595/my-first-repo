@@ -151,7 +151,7 @@ window.Scenery = (() => {
   async function preloadCommon() {
     if (cache.common) return cache.common;
     const K = cache.common = { road: null, decals: null, decalJson: null, paint: null, curb: null, blob: null };
-    const [road, dec, dj] = await Promise.all([loadImg(BASE + "common/road.jpg"), loadImg(BASE + "common/decals.png"), loadJson(BASE + "common/decals.json")]);
+    const [road, dec, dj] = await Promise.all([loadImg(BASE + "common/road.jpg"), loadImg(BASE + "common/decals.webp"), loadJson(BASE + "common/decals.json")]);
     K.roadImg = road; K.decalImg = dec; K.decalJson = dj;
     K.build = () => {
       if (!K.road) K.road = mkTex(road || procCanvas("asphalt", 0x55565c));

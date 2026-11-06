@@ -39,7 +39,7 @@ const server = http.createServer((req, res) => {
   await page.route("**/three.min.js", r => r.fulfill({ path: THREE_LOCAL, contentType: "application/javascript" }));
   await page.route("**fonts.g*/**", r => r.abort());
   await page.addInitScript(() => { try { localStorage.setItem("squad-surge-v1", JSON.stringify({ level: 1, unlocked: 99, sound: false, vibe: false })); } catch (e) {} });
-  await page.goto(`http://127.0.0.1:${port}/index.html`);
+  await page.goto(`http://127.0.0.1:${port}/index.html?hq`); // ?hq: keep full quality (swiftshader is always slow)
   await page.waitForFunction(() => window.__game && __game.state === "home", null, { timeout: 60000 });
 
   for (const lv of levels) {

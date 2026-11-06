@@ -8,13 +8,13 @@
  },
  "facades": [
   {
-   "file": "facades/boat-shed.png",
+   "file": "facades/boat-shed.webp",
    "w": 5.62,
    "h": 3.6
   }
  ],
  "props": {
-  "atlas": "props.png",
+  "atlas": "props.webp",
   "items": [
    {
     "name": "crates",

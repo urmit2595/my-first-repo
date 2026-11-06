@@ -12,18 +12,18 @@
  },
  "facades": [
   {
-   "file": "facades/adobe.png",
+   "file": "facades/adobe.webp",
    "w": 6.88,
    "h": 3.4
   },
   {
-   "file": "facades/diner.png",
+   "file": "facades/diner.webp",
    "w": 8.14,
    "h": 3.6
   }
  ],
  "props": {
-  "atlas": "props.png",
+  "atlas": "props.webp",
   "items": [
    {
     "name": "saguaro-a",
