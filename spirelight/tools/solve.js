@@ -26,9 +26,12 @@ const G = require(path.join(ROOT, "js", "geom.js"));
 
 function loadLevels() {
   global.window = global; global.LEVELS = [];
-  const f = path.join(ROOT, "levels", "levels.js");
-  delete require.cache[require.resolve(f)];
-  require(f);
+  for (const name of ["levels.js", "levels2.js"]) {   // levels 1-5 + title, then levels 6-10
+    const f = path.join(ROOT, "levels", name);
+    if (!require("fs").existsSync(f)) continue;
+    delete require.cache[require.resolve(f)];
+    require(f);
+  }
   return global.LEVELS;
 }
 

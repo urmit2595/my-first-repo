@@ -297,8 +297,11 @@ test("validation errors name the level and entry", () => {
 console.log("seed levels");
 test("every level in levels/levels.js loads and its solution verifies", () => {
   global.window = global; global.LEVELS = [];
-  delete require.cache[require.resolve("../levels/levels.js")];
-  require("../levels/levels.js");
+  for (const f of ["../levels/levels.js", "../levels/levels2.js"]) {
+    if (!require("fs").existsSync(require("path").join(__dirname, f))) continue;
+    delete require.cache[require.resolve(f)];
+    require(f);
+  }
   assert.ok(LEVELS.length >= 3);
   for (const L of LEVELS) {
     if (L.id === "title") continue;
@@ -306,7 +309,7 @@ test("every level in levels/levels.js loads and its solution verifies", () => {
     assert.ok(r.ok, L.id + ": " + r.errors.join("; "));
     assert.strictEqual(r.solutionOk, true, L.id);
     const cells = G.load(L).solids().length;
-    assert.ok(cells <= 120, L.id + " has " + cells + " cells");
+    assert.ok(cells <= 400, L.id + " has " + cells + " cells");   // design.md: about 120-320 cells per level
   }
 });
 
