@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>UI test</title>
+<style>
+@font-face{font-family:'Sl Display';src:url(../assets/fonts/display.woff2) format('woff2');font-display:block}
+html,body{height:100%;margin:0;overflow:hidden;background:#0b0818}
+#game{position:fixed;inset:0;background:#1d1b45 url(../art-src/style/style-1.png) center/cover}
+#ui{position:absolute;inset:0;pointer-events:none}#ui>*{pointer-events:auto}
+</style></head><body>
+<div id="game"><div id="ui"></div></div>
+<script src="../js/ui.js"></script>
+<script>
+// A small fake Game so the UI can be tested without the engine.
+(function(){
+  var hs={};
+  var names=[["First Light",1],["Hollow Stair",1],["The Long Wick",1],["Lantern Row",2],["Nightbloom",2],["The Bell Walk",2],["Veil of Glass",3],["Ribbon Court",3],["First Dawn",4],["The Beacon",4]];
+  var levels=names.map(function(n,i){return {id:"l"+i,name:n[0],chapter:n[1],theme:["dusk","night","aurora","dawn"][n[1]-1],intro:"Every spire keeps one lamp.",hint:"Tap a pale stone to walk there, then turn the brass crank.",glimmers:i%3===0?["a","b","c"]:i%3===1?["a","b"]:[]};});
+  var G=window.Game={ui:document.getElementById("ui"),levels:levels,levelIndex:0,level:levels[0],state:"loading",reducedMotion:false,quality:"auto",
+    save:{unlocked:+(new URLSearchParams(location.search).get("u")||6),done:{l0:{glimmers:3},l1:{glimmers:1},l2:{glimmers:0},l3:{glimmers:2}},sound:true,music:true,quality:"auto"},
+    saveNow:function(){},
+    bus:{on:function(e,f){(hs[e]=hs[e]||[]).push(f)},off:function(){},emit:function(e,d){(hs[e]||[]).forEach(function(f){f(d||{})})}},
+    showTitle:function(){G.state="title";G.bus.emit("title",{})},
+    startLevel:function(i){G.levelIndex=i;G.level=levels[i];G.state="play";G.bus.emit("levelStart",{index:i,level:levels[i]})},
+    restart:function(){G.state="play";G.bus.emit("restart",{index:G.levelIndex})},
+    nextLevel:function(){G.startLevel(G.levelIndex+1)},
+    pause:function(b){G.state=b?"paused":"play";G.bus.emit("pause",{paused:b})},
+    setQuality:function(q){G.quality=q}};
+  UI.setup(G);
+  window.__ready=true;
+})();
+</script></body></html>

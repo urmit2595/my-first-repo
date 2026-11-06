@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>SPIRELIGHT · Wick study</title>
+<style>
+html,body{margin:0;overflow:hidden;color:#eadfc9;font-family:Georgia,serif}
+header{position:fixed;left:30px;top:24px;z-index:2;pointer-events:none}
+header .eyebrow{font:10px system-ui,sans-serif;letter-spacing:.3em;color:#b5a28d}
+h1{font-size:27px;font-weight:400;letter-spacing:.09em;margin:7px 0}
+header p{font:11px system-ui,sans-serif;color:#ab9da5;margin:0}
+#labels{position:fixed;inset:0;z-index:2;pointer-events:none}
+.label{position:absolute;transform:translate(-50%,0);font:11px system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#d9c7ab}
+footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-serif;letter-spacing:.12em;color:#b5a5a5;pointer-events:none}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">SPIRELIGHT / CHARACTER STUDY</div><h1>Wick</h1><p id="caption">The little lamplighter</p></header>
+<div id="labels"></div><footer id="note">BRASS · GLASS · A LITTLE LIVING LIGHT</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="testbed.js"></script>
+<script src="../js/hero.js"></script>
+<script>
+(function () {
+  "use strict";
+  var params = new URLSearchParams(location.search), view = params.get("view") || "large";
+  var lineup = view === "lineup", small = view === "small";
+  var frozen = params.has("t") || lineup, time = params.has("t") ? Number(params.get("t")) : (lineup ? 1 : 0);
+  if (!Number.isFinite(time)) time = 0; time = Math.max(0, time);
+  var yaw = params.has("yaw") ? Number(params.get("yaw")) : 35; if (!Number.isFinite(yaw)) yaw = 35;
+  var names = lineup ? ["idle", "walk", "climb", "celebrate", "bump", "ride", "wave"] : [params.get("anim") || "idle"];
+  var height = small ? window.innerHeight * 0.85 / 70 : (lineup ? 3 : 1.6);
+  var heroes = [], labels = [], labelPoint = new THREE.Vector3(), states = { speed: 1.4, grounded: true };
+  document.getElementById("caption").textContent = lineup ? "Seven small ways to be alive" : names[0] + (frozen ? " · " + time.toFixed(2) + " s" : " · live");
+  if (small) document.getElementById("note").textContent = "IN-GAME SCALE / 70 PX WORLD HEIGHT";
+  Testbed.start({ height: height, center: [0, 0.45, 0], bg: 0x201e30, shadows: true, exposure: 1.2 }, function (tb) {
+    var scene = tb.scene;
+    var bg = document.createElement("canvas"); bg.width = 16; bg.height = 512;
+    var bc = bg.getContext("2d"), gradient = bc.createLinearGradient(0, 0, 0, 512);
+    gradient.addColorStop(0, small ? "#1d1b45" : "#171e2a");
+    gradient.addColorStop(0.62, small ? "#674874" : "#33303d");
+    gradient.addColorStop(1, small ? "#c47b6e" : "#51404a");
+    bc.fillStyle = gradient; bc.fillRect(0, 0, 16, 512);
+    var background = new THREE.CanvasTexture(bg); background.encoding = THREE.sRGBEncoding; scene.background = background;
+    tb.key.shadow.normalBias = 0.008;
+    tb.key.shadow.camera.left = tb.key.shadow.camera.bottom = -4;
+    tb.key.shadow.camera.right = tb.key.shadow.camera.top = 4; tb.key.shadow.camera.updateProjectionMatrix();
+    var paver = new THREE.MeshStandardMaterial({ color: 0xefe2c6, roughness: 0.84 });
+    var edge = new THREE.MeshStandardMaterial({ color: 0x997653, roughness: 0.72 });
+    var inlay = new THREE.MeshStandardMaterial({ color: 0xc8963e, roughness: 0.4, metalness: 0.65 });
+    function tile(x, z, width) {
+      var floor = new THREE.Mesh(new THREE.BoxGeometry(width, 0.07, width), edge); floor.position.set(x, -0.046, z); floor.receiveShadow = true; scene.add(floor);
+      var top = new THREE.Mesh(new THREE.BoxGeometry(width - 0.025, 0.02, width - 0.025), paver); top.position.set(x, -0.001 - 0.01, z); top.receiveShadow = true; scene.add(top);
+      // Fine brass perimeter set flush into the pale top.
+      var strip = new THREE.BoxGeometry(width - 0.07, 0.001, 0.0035);
+      for (var e = 0; e < 4; e++) {
+        var line = new THREE.Mesh(strip, inlay); var a = e * Math.PI / 2;
+        line.position.set(x + Math.sin(a) * (width / 2 - 0.035), -0.0005, z + Math.cos(a) * (width / 2 - 0.035));
+        line.rotation.y = a; scene.add(line);
+      }
+    }
+    for (var i = 0; i < names.length; i++) {
+      var hero = Hero.create(THREE, { quality: params.get("quality") || "high" });
+      var offset = lineup ? (i - 3) * 0.94 : 0;
+      hero.object3D.position.set(offset / Math.SQRT2, 0, -offset / Math.SQRT2);
+      hero.object3D.rotation.y = yaw * Math.PI / 180; hero.setAnim(names[i]); scene.add(hero.object3D); heroes.push(hero);
+      tile(hero.object3D.position.x, hero.object3D.position.z, lineup ? 0.62 : (small ? 0.9 : 0.73));
+      if (lineup) {
+        var label = document.createElement("div"); label.className = "label"; label.textContent = names[i];
+        document.getElementById("labels").appendChild(label); labels.push(label);
+      }
+    }
+    if (small) { tile(-0.66, 0.66, 0.9); tile(0.66, -0.66, 0.9); }
+    function placeLabels() {
+      for (var j = 0; j < labels.length; j++) {
+        labelPoint.copy(heroes[j].object3D.position); labelPoint.y = -0.24; labelPoint.project(tb.camera);
+        labels[j].style.left = (labelPoint.x * 0.5 + 0.5) * window.innerWidth + "px";
+        labels[j].style.top = (-labelPoint.y * 0.5 + 0.5) * window.innerHeight + "px";
+      }
+    }
+    // Fixed 60 Hz simulation, including the final fractional frame. No wall clock
+    // input reaches a frozen frame (including Testbed's public time).
+    if (frozen) {
+      var frames = Math.floor(time * 60);
+      for (var f = 0; f < frames; f++) for (i = 0; i < heroes.length; i++) heroes[i].update(1 / 60, (f + 1) / 60, states);
+      for (i = 0; i < heroes.length; i++) heroes[i].update(time - frames / 60, time, states);
+      tb.time = time;
+      Object.defineProperty(tb, "time", { configurable: true, get: function () { return time; }, set: function () {} });
+    }
+    var liveTime = 0;
+    tb.onFrame(function (dt) {
+      if (!frozen) {
+        liveTime += dt;
+        for (var j = 0; j < heroes.length; j++) {
+          if (params.get("walkto") === "1") {
+            var p = heroes[j].object3D, a = liveTime * 1.5, radius = small ? 0.6 : 0.20;
+            p.position.set(Math.sin(a) * radius, 0, Math.sin(a * 2) * radius * 0.5);
+            var desired = Math.atan2(Math.cos(a), Math.cos(a * 2));
+            var difference = Math.atan2(Math.sin(desired - p.rotation.y), Math.cos(desired - p.rotation.y));
+            p.rotation.y += difference * (1 - Math.exp(-dt * 12));
+          }
+          heroes[j].update(dt, liveTime, states);
+        }
+      }
+      placeLabels();
+    });
+    placeLabels();
+    // Exposed for console inspection and the screenshot harness.
+    window.hero = heroes[0]; window.heroes = heroes;
+    window.addEventListener("pagehide", function () {
+      try { heroes.forEach(function (h) { h.dispose(); }); background.dispose(); } catch (error) { console.error(error); }
+    });
+  });
+})();
+</script>
+</body>
+</html>

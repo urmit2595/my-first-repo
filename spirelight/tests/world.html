@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8"><title>world test</title>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="testbed.js"></script>
+<script src="../js/world.js"></script>
+<script>
+// ?theme=dusk|night|aurora|dawn   &fade=1 cycles themes   &h=14 visible world height
+const q = new URLSearchParams(location.search);
+Testbed.start({ height: +(q.get("h") || 15), center: [3, 3.5, 3], lights: false, exposure: 1 }, (tb) => {
+  const THREE = tb.THREE;
+  const mats = {
+    stone: new THREE.MeshStandardMaterial({ color: 0xd9a46a, roughness: 0.85 }),
+    dark: new THREE.MeshStandardMaterial({ color: 0x8a5a48, roughness: 0.9 }),
+    paver: new THREE.MeshStandardMaterial({ color: 0xefe2c6, roughness: 0.8 }),
+    brass: new THREE.MeshStandardMaterial({ color: 0xc8963e, roughness: 0.35, metalness: 0.8 }),
+    slate: new THREE.MeshStandardMaterial({ color: 0x3b3d5c, roughness: 0.7 }),
+    glow: new THREE.MeshStandardMaterial({ color: 0xffb35a, emissive: 0xffb35a, emissiveIntensity: 1.6 }),
+  };
+  for (const k in mats) mats[k].color.convertSRGBToLinear();
+  mats.glow.emissive.convertSRGBToLinear();
+  const tower = new THREE.Group();
+  const box = (x0, y0, z0, x1, y1, z1, m, top) => {
+    const g = new THREE.BoxGeometry(x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1);
+    const mesh = new THREE.Mesh(g, [m, m, top || m, m, m, m]); // +x -x +y -y +z -z
+    mesh.position.set((x0 + x1 + 1) / 2, (y0 + y1 + 1) / 2, (z0 + z1 + 1) / 2);
+    mesh.castShadow = mesh.receiveShadow = true; tower.add(mesh);
+  };
+  box(0, 0, 0, 5, 0, 5, mats.dark);             // base
+  box(0, 1, 0, 5, 1, 5, mats.stone, mats.paver);
+  box(1, 2, 1, 4, 5, 4, mats.stone, mats.paver);  // tower
+  box(2, 6, 2, 3, 6, 3, mats.slate);
+  box(2, 7, 2, 3, 7, 3, mats.glow);
+  box(5, 2, 1, 9, 2, 1, mats.brass, mats.paver); // arm to +x
+  box(1, 2, 5, 1, 2, 8, mats.brass, mats.paver); // arm to +z
+  box(0, 4, 4, 0, 4, 6, mats.stone, mats.paver); // small ledge
+  const spot = new THREE.PointLight(0xffb35a, 1.2, 8); spot.position.set(3, 8.5, 3); tower.add(spot);
+  tb.scene.add(tower);
+  tb.renderer.shadowMap.enabled = true;
+
+  return World.init(THREE, tb.renderer, tb.scene, tb.camera).then(() => {
+    World.setTheme(q.get("theme") || "dusk", true);
+    World.fit({ min: [0, 0, 0], max: [9, 7, 8] });
+    tb.renderer.toneMappingExposure = World.exposure;
+    const names = World.themes; let i = 0;
+    if (q.get("fade")) setInterval(() => { World.setTheme(names[++i % 4]); }, 5000);
+    tb.onFrame((dt, t) => { World.update(dt, t); tb.renderer.toneMappingExposure = World.exposure; });
+    window.World = World;
+  });
+});
+</script>
