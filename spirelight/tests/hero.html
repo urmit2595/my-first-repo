@@ -14,6 +14,10 @@ header p{font:11px system-ui,sans-serif;color:#ab9da5;margin:0}
 #labels{position:fixed;inset:0;z-index:2;pointer-events:none}
 .label{position:absolute;transform:translate(-50%,0);font:11px system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#d9c7ab}
 footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-serif;letter-spacing:.12em;color:#b5a5a5;pointer-events:none}
+#pixel-inset{position:fixed;right:24px;bottom:24px;z-index:3;margin:0;border:1px solid #ab8b69;background:#211d32;box-shadow:0 5px 25px #0005}
+#pixel-inset canvas{display:block;width:288px;height:324px;image-rendering:pixelated}
+#pixel-inset figcaption{padding:9px 12px;font:10px system-ui,sans-serif;letter-spacing:.12em;color:#dfcdb6}
+@media(max-width:600px){#pixel-inset{right:12px;bottom:12px}}
 </style>
 </head>
 <body>
@@ -31,12 +35,33 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
   if (!Number.isFinite(time)) time = 0; time = Math.max(0, time);
   var yaw = params.has("yaw") ? Number(params.get("yaw")) : 35; if (!Number.isFinite(yaw)) yaw = 35;
   var names = lineup ? ["idle", "walk", "climb", "celebrate", "bump", "ride", "wave"] : [params.get("anim") || (params.get("walkto") === "1" ? "walk" : "idle")];
-  var height = small ? window.innerHeight * 0.85 / 70 : (lineup ? 3 : 1.6);
+  var height = small ? window.innerHeight * 0.85 * Math.sqrt(2 / 3) / 70 : (lineup ? 3 : 1.6);
   var heroes = [], labels = [], labelPoint = new THREE.Vector3(), states = { speed: 1.4, grounded: true };
   document.getElementById("caption").textContent = lineup ? "Seven small ways to be alive" : names[0] + (frozen ? " · " + time.toFixed(2) + " s" : " · live");
   if (small) document.getElementById("note").textContent = "IN-GAME SCALE / 70 PX WORLD HEIGHT";
   Testbed.start({ height: height, center: [0, 0.45, 0], bg: 0x201e30, shadows: true, exposure: 0.95 }, function (tb) {
     var scene = tb.scene;
+    // Copy synchronously after WebGL rendering, before its drawing buffer clears.
+    // The source is the actual game-scale canvas, never a second camera render.
+    if (small) {
+      tb.renderer.setPixelRatio(1);
+      var inset = document.createElement("figure"); inset.id = "pixel-inset";
+      var pixels = document.createElement("canvas"), pixelContext = pixels.getContext("2d");
+      pixels.width = 288; pixels.height = 324;
+      var insetLabel = document.createElement("figcaption"); insetLabel.textContent = "3× PIXELS / NEAREST NEIGHBOUR";
+      inset.appendChild(pixels); inset.appendChild(insetLabel); document.body.appendChild(inset);
+      var render = tb.renderer.render, cropCenter = new THREE.Vector3();
+      tb.renderer.render = function (renderScene, renderCamera) {
+        render.call(this, renderScene, renderCamera);
+        cropCenter.copy(heroes[0].object3D.position); cropCenter.y += 0.43; cropCenter.project(tb.camera);
+        var ratio = tb.canvas.width / window.innerWidth;
+        var cx = (cropCenter.x * 0.5 + 0.5) * tb.canvas.width;
+        var cy = (-cropCenter.y * 0.5 + 0.5) * tb.canvas.height;
+        pixelContext.imageSmoothingEnabled = false;
+        pixelContext.drawImage(tb.canvas, Math.round(cx - 48 * ratio), Math.round(cy - 54 * ratio),
+          96 * ratio, 108 * ratio, 0, 0, 288, 324);
+      };
+    }
     var bg = document.createElement("canvas"); bg.width = 16; bg.height = 512;
     var bc = bg.getContext("2d"), gradient = bc.createLinearGradient(0, 0, 0, 512);
     gradient.addColorStop(0, small ? "#1d1b45" : "#171e2a");
@@ -44,7 +69,7 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
     gradient.addColorStop(1, small ? "#c47b6e" : "#51404a");
     bc.fillStyle = gradient; bc.fillRect(0, 0, 16, 512);
     var background = new THREE.CanvasTexture(bg); background.encoding = THREE.sRGBEncoding; scene.background = background;
-    tb.key.intensity = 1.15; tb.hemi.intensity = 0.45;
+    tb.key.intensity = 1.15; tb.hemi.intensity = 0.65;
     tb.key.shadow.normalBias = 0.008;
     tb.key.shadow.camera.left = tb.key.shadow.camera.bottom = -4;
     tb.key.shadow.camera.right = tb.key.shadow.camera.top = 4; tb.key.shadow.camera.updateProjectionMatrix();

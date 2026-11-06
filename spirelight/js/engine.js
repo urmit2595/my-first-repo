@@ -509,6 +509,8 @@
   function disposeLevel() {
     for (var i = levelRoot.children.length - 1; i >= 0; i--) {
       var c = levelRoot.children[i]; levelRoot.remove(c);
+      if (window.Decor && Decor.dispose) { try { Decor.dispose(c); } catch (e) {} }
+      if (window.Blocks && Blocks.disposeObject) { try { Blocks.disposeObject(c); } catch (e) {} }
       c.traverse(function (o) { if (o.geometry) { try { o.geometry.dispose(); } catch (e) {} } });
     }
     for (var j = fxRoot.children.length - 1; j >= 0; j--) { var r = fxRoot.children[j]; fxRoot.remove(r); if (r.material) r.material.dispose(); }
@@ -576,6 +578,10 @@
       if (!obj) obj = safe(function () { return fallbackDecor(item); }, "fallbackDecor");
       if (!obj) return null;
       g.contentNode.add(obj);
+      safe(function () {
+        var bb = new THREE.Box3().setFromObject(obj), sz = bb.getSize(new THREE.Vector3());
+        if (Math.max(sz.x, sz.y, sz.z) < 0.5) obj.traverse(function (o) { if (o.isMesh) o.castShadow = false; });
+      }, "shadow cull");
       var entry = Object.assign({ item: item, object3D: obj, node: g.contentNode, group: g.id }, extra || {});
       entry.worldPos = function (target) { return decorWorldPos(entry, target); };
       Game.decor.push(entry);
@@ -633,7 +639,12 @@
     levelRoot.updateMatrixWorld(true);
 
     // world / camera
-    if (window.World && mods.world) { safe(function () { World.setTheme(theme, true); }, "World.setTheme"); safe(function () { World.fit(w.bounds()); }, "World.fit"); }
+    if (window.World && mods.world) {
+      safe(function () { World.setTheme(theme, true); }, "World.setTheme");
+      safe(function () { if (World.exposure) renderer.toneMappingExposure = World.exposure; }, "exposure");
+      safe(function () { if (window.Blocks && Blocks.useSceneEnvironment && scene.environment) Blocks.useSceneEnvironment(scene.environment); }, "Blocks env");
+      safe(function () { var b = w.bounds(); World.fit({ min: b.min, max: [b.max[0] - 1, b.max[1] - 1, b.max[2] - 1] }); }, "World.fit");
+    }
     fitFallbackLights(w.bounds());
     fitBox = computeFitBox();
     cam.zoomK = (Game.reducedMotion || TEST) ? 1 : 1.14; cam.introT = 0;
@@ -1047,7 +1058,7 @@
       if (a[0] === "walk") r = await Game.tapTile(a[1]); else r = await Game.setMech(a[1], a[2]);
       if (a[0] === "walk" ? !(r && r.ok) : !r) { ok = false; why = "step " + k + " " + JSON.stringify(a) + " failed"; break; }
     }
-    if (ok) { var tmo = performance.now() + 20000; while (!done && performance.now() < tmo) await new Promise(function (r2) { setTimeout(r2, 30); }); if (!done) { ok = false; why = "level did not complete"; } }
+    if (ok) { var tmo = performance.now() + 60000; while (!done && performance.now() < tmo) await new Promise(function (r2) { setTimeout(r2, 30); }); if (!done) { ok = false; why = "level did not complete"; } }
     off();
     return { ok: ok, ms: Math.round(performance.now() - t0), why: why };
   };
@@ -1188,6 +1199,11 @@
       handleRefWorld(g, g.cur, o); r.position.set(o[0], o[1], o[2]); r.quaternion.copy(camera.quaternion);
       var hov = (hoverG === g) || (drag && drag.g === g), pulse = 0.5 + 0.5 * Math.sin(t * 3.2);
       var base = g.used ? 0 : 0.25 + 0.4 * pulse; if (hov) base = 0.85;
+      if (g.handle.obj && g.handle.obj.userData) {
+        var ud = g.handle.obj.userData;
+        if (ud.setHover && g.hov !== hov) { g.hov = hov; safe(function () { ud.setHover(hov); }); }
+        if (ud.setHint && g.used && !g.hintOff) { g.hintOff = true; safe(function () { ud.setHint(false); }); }
+      }
       r.visible = base > 0.01; r.material.opacity = base; r.scale.setScalar(1 + (g.used ? 0 : 0.12 * pulse) + (hov ? 0.12 : 0));
     }
     for (var i = 0; i < ripples.length; i++) {

@@ -42,8 +42,8 @@
       var sky = ctx.createLinearGradient(0, 0, 0, 64);
       sky.addColorStop(0, i === 2 ? "#b6c4db" : "#879bb6");
       sky.addColorStop(0.42, "#a49c8b"); sky.addColorStop(0.55, "#e6bb7d");
-      sky.addColorStop(0.68, "#45392f"); sky.addColorStop(1, "#191b28");
-      ctx.fillStyle = i === 3 ? "#29232b" : sky; ctx.fillRect(0, 0, 64, 64);
+      sky.addColorStop(0.68, "#82715b"); sky.addColorStop(1, "#555061");
+      ctx.fillStyle = i === 3 ? "#645361" : sky; ctx.fillRect(0, 0, 64, 64);
       var strip = ctx.createLinearGradient(0, 0, 64, 0);
       strip.addColorStop(0, "rgba(255,239,204,0)"); strip.addColorStop(0.3, "rgba(255,239,204,0)");
       strip.addColorStop(0.43, "rgba(255,239,204,.6)"); strip.addColorStop(0.54, "rgba(255,239,204,.6)");
@@ -52,16 +52,16 @@
     }
     var env = new THREE.CubeTexture(faces); env.encoding = THREE.sRGBEncoding; env.needsUpdate = true; textures.push(env);
     function linear(hex) { return new THREE.Color(hex).convertSRGBToLinear(); }
-    var brass = mat(new THREE.MeshStandardMaterial({ color: linear(0xb9852f), metalness: 0.85, roughness: 0.44,
-      map: metalMap, bumpMap: grainMap, bumpScale: 0.00035, envMap: env, envMapIntensity: 1 }));
+    var brass = mat(new THREE.MeshStandardMaterial({ color: linear(0xc79540), metalness: 0.75, roughness: 0.45,
+      map: metalMap, bumpMap: grainMap, bumpScale: 0.00035, envMap: env, envMapIntensity: 1.4 }));
     var dark = mat(new THREE.MeshStandardMaterial({ color: linear(0x5c4931), metalness: 0.85, roughness: 0.53, envMap: env }));
     var patina = mat(new THREE.MeshStandardMaterial({ color: linear(0x4fa597), metalness: 0.65, roughness: 0.55, envMap: env }));
     var knitCanvas = canvas(128, 128), kc = knitCanvas.getContext("2d");
-    kc.fillStyle = "#2f7f86"; kc.fillRect(0, 0, 128, 128); kc.lineCap = "round";
+    kc.fillStyle = "#2f9a98"; kc.fillRect(0, 0, 128, 128); kc.lineCap = "round";
     for (y = -8; y < 136; y += 8) for (x = -8; x < 136; x += 8) {
-      kc.strokeStyle = "#22575d"; kc.lineWidth = 4.5;
+      kc.strokeStyle = "#277976"; kc.lineWidth = 4.5;
       kc.beginPath(); kc.moveTo(x - 2, y); kc.lineTo(x + 1, y + 5); kc.lineTo(x + 4, y); kc.stroke();
-      kc.strokeStyle = (x + y) % 16 ? "#3a9a96" : "#378b8b"; kc.lineWidth = 2;
+      kc.strokeStyle = (x + y) % 16 ? "#55b9ae" : "#43aaa5"; kc.lineWidth = 2;
       kc.beginPath(); kc.moveTo(x - 2, y); kc.lineTo(x + 1, y + 4); kc.lineTo(x + 4, y); kc.stroke();
     }
     var knitColor = texture(knitCanvas, true), knit = texture(knitCanvas, false);
@@ -72,17 +72,17 @@
     var glassMat = mat(new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
       uniforms: { strength: { value: low ? 0.5 : 1 } },
       vertexShader: "varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.); n=normalize(normalMatrix*normal); v=-p.xyz; gl_Position=projectionMatrix*p;}",
-      fragmentShader: "uniform float strength; varying vec3 n; varying vec3 v; void main(){vec3 N=normalize(n); float rim=pow(1.-abs(dot(N,normalize(v))),3.); float streak=pow(max(0.,dot(N,normalize(vec3(-.65,.3,.7)))),65.); float a=(.015+.19*rim+.22*streak)*strength; gl_FragColor=vec4(mix(vec3(.72,.45,.18),vec3(.85,.95,1.),min(1.,rim+streak)),a);}" }));
+      fragmentShader: "uniform float strength; varying vec3 n; varying vec3 v; void main(){vec3 N=normalize(n); float rim=pow(1.-abs(dot(N,normalize(v))),3.); float streak=pow(max(0.,dot(N,normalize(vec3(-.65,.3,.7)))),65.); float a=(.025+.38*rim+.65*streak)*strength; gl_FragColor=vec4(mix(vec3(.72,.45,.18),vec3(1.,.95,.79),min(1.,rim+streak)),a);}" }));
     var eyeMat = mat(new THREE.MeshBasicMaterial({ color: 0x241006, toneMapped: false }));
     var flameMat = mat(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff,
-      emissiveIntensity: 2.8, roughness: 1, vertexColors: true }));
+      emissiveIntensity: 1.85, roughness: 1, vertexColors: true }));
     // In r128 vertex colour normally affects diffuse only; the flame's gradient
     // belongs to its emitted light as well.
     flameMat.onBeforeCompile = function (shader) {
       shader.fragmentShader = shader.fragmentShader.replace("#include <emissivemap_fragment>",
         "#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor;");
     };
-    var coreMat = mat(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffdf66, emissiveIntensity: 4 }));
+    var coreMat = mat(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffefaa, emissiveIntensity: 2.6 }));
     var tipMat = mat(new THREE.MeshBasicMaterial({ color: 0xff730a, transparent: true, opacity: 0.16,
       blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     var sphere = geo(new THREE.SphereGeometry(1, low ? 12 : 18, low ? 8 : 12));
@@ -112,7 +112,9 @@
       part(p, torus, material || brass, xx, yy, zz, radius, sy || radius, radius, rx || 0);
     }
     function lathe(points) { return geo(new THREE.LatheGeometry(points.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), radial)); }
-    var hips = group(root, "hips", 0, 0.222, 0);
+    // Keep the fuller lantern silhouette within the 0.85-unit game scale.
+    var assembly = group(root, "assembly"); assembly.scale.setScalar(0.82);
+    var hips = group(assembly, "hips", 0, 0.222, 0);
     var torso = group(hips, "torso");
     var egg = lathe([[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],
       [0.112,0.148],[0.097,0.194],[0.071,0.22],[0,0.226]]);
@@ -167,22 +169,24 @@
       0, 0.263, 0, 1, 1, 0.8, Math.PI / 2);
     ring(torso, 0, 0.242, 0, 0.096, Math.PI / 2, scarfMat);
     ball(torso, -0.094, 0.262, 0.093, 0.038, 0.035, 0.035, scarfMat);
-    var head = group(torso, "head", 0, 0.289, 0); head.scale.y = 0.94;
+    rod(torso, 0, 0.295, 0, 0.073, 0.065);
+    var head = group(torso, "head", 0, 0.32, 0);
     var globe = lathe([[0.114,0.008],[0.145,0.03],[0.173,0.067],[0.183,0.111],
-      [0.178,0.151],[0.159,0.20],[0.134,0.248],[0.127,0.263]]);
+      [0.184,0.151],[0.18,0.22],[0.16,0.275],[0.155,0.285]]);
     var glass = new THREE.Mesh(globe, glassMat); glass.name = "lantern glass"; glass.renderOrder = 3; head.add(glass);
     rod(head, 0, 0.009, 0, 0.12, 0.014);
     part(head, geo(new THREE.TorusGeometry(0.115, 0.0045, 8, radial)), brass, 0, 0.017, 0, 1, 1, 1, Math.PI / 2);
-    rod(head, 0, 0.267, 0, 0.139, 0.01);
-    part(head, geo(new THREE.TorusGeometry(0.136, 0.004, 8, radial)), brass, 0, 0.267, 0, 1, 1, 1, Math.PI / 2);
-    var dome = lathe([[0.137,0.271],[0.127,0.278],[0.103,0.285],[0.07,0.29],[0.034,0.292],[0,0.293]]);
-    part(head, dome, brass);
-    rod(head, 0, 0.298, 0, 0.023, 0.009);
-    ball(head, 0, 0.309, 0, 0.014);
-    ring(head, 0, 0.334, 0, 0.03, 0);
+    // Convex spun dome, seated directly on the globe, with a rolled rim.
+    var dome = lathe([[0,0.248],[0.163,0.248],[0.17,0.254],[0.168,0.265],
+      [0.156,0.283],[0.136,0.305],[0.108,0.324],[0.074,0.339],[0.035,0.348],[0,0.35]]);
+    part(head, dome, brass, 0, 0.035, 0);
+    part(head, geo(new THREE.TorusGeometry(0.164, 0.006, 8, radial)), brass, 0, 0.29, 0, 1, 1, 1, Math.PI / 2);
+    rod(head, 0, 0.392, 0, 0.025, 0.018);
+    ball(head, 0, 0.406, 0, 0.017);
+    part(head, geo(new THREE.TorusGeometry(0.05, 0.012, 8, radial)), brass, 0, 0.452, 0);
     for (i = 0; i < 4; i++) {
       angle = Math.PI / 4 + i * Math.PI / 2;
-      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.176,.078],[.185,.117],[.175,.16],[.15,.225],[.13,.263]];
+      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.181,.078],[.188,.117],[.188,.16],[.183,.22],[.16,.288]];
       for (j = 0; j < ribProfile.length; j++) {
         ribs.push(new THREE.Vector3(Math.sin(angle) * ribProfile[j][0], ribProfile[j][1], Math.cos(angle) * ribProfile[j][0]));
       }
@@ -190,40 +194,42 @@
     }
     for (i = 0; i < 16; i++) {
       angle = i * Math.PI / 8;
-      ball(head, Math.sin(angle) * 0.128, 0.278, Math.cos(angle) * 0.128, 0.0045);
+      ball(head, Math.sin(angle) * 0.16, 0.313, Math.cos(angle) * 0.16, 0.005);
       ball(head, Math.sin(angle) * 0.117, 0.013, Math.cos(angle) * 0.117, 0.005);
-      if (i % 2 === 0) ball(head, Math.sin(angle) * 0.129, 0.275, Math.cos(angle) * 0.129, 0.006, 0.002, 0.006, patina);
+      if (i % 2 === 0) ball(head, Math.sin(angle) * 0.16, 0.309, Math.cos(angle) * 0.16, 0.006, 0.002, 0.006, patina);
     }
-    var flame = group(head, "living flame", 0, 0.025, 0.055);
+    var flame = group(head, "living flame", 0, 0.031, 0.045);
     var flameShape = lathe([[0,0],[0.045,0.008],[0.074,0.03],[0.079,0.057],[0.066,0.083],
       [0.044,0.111],[0.027,0.137],[0.019,0.158],[0.009,0.178],[0,0.197]]);
     var fp = flameShape.attributes.position, colors = new Float32Array(fp.count * 3), color = new THREE.Color();
     for (i = 0; i < fp.count; i++) {
       var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.118);
       fp.setX(i, fp.getX(i) + Math.sin(bend * 6.8) * 0.038 * bend);
-      fp.setZ(i, fp.getZ(i) + bend * 0.07);
+      fp.setZ(i, fp.getZ(i) + bend * 0.08);
+      fp.setY(i, fy * 1.1);
       var heat = fy / 0.197;
-      color.setRGB(1, Math.max(0.015, 0.45 * Math.pow(1 - heat, 2)), 0.002);
+      var faceDim = 1 - 0.25 * Math.exp(-Math.pow((heat - 0.36) / 0.18, 2));
+      color.setRGB(faceDim, Math.max(0.018, 0.5 * Math.pow(1 - heat, 2)) * faceDim, 0.004);
       colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
     }
     flameShape.setAttribute("color", new THREE.BufferAttribute(colors, 3)); flameShape.computeVertexNormals();
     var outer = new THREE.Mesh(flameShape, flameMat); flame.add(outer);
-    var core = new THREE.Mesh(flameShape, coreMat); core.scale.set(0.59, 0.57, 0.52); core.position.set(0, 0.003, 0.043); flame.add(core);
+    var core = new THREE.Mesh(flameShape, coreMat); core.scale.set(0.49, 0.51, 0.48); core.position.set(0, 0.003, 0.038); flame.add(core);
     var tongue = new THREE.Mesh(flameShape, tipMat); tongue.scale.set(1.09, 1.03, 1.09); tongue.position.set(0, 0, -0.003); flame.add(tongue);
-    var eyes = group(flame, "eyes", 0, 0.057, 0.084);
-    ball(eyes, -0.023, 0, 0, 0.0065, 0.015, 0.005, eyeMat);
-    ball(eyes, 0.023, 0, 0, 0.0065, 0.015, 0.005, eyeMat);
-    var light = new THREE.PointLight(0xffb35a, 1.2, 4, 2); light.name = "Wick flame light";
+    var eyes = group(flame, "eyes", 0, 0.078, 0.078);
+    ball(eyes, -0.023, 0, 0, 0.007, 0.0175, 0.006, eyeMat);
+    ball(eyes, 0.023, 0, 0, 0.007, 0.0175, 0.006, eyeMat);
+    var light = new THREE.PointLight(0xffb35a, 1.4, 4, 2); light.name = "Wick flame light";
     light.castShadow = false; root.add(light);
     var halo = null;
     if (!low) {
       var hc = canvas(128, 128), hctx = hc.getContext("2d"), hg = hctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-      hg.addColorStop(0, "rgba(255,205,100,.35)"); hg.addColorStop(0.24, "rgba(255,153,40,.16)");
+      hg.addColorStop(0, "rgba(255,205,100,.4)"); hg.addColorStop(0.24, "rgba(255,153,40,.2)");
       hg.addColorStop(0.55, "rgba(255,120,20,.045)"); hg.addColorStop(1, "rgba(255,100,0,0)");
       hctx.fillStyle = hg; hctx.fillRect(0, 0, 128, 128);
       halo = new THREE.Sprite(mat(new THREE.SpriteMaterial({ map: texture(hc, true), transparent: true,
-        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.65, toneMapped: false })));
-      halo.position.y = 0.13; halo.scale.set(0.47, 0.47, 1); head.add(halo);
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.75, toneMapped: false })));
+      halo.position.y = 0.13; halo.scale.set(1.1, 1.1, 1); head.add(halo);
     }
     var shoulders = [], elbows = [], legHips = [], knees = [], ankles = [];
     for (i = 0; i < 2; i++) {
@@ -237,9 +243,9 @@
       rod(el, 0, -0.035, 0, 0.0105, 0.059);
       ball(el, 0, -0.069, 0, 0.014);
       rod(el, 0, -0.065, 0, 0.02, 0.012);
-      ball(el, 0, -0.088, 0.003, 0.018, 0.022, 0.014);
-      for (j = 0; j < 3; j++) ball(el, (j - 1) * 0.011, -0.108, 0.008, 0.0065, 0.014, 0.008);
-      ball(el, -sign * 0.022, -0.088, 0.01, 0.008, 0.015, 0.009);
+      ball(el, 0, -0.088, 0.003, 0.023, 0.025, 0.018);
+      for (j = 0; j < 3; j++) ball(el, (j - 1) * 0.014, -0.111, 0.01, 0.008, 0.016, 0.01);
+      ball(el, -sign * 0.027, -0.088, 0.014, 0.01, 0.017, 0.011);
       var hip = group(hips, "hip." + side, sign * 0.065, 0, 0); legHips.push(hip);
       ball(hip, 0, 0, 0, 0.023); rod(hip, 0, -0.043, 0, 0.014, 0.069);
       var knee = group(hip, "knee." + side, 0, -0.085, 0); knees.push(knee);
@@ -247,8 +253,9 @@
       var ankle = group(knee, "ankle." + side, 0, -0.071, 0); ankles.push(ankle);
       ball(ankle, 0, 0, 0, 0.019);
       rod(ankle, 0, -0.004, 0, 0.026, 0.012);
-      ball(ankle, 0, -0.034, 0.017, 0.046, 0.03, 0.065);
-      ball(ankle, 0, -0.058, 0.018, 0.048, 0.008, 0.066, dark);
+      ball(ankle, 0, -0.034, 0.024, 0.051, 0.032, 0.075);
+      ball(ankle, 0, -0.058, 0.025, 0.054, 0.008, 0.077, dark);
+      part(ankle, geo(new THREE.TorusGeometry(1, 0.045, 5, radial)), brass, 0, -0.052, 0.025, 0.052, 0.075, 0.052, Math.PI / 2);
       ring(ankle, 0, -0.014, 0, 0.023, Math.PI / 2);
     }
     batches.forEach(function (b) {
@@ -265,7 +272,7 @@
     });
     batches.length = 0;
     // Two world-space Verlet ribbons. Every buffer/vector used below is persistent.
-    var tails = [], nodes = low ? 4 : 7, segment = low ? 0.066 : 0.035;
+    var tails = [], nodes = low ? 4 : 7, segment = low ? 0.122 : 0.061;
     for (i = 0; i < 2; i++) {
       var ribbon = geo(new THREE.BufferGeometry()), positions = new Float32Array(nodes * 6 + 72), uv = new Float32Array(nodes * 4 + 48), indices = [];
       for (j = 0; j < nodes; j++) {
@@ -287,7 +294,7 @@
       var current = [], previous = [];
       for (j = 0; j < nodes; j++) { current.push(new THREE.Vector3()); previous.push(new THREE.Vector3()); }
       tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.09 - i * 0.045, 0.259, 0.124 - i * 0.008),
-        pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.87 : 1) });
+        pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.94 : 1) });
     }
     var rootWorld = new THREE.Vector3(), lastWorld = new THREE.Vector3(), movement = new THREE.Vector3();
     var temp = new THREE.Vector3(), correction = new THREE.Vector3(), local = new THREE.Vector3(), local2 = new THREE.Vector3();
@@ -442,15 +449,15 @@
         torso.rotation.z = gait * 0.025 * s + ride * Math.sin(t * 3) * 0.045 + bump * Math.sin(animTimes[4] * 22) * Math.exp(-animTimes[4] * 4) * 0.11;
         torso.scale.y = 1 + 0.008 * Math.sin(t * 2.6);
         var look = Math.sin(t * 0.69) * Math.pow(Math.max(0, Math.sin(t * 0.37)), 4);
-        head.position.y = 0.289 + celebrate * 0.025 + gait * 0.003 * Math.cos(phase * 2);
+        head.position.y = 0.32 + celebrate * 0.042 + gait * 0.003 * Math.cos(phase * 2);
         head.rotation.y = look * 0.5 * weights[0];
         head.rotation.z = bump * 0.28 + wave * 0.11 + ride * Math.sin(t * 2.4) * 0.04;
         head.rotation.x = bump * 0.12 - torso.rotation.x * 0.65;
         for (var li = 0; li < 2; li++) {
           var sideSign = li === 0 ? 1 : -1, swing = s * sideSign;
-          legHips[li].rotation.x = -gait * swing * (0.66 + climb * 0.32) - air * 0.55 - ride * 0.38;
+          legHips[li].rotation.x = -gait * swing * (0.72 + climb * 0.32) - air * 0.55 - ride * 0.38;
           legHips[li].rotation.z = sideSign * (ride * 0.13 + celebrate * 0.05);
-          knees[li].rotation.x = gait * Math.max(0, swing) * (1.8 + climb * 0.6) + air * 1.1 + ride * 0.76;
+          knees[li].rotation.x = gait * Math.max(0, swing) * (2.1 + climb * 0.6) + air * 1.1 + ride * 0.76;
           ankles[li].rotation.x = -legHips[li].rotation.x - knees[li].rotation.x;
           ankles[li].rotation.z = -legHips[li].rotation.z;
           shoulders[li].rotation.x = gait * swing * (0.65 + climb * 0.2) + Math.sin(t * 2 + li) * 0.035 - bump * (li ? 0.8 : 0.05);
@@ -483,11 +490,11 @@
         flame.rotation.z = Math.sin(t * 11) * 0.025 + gait * s * 0.03;
         outer.scale.x = 1 + Math.sin(t * 13) * 0.025;
         tongue.scale.y = 1.03 + Math.sin(t * 19) * 0.025;
-        flameMat.emissiveIntensity = 2.8 * (0.65 + glow * 0.35) * flicker;
-        if (halo) { halo.scale.setScalar(0.47 * (0.85 + glow * 0.15)); halo.material.opacity = 0.65 * glow; }
+        flameMat.emissiveIntensity = 1.85 * (0.65 + glow * 0.35) * flicker;
+        if (halo) { halo.scale.setScalar(1.1 * (0.85 + glow * 0.15)); halo.material.opacity = 0.75 * glow; }
         updateScarf(dt, t);
         temp.set(0, 0.105, 0).applyMatrix4(head.matrixWorld).applyMatrix4(rootInverse); light.position.copy(temp);
-        light.intensity = 1.2 * glow * flicker;
+        light.intensity = 1.4 * glow * flicker;
       },
       dispose: function () {
         if (disposed) return; disposed = true;

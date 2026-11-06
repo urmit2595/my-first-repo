@@ -20,11 +20,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(() => { window.__ev = []; ["tap","path","heroStep","heroStop","mechGrab","mechSnap","mechLocked","plate","glimmer","goal","beacon","levelComplete"].forEach(n => Game.bus.on(n, d => __ev.push(n + " " + JSON.stringify(d).slice(0, 90)))); });
   console.log("levels", await ev(() => Game.levels.map(l => l.id)), "mods", await ev(() => Game.debug().mods));
   const n = await ev(() => Game.levels.length);
-  for (let i = 0; i < n; i++) {
-    await ev(i => { Game.startLevel(i); }, i);
-    await sleep(600);
-    await h.page.screenshot({ path: path.join(out, `level${i + 1}-landscape.png`) });
-    const r = await ev(i => Game.runSolution(i), i);
+  const only = process.argv[3] !== undefined ? [+process.argv[3]] : [...Array(n).keys()];
+  for (const i of only) {
+    await h.page.evaluate(i => { window.__r = null; Game.runSolution(i).then(r => (window.__r = r)); }, i);
+    let r = null;
+    for (let k = 0; k < 120 && !r; k++) { await sleep(1000); r = await ev(() => window.__r); }
     const d = await ev(() => Game.debug());
     console.log("level", i + 1, JSON.stringify(r), "draws", d.calls, "tris", d.tris, "state", d.state);
     await h.page.screenshot({ path: path.join(out, `level${i + 1}-done.png`) });

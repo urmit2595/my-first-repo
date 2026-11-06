@@ -66,16 +66,6 @@
     "float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++){ float n = vnoise(p);",
     "  s += a * mix(n, 1.0 - abs(2.0 * n - 1.0), 0.55); p = p * 2.05 + vec2(17.1, 9.2); a *= 0.47; } return s * 0.95; }",
   ].join("\n");
-  const DOMES = [
-    "float domes(vec2 p, float rad){ vec2 i = floor(p), f = fract(p); float h = 0.0;",
-    "  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++){ vec2 g = vec2(float(x), float(y));",
-    "    vec2 o = vec2(hash(i + g), hash(i + g + 19.7)); vec2 d = g + 0.15 + o * 0.7 - f;",
-    "    float r = rad * (0.55 + 0.9 * hash(i + g + 7.3)); float q = 1.0 - dot(d, d) / (r * r);",
-    "    if (q > 0.0) h = max(h, sqrt(q) * r); }",
-    "  return h; }",
-    "float cloudH(vec2 uv){ return domes(uv, 0.62) * 0.55 + domes(uv * 2.3 + 5.3, 0.6) * 0.26 + domes(uv * 5.1 + 2.1, 0.6) * 0.1 + fbm(uv * 2.0) * 0.14; }",
-  ].join("\n");
-
   const FS_BACKDROP = [
     "precision highp float; varying vec2 vN;",
     "uniform sampler2D uTexA, uTexB; uniform float uHasA, uHasB, uMix, uGain, uImgAspect, uAspect, uZoom, uFocusX;",
@@ -91,37 +81,76 @@
     "  gl_FragColor = vec4(mix(a, b, uMix) * uGain, 1.0); }",
   ].join("\n");
 
+  // Fallback cloud sea (used only until/unless the painted cloud bands load): soft, low-contrast, domain-warped.
   const FS_CLOUD = [
     "precision highp float; varying vec2 vN;",
     "uniform float uTime, uAspect, uHorizon, uCover; uniform vec2 uSunDir;",
     "uniform vec3 uLit, uMidC, uShadow, uRim;",
-    NOISE, DOMES,
-    // one cloud layer: returns premultiplied colour in rgb, coverage in a
+    NOISE,
+    "float sfbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += a * vnoise(p); p = p * 2.0 + vec2(5.2, 1.3); a *= 0.5; } return s / 0.9375; }",
     "vec4 layer(vec2 sp, float hz, float scale, float speed, float seed, float rise, float haze){",
-    "  vec2 uv = vec2(sp.x * scale + uTime * speed + seed, sp.y * scale * 1.0);",
-    "  float d = cloudH(uv);",
+    "  vec2 uv = vec2(sp.x * scale + uTime * speed + seed, sp.y * scale * 0.8);",
+    "  vec2 w = vec2(sfbm(uv * 0.7 + 3.1), sfbm(uv * 0.7 + 8.7));",
+    "  uv += (w - 0.5) * 1.1;",
+    "  float d = sfbm(uv);",
     "  float f = d + (hz - sp.y) * rise;",
-    "  float thr = uCover;",
-    "  float a = smoothstep(thr - 0.02, thr + 0.035, f);",
-    "  if (a <= 0.001) return vec4(0.0);",
-    "  float d2 = cloudH(uv + uSunDir * 0.12);",
-    "  float lit = smoothstep(-0.02, 0.07, d - d2);",
-    "  float shade = smoothstep(0.0, 0.6, f - thr);",
-    "  float rim = 1.0 - smoothstep(0.0, 0.12, f - thr);",
-    "  vec3 c = mix(uMidC, uShadow, shade * 0.85 * (1.0 - lit * 0.5));",
-    "  c = mix(c, uLit, lit * (1.0 - shade * 0.55));",
-    "  c *= 0.86 + 0.24 * d + 0.07 * fbm(uv * 4.0);",
-    "  c += uRim * rim * (0.25 + 0.5 * lit);",
+    "  float a = smoothstep(uCover - 0.16, uCover + 0.16, f);",
+    "  if (a <= 0.002) return vec4(0.0);",
+    "  float d2 = sfbm(uv + uSunDir * 0.18);",
+    "  float lit = clamp(0.55 + (d - d2) * 2.2, 0.0, 1.0);",
+    "  vec3 c = mix(uMidC, uLit, lit * 0.75);",
+    "  c = mix(c, uShadow, 0.18 * (1.0 - lit) + 0.2 * smoothstep(0.0, 1.2, f - uCover));",
+    "  c += uRim * (1.0 - smoothstep(0.0, 0.2, f - uCover)) * 0.18;",
     "  c = mix(c, uMidC * 0.9 + uLit * 0.1, haze);",
     "  return vec4(c * a, a); }",
     "void main(){",
     "  float k = 1.0 / min(uAspect, 1.0);",
     "  vec2 sp = vec2(vN.x * uAspect, vN.y) * k; float hz = uHorizon * k;",
-    "  vec4 acc = vec4(0.0);",
-    "  vec4 l;",
-    "  l = layer(sp, hz + 0.22 * k, 1.2, 0.004, 3.0, 1.0, 0.45); acc = acc * (1.0 - l.a) + l;",
-    "  l = layer(sp, hz + 0.06 * k, 1.7, 0.0075, 11.0, 0.8, 0.2); acc = acc * (1.0 - l.a) + l;",
-    "  l = layer(sp, hz - 0.14 * k, 2.3, 0.012, 27.0, 0.7, 0.0); acc = acc * (1.0 - l.a) + l;",
+    "  vec4 acc = vec4(0.0); vec4 l;",
+    "  l = layer(sp, hz + 0.2 * k, 0.9, 0.004, 3.0, 0.9, 0.45); acc = acc * (1.0 - l.a) + l;",
+    "  l = layer(sp, hz + 0.05 * k, 1.2, 0.007, 11.0, 0.8, 0.2); acc = acc * (1.0 - l.a) + l;",
+    "  l = layer(sp, hz - 0.12 * k, 1.6, 0.011, 27.0, 0.7, 0.0); acc = acc * (1.0 - l.a) + l;",
+    "  if (acc.a < 0.002) discard;",
+    "  gl_FragColor = vec4(acc.rgb / acc.a, acc.a); }",
+  ].join("\n");
+
+  // Painted cloud bands (alpha RGBA, rgb = grey luminance), tinted per theme, 3 parallax layers in screen space.
+  const FS_CLOUDTEX = [
+    "precision highp float; varying vec2 vN;",
+    "uniform sampler2D uTexN, uTexF; uniform float uAspN, uAspF, uTime, uAspect, uHorizon, uHasF;",
+    "uniform vec2 uSunDir; uniform vec3 uLit, uMidC, uShadow, uRim, uHazeC;",
+    // sample a band: top of the cloud mass at yTop (screen units), width = screen units per image repeat
+    "vec4 band(sampler2D t, float asp, vec2 sp, float yTop, float width, float scroll, float flip, float yscale){",
+    "  float bh = width / asp * yscale;",
+    "  float v = (sp.y - (yTop - bh)) / bh;",
+    "  if (v > 1.0) return vec4(0.0);",
+    "  float u = (sp.x / width) * flip + scroll;",
+    "  u += 0.0025 * sin(uTime * 0.6 + v * 9.0 + u * 6.0);",
+    "  vec4 s = texture2D(t, vec2(u, clamp(v, 0.003, 0.997)));",
+    "  s.a *= smoothstep(1.0, 0.93, v) * 0.0 + 1.0;",
+    "  return s; }",
+    "vec4 shade(vec4 s, vec2 sp, float haze, float rimAmt, float depthK){",
+    "  float a = s.a; float g = mix(0.95, s.r, smoothstep(0.15, 0.9, a));",
+    "  vec3 c = mix(uShadow, uMidC, smoothstep(0.08, 0.6, g));",
+    "  c = mix(c, uLit, smoothstep(0.5, 1.0, g));",
+    "  float side = clamp(0.5 + 0.5 * uSunDir.x * sp.x * 0.35, 0.0, 1.0);",
+    "  c *= 0.9 + 0.2 * side;",
+    "  c += uRim * rimAmt * (1.0 - smoothstep(0.0, 0.9, a)) * smoothstep(0.0, 0.3, a) * 0.5;",
+    "  c *= 1.0 + 0.05 * sin(uTime * 0.8 + sp.x * 7.0 + g * 5.0);",
+    "  c = mix(c, uHazeC, haze);",
+    "  c = mix(c, uShadow, depthK);",
+    "  return vec4(c * a, a); }",
+    "void main(){",
+    "  float k = 1.0 / min(uAspect, 1.0);",
+    "  vec2 sp = vec2(vN.x * uAspect, vN.y) * k; float hz = uHorizon * k;",
+    "  float below = clamp((hz - sp.y) / 1.6, 0.0, 1.0);",
+    "  vec4 acc = vec4(0.0), l;",
+    "  if (uHasF > 0.5) { l = shade(band(uTexF, uAspF, sp, hz + 0.20 * k, 2.4 * k, uTime * 0.0035 + 0.31, 1.0, 1.0), sp, 0.5, 0.0, 0.0);",
+    "    l *= 0.8; acc = acc * (1.0 - l.a) + l; }",
+    "  l = shade(band(uTexN, uAspN, sp, hz + 0.02 * k, 3.1 * k, uTime * 0.007 + 0.6, 1.0, 1.0), sp, 0.15, 1.0, below * 0.18);",
+    "  acc = acc * (1.0 - l.a) + l;",
+    "  l = shade(band(uTexN, uAspN, sp, hz - 0.2 * k, 5.2 * k, uTime * 0.012 + 0.13, -1.0, 1.0), sp, 0.0, 0.7, below * 0.3);",
+    "  acc = acc * (1.0 - l.a) + l;",
     "  if (acc.a < 0.002) discard;",
     "  gl_FragColor = vec4(acc.rgb / acc.a, acc.a); }",
   ].join("\n");
@@ -396,14 +425,14 @@
       try {
         new T.TextureLoader().load(BASE_URL(name), (t) => {
           t.minFilter = T.LinearFilter; t.magFilter = T.LinearFilter; t.generateMipmaps = false;
-          t.wrapS = t.wrapT = T.ClampToEdgeWrapping; t.encoding = T.LinearEncoding;
+          t.wrapS = name.indexOf("cloud-") === 0 ? T.RepeatWrapping : T.ClampToEdgeWrapping; t.wrapT = T.ClampToEdgeWrapping; t.encoding = T.LinearEncoding;
           fin(t);
         }, undefined, () => fin(null));
       } catch (e) { fin(null); }
       setTimeout(() => fin(null), 15000);
     });
   }
-  function BASE_URL(name) { return World.base + "sky-" + name + ".webp"; }
+  function BASE_URL(name) { return World.base + (name.indexOf("cloud-") === 0 ? "" : "sky-") + name + ".webp"; }
 
   World.init = function (THREE, rend, scn, cam) {
     try {
@@ -459,7 +488,15 @@
         uLit: { value: S.cur.cloudLit }, uMidC: { value: S.cur.cloudMid }, uShadow: { value: S.cur.cloudShadow }, uRim: { value: S.cur.cloudRim },
       };
       const mCloud = blend(new T.ShaderMaterial({ uniforms: S.uCloud, vertexShader: VS_FULL, fragmentShader: FS_CLOUD }), "alpha");
-      root.add(fullMesh(mCloud, -960));
+      S.meshCloudProc = fullMesh(mCloud, -960); root.add(S.meshCloudProc);
+      S.uCloudT = {
+        uTexN: { value: null }, uTexF: { value: null }, uAspN: { value: 3 }, uAspF: { value: 5 }, uHasF: { value: 0 },
+        uTime: { value: 0 }, uAspect: { value: 1 }, uHorizon: { value: S.horizon }, uSunDir: { value: S.sunDirScreen },
+        uLit: { value: S.cur.cloudLit }, uMidC: { value: S.cur.cloudMid }, uShadow: { value: S.cur.cloudShadow }, uRim: { value: S.cur.cloudRim },
+        uHazeC: { value: S.cur.skyLow },
+      };
+      const mCloudT = blend(new T.ShaderMaterial({ uniforms: S.uCloudT, vertexShader: VS_FULL, fragmentShader: FS_CLOUDTEX }), "alpha");
+      S.meshCloudTex = fullMesh(mCloudT, -960); S.meshCloudTex.visible = false; root.add(S.meshCloudTex);
 
       // very light screen-space haze over the lowest part of the screen (screen y only)
       S.uMist = { uAmt: { value: 0 }, uCol: { value: S.cur.mistCol } };
@@ -486,6 +523,17 @@
         if (t && t.image && t.image.width) S.imgAspect = t.image.width / t.image.height;
         applyTextures(false);
       }));
+      Promise.all([loadTexture("cloud-near"), loadTexture("cloud-far")]).then((r) => {
+        try {
+          const n = r[0], f = r[1];
+          if (!n || !n.image) return;
+          S.cloudTex = r;
+          S.uCloudT.uTexN.value = n; S.uCloudT.uAspN.value = n.image.width / n.image.height;
+          if (f && f.image) { S.uCloudT.uTexF.value = f; S.uCloudT.uAspF.value = f.image.width / f.image.height; S.uCloudT.uHasF.value = 1; }
+          else { S.uCloudT.uTexF.value = n; }
+          S.meshCloudTex.visible = true; S.meshCloudProc.visible = false;
+        } catch (e) { /* keep the procedural fallback */ }
+      });
       World.ready = true;
       return Promise.all(jobs).then(() => { applyTextures(true); }).catch(() => {});
     } catch (e) {
@@ -668,6 +716,7 @@
       // push uniforms
       const k = S.uCloud;
       k.uTime.value = tm; k.uAspect.value = S.aspect; k.uHorizon.value = S.horizon; k.uCover.value = c.cloudCover;
+      const ct = S.uCloudT; ct.uTime.value = tm; ct.uAspect.value = S.aspect; ct.uHorizon.value = S.horizon;
       const st = S.uStars;
       st.uTime.value = tm; st.uAmt.value = c.stars; st.uAspect.value = S.aspect; st.uPx.value = S.pxRatio * Math.min(1.4, Math.max(0.7, h / 720));
       const au = S.uAur; au.uTime.value = tm; au.uAspect.value = S.aspect; au.uAmt.value = c.aurora;
@@ -689,6 +738,7 @@
       }
       if (World.lights) { scene.remove(World.lights.key, World.lights.key.target, World.lights.hemi, World.lights.rim, World.lights.rim.target); }
       if (S.envRT) { S.envRT.dispose(); S.envRT = null; if (scene.environment === World.envMap) scene.environment = null; World.envMap = null; }
+      if (S.cloudTex) for (const t of S.cloudTex) if (t) t.dispose();
       for (const n in S.textures) if (S.textures[n]) S.textures[n].dispose();
     } catch (e) { /* */ }
     World.ready = false;
