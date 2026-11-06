@@ -36,7 +36,7 @@
   put(4, 1, 4, { style: "wood" }); put(5, 1, 4, { style: "brass" });
   box(6, 1, 0, 8, 4, 2, { style: "sandstone" });
   box(6, 1, 3, 8, 2, 3, { style: "brick" }); box(7, 3, 3, 8, 3, 3, { style: "marble", walk: false });
-  put(0, 1, 1, { style: "column", walk: false }); put(0, 2, 1, { style: "column", walk: false }); put(0, 3, 1, { style: "column", walk: false });
+  put(0, 1, 1, { style: "column", walk: false, kind: P.get("veil") ? "veil" : "cube" }); put(2, 1, 1, { style: "hedge", kind: P.get("veil") ? "veil" : "cube" });
   put(0, 1, 2, { style: "column", walk: false });
   put(1, 1, 1, { style: "hedge" }); put(2, 1, 1, { style: "hedge" }); put(1, 1, 2, { style: "hedge" });
   put(8, 5, 0, { style: "slate", walk: false }); put(7, 5, 1, { style: "copper", walk: false });

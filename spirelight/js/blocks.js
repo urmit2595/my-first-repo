@@ -29,6 +29,7 @@
     brassTrim: { tex: "brass",     scale: 0.6, rough: 0.28, metal: 0.9, env: 1.3, color: 0xffe2a0, fb: 0xc8963e, nrm: 0.0 },
     grate:     { canvas: "grate",  scale: 1.0, rough: 0.4,  metal: 0.8, env: 1.0, color: 0xffffff, fb: 0x6a4a22, nrm: 0.0 },
     iron:      { scale: 1, rough: 0.45, metal: 0.8, env: 0.8, color: 0x4a4048, fb: 0x4a4048, nrm: 0.0 },
+    veilRim:   { scale: 1, rough: 1, metal: 0, color: 0xffffff, fb: 0xa8d0ff },
     darkiron:  { scale: 1, rough: 0.7, metal: 0.3, color: 0x120e16, fb: 0x120e16, nrm: 0.0 },
     grime:     { canvas: "grime", scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x28182a, soft: true, decal: true },
     window:    { canvas: "window", scale: 1.0, rough: 0.3, metal: 0.0, color: 0xffffff, fb: 0xffb35a, emissive: true },

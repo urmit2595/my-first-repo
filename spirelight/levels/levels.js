@@ -69,7 +69,7 @@
     decor: [].concat(
       [
         { type: "beacon", at: [0, 3, 1], face: "+y" },
-        { type: "keel", at: [2, -2, 1], w: 4, d: 2, depth: 5 },
+        { type: "keel", at: [2, -2, 1], w: 2, d: 2, depth: 4 },
         { type: "dome", at: [-1, 5, 1], face: "+y", r: 1.0 },
         { type: "finial", at: [-1, 6, 1], face: "+y" },
         S("strut", [-0.6, 0.4, 0.5], [0.4, 0.9, 0.5]),
