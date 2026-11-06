@@ -17,15 +17,15 @@ window.Scenery = (() => {
     pier: { front: 8.4, depth: [3.2, 3.6], scale: [0.9, 1.1], roof: "gable", lot: 0.93, alley: 0, lotW: [40, 90], hvar: false, shed: true },
   };
   const CFG = {
-    town: { exposure: 1.0, fog: [30, 150], sun: [0xffd29c, 2.7], sunPos: [-12, 12, -18], hemi: [0xbfd2ff, 0xd9a874, 0.6], tint: 0xffffff, rows: "town", far2: true, endWall: true, walk: [0.5, 2.0], curb: [10, 18], far: null, lotStep: null, ground: 0x8a9a4a, sand: false,
+    town: { exposure: 1.0, fog: [30, 150], sun: [0xffd29c, 2.7], sunPos: [-12, 12, -18], hemi: [0xbfd2ff, 0xd9a874, 0.78], tint: 0xffffff, rows: "town", far2: true, endWall: true, walk: [0.5, 2.0], curb: [10, 18], far: null, lotStep: null, ground: 0x8a9a4a, sand: false,
       env: [0x7da6ff, 0xffd2a0, 0xb98a5c, 0xffc070], plain: 0.82 },
-    ruins: { exposure: 1.0, fog: [28, 135], sun: [0xffc896, 2.3], sunPos: [-12, 12, -18], hemi: [0xb9b5b0, 0x8a7766, 0.7], tint: 0xe6dccf, rows: "ruins", far2: true, endWall: true, walk: [1, 3], curb: [12, 22], far: [55, 110, 28, 70], lotStep: null, ground: 0x7a6d5e,
+    ruins: { exposure: 1.0, fog: [28, 135], sun: [0xffc896, 2.3], sunPos: [-12, 12, -18], hemi: [0xb9b5b0, 0x8a7766, 0.8], tint: 0xe6dccf, rows: "ruins", far2: true, endWall: true, walk: [1, 3], curb: [12, 22], far: [55, 110, 28, 70], lotStep: null, ground: 0x7a6d5e,
       env: [0x8d9db0, 0xe0b790, 0x7a6552, 0xffb070], plain: 0.72 },
     bridge: { exposure: 1.05, fog: [60, 200], fogColor: 0x8fcbf2, rhythm: 14, sun: [0xfff1dc, 2.6], sunPos: [-12, 13, -16], hemi: [0xc8e4ff, 0x9bb5c8, 0.7], tint: 0xffffff, rows: null, walk: [4, 10], curb: [14, 20], far: [90, 170, 40, 95], lotStep: null, water: { y: -13, deep: 0x1568b0, shallow: [0.30, 0.74, 0.95] }, remapLot: true,
       env: [0x5fa8f5, 0xdcefff, 0x8fb5d0, 0xfff0d0], plain: 0.9 },
     pier: { exposure: 1.05, fog: [52, 220], sun: [0xfff0d4, 2.5], sunPos: [-12, 13, -17], hemi: [0xcdeaf5, 0xb3a58f, 0.7], tint: 0xffffff, rows: "pier", walk: [1.5, 4.5], curb: [9, 15], far: null, lotStep: null, water: { y: -3.3, deep: 0x12859d, shallow: [0.33, 0.82, 0.86] }, remapLot: true,
       env: [0x72c9e0, 0xf0ffff, 0xa09078, 0xffeed0], plain: 0.8 },
-    desert: { exposure: 1.0, fog: [46, 200], sun: [0xffc084, 2.8], sunPos: [-12, 12, -18], hemi: [0xffe3b8, 0xd9a068, 0.6], tint: 0xffffff, rows: "desert", walk: [9, 22], curb: [28, 55], far: [70, 140, 55, 110], lotStep: [7, 16], ground: 0xe8a550, sand: true,
+    desert: { exposure: 1.0, fog: [46, 200], sun: [0xffc084, 2.8], sunPos: [-12, 12, -18], hemi: [0xffe3b8, 0xd9a068, 0.75], tint: 0xffffff, rows: "desert", walk: [9, 22], curb: [28, 55], far: [70, 140, 55, 110], lotStep: [7, 16], ground: 0xe8a550, sand: true,
       env: [0xffa86a, 0xffe2b0, 0xd9a068, 0xffc070], plain: 0.85 },
     arena: { exposure: 0.95, walkTone: 0.32, dim: 0.6, endWall: true, fog: [40, 175], sun: [0xe9f1ff, 2.0], sunPos: [-9, 14, -14], hemi: [0x5d72b0, 0x2b3458, 0.5], tint: 0xa7b4e0, rows: "arena", walk: [1.5, 4.5], curb: [16, 28], far: [50, 70, 20, 28], lotStep: null, ground: 0x6a7080, remapLot: true,
       env: [0x16224a, 0x3b4c82, 0x24304f, 0xe8f0ff], plain: 0.7 },

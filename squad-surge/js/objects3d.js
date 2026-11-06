@@ -64,7 +64,7 @@ window.Obj3D = (() => {
   function buildEnv() {
     const gen = new THREE.PMREMGenerator(C.renderer), sc = new THREE.Scene();
     const sg = new THREE.SphereBufferGeometry(60, 32, 20), pos = sg.attributes.position, col = [];
-    const top = new THREE.Color(0.3, 0.5, 0.95), hor = new THREE.Color(0.95, 0.8, 0.6), bot = new THREE.Color(0.01, 0.01, 0.012), c = new THREE.Color();
+    const top = new THREE.Color(0.3, 0.5, 0.95), hor = new THREE.Color(0.95, 0.8, 0.6), bot = new THREE.Color(0.07, 0.07, 0.08), c = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
       const y = pos.getY(i) / 60;
       if (y > 0) c.copy(hor).lerp(top, Math.pow(y, 0.6)); else c.copy(hor).lerp(bot, Math.min(1, -y * 14));
