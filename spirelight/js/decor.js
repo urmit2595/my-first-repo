@@ -793,7 +793,6 @@
     const hole = new THREE.Path(); hole.absarc(0, 0, 0.315, 0, TAU, true); slab.holes.push(hole);
     b.add("matte", new THREE.ExtrudeGeometry(slab, { depth: 0.045, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2, curveSegments: S(20) }).rotateX(-Math.PI / 2), { c: 0x5e5668 });
     b.cyl("matte", 0.32, 0.32, 0.01, S(28), { p: [0, 0.01, 0], c: 0x2a2230 });                                  // dark well under the disc
-    b.tor("metal", 0.335, 0.008, { p: [0, 0.062, 0], r: [Math.PI / 2, 0, 0], c: C.brassDk }, S(40), 5);           // thin brass lip round the inset
     for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; b.box("matte", 0.07, 0.016, 0.07, { p: [Math.cos(a) * 0.38, 0.062, Math.sin(a) * 0.38], r: [0, -a, 0], c: 0xb2a8bc }); }
     // chime post (back corner) with a small bell hanging from a brass arm
     b.cyl("matte", 0.045, 0.06, 0.2, 8, { p: [-0.34, 0.15, -0.34], c: 0x9a90a4 });
@@ -814,9 +813,9 @@
     const dgeo = new THREE.CylinderGeometry(0.3, 0.3, 0.06, S(36)); env.ownG.push(dgeo);
     const disc = new THREE.Mesh(dgeo, dm); disc.position.y = -0.03; disc.receiveShadow = true; top.add(disc);   // glyph reads from the top cap UVs
     // orange emissive ring in the groove (always faintly lit so plates are recognisable; blazes when pressed)
-    const rg = new THREE.TorusGeometry(0.318, 0.016, 6, S(48)); env.ownG.push(rg);
+    const rg = new THREE.TorusGeometry(0.322, 0.024, 6, S(48)); env.ownG.push(rg);
     const rm = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.4, 0.06) }); env.own.push(rm);
-    const ring = new THREE.Mesh(rg, rm); ring.rotation.x = Math.PI / 2; ring.position.y = 0.05; W.add(ring);
+    const ring = new THREE.Mesh(rg, rm); ring.rotation.x = Math.PI / 2; ring.position.y = 0.056; W.add(ring);
     const halo = flatGlow(env, 0xff8a30, 1.4, 1.4, 0); halo.position.y = 0.014; W.add(halo);
     const st = ramp(false, 5), ph = env.rng() * TAU; let swing = 0;
     const apply = (t) => {
@@ -824,7 +823,7 @@
       top.position.y = 0.06 - 0.04 * v;
       dm.emissiveIntensity = 0.04 + v * 1.4;
       const k = 0.55 + 0.2 * Math.sin(t * 2 + ph);
-      rm.color.setRGB(lerp(0.95 * k, 2.2, v), lerp(0.26 * k, 0.7, v), lerp(0.03 * k, 0.08, v));
+      rm.color.setRGB(lerp(1.35 * k, 2.4, v), lerp(0.22 * k, 0.55, v), lerp(0.02 * k, 0.05, v));
       halo.material.opacity = v * 0.45; halo.visible = v > 0.01;
     };
     env.ud.press = (on, instant) => { const was = env.ud.pressed; st.set(on !== false, instant); env.ud.pressed = on !== false; if (on !== false && !was) swing = 0.7; if (instant) apply(0); };
