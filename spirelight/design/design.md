@@ -262,7 +262,7 @@ LEVELS.push({
   hint: "Tap a pale stone to walk there.", // shown when the player asks for a hint
   start: "start",               // tile alias (or id "group:x,y,z")
   goal: "goal",                 // tile alias; the beacon decor sits behind it
-  view: { center: [3, 4, 3], height: 16 },  // optional camera override (world point, visible world height)
+  view: { center: [3, 4, 3], height: 16, portrait: { center: [3, 5, 3], height: 20 } },  // optional camera override: world point and VISIBLE world height (landscape); `portrait` overrides it when the screen is taller than wide
   groups: [
     { id: "base", blocks: [
         { box: [0,0,0, 4,0,4], style: "darkstone", walk: false }, // inclusive cell range x0,y0,z0, x1,y1,z1
