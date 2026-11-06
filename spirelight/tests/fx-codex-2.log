@@ -1938,3 +1938,140 @@ exec
     bind("title", function () { paused = false; changeTheme("dusk"); rebuild(true); resetBed(); });
     bind("pause", function (d) { paused = !!d.paused; poll = 0; });
 
+codex
+The plate and glimmer handlers currently ignore `pos`. I also found local-coordinate hero dust, midpoint-based junction shimmers, and counters that increment only after audio plays. I’ll fix those while preserving the particle pools and ambient effects, and make `FX.unlock()` awaitable so the harness can check the resumed audio context.
+
+apply patch
+patch: completed
+/home/user/my-first-repo/spirelight/js/fx.js
+diff --git a/spirelight/js/fx.js b/spirelight/js/fx.js
+index 5dd6ca1f3dabb0a1afa492d04f8a2a85ca5f9d77..8845414d8852edc22d277fdd208955464f21c391
+--- a/spirelight/js/fx.js
++++ b/spirelight/js/fx.js
+@@ -43,7 +43,7 @@
+     out.set(x, y, z); return true;
+   }
+   function point(value, out) {
+-    if (typeof value !== "string") return readPoint(value, out);
++    if (typeof value !== "string") return false;
+     if (!G.geom || typeof G.geom.walkable !== "function") return false;
+     var w = G.geom.walkable(value);
+     if (!w || !readPoint(w.stand, out)) return false;
+@@ -60,7 +60,9 @@
+   }
+   function decorPoint(d, out) {
+     try {
+-      if (d && typeof d.worldPos === "function" && readPoint(d.worldPos(), out)) return true;
++      if (d && typeof d.worldPos === "function") {
++        out.copy(d.worldPos(out)); return true;
++      }
+       if (d && d.object3D && d.object3D.getWorldPosition) {
+         d.object3D.getWorldPosition(out); return true;
+       }
+@@ -74,9 +76,12 @@
+     obj.getWorldPosition(out); return true;
+   }
+   function heroPoint(out) {
+-    return !!(G.hero && G.hero.object3D && readPoint(G.hero.object3D.position, out));
++    var obj = G.hero && G.hero.object3D;
++    if (!obj || !obj.getWorldPosition) return false;
++    obj.getWorldPosition(out); return true;
+   }
+   function tapPoint(d, out) {
++    if (readPoint(d.pos, out)) return true;
+     if (d.tile != null && point(d.tile, out)) return true;
+     if (!G.camera || !G.root || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return false;
+     // Event coordinates are CSS pixels within root, per the Game contract.
+@@ -234,6 +239,7 @@
+     beaconPoint[0] = a.x; beaconPoint[1] = a.y; beaconPoint[2] = a.z;
+     cascade.length = 0;
+     for (var k = 0; k < decor.length; k++) {
++      if (decor[k].item && decor[k].item.type === "beacon") continue;
+       var obj = decor[k].object3D;
+       if (obj && obj.userData && typeof obj.userData.setLit === "function" && decorPoint(decor[k], b)) {
+         cascade.push({ decor: decor[k], distance: b.distanceToSquared(a), at: 0 });
+@@ -282,11 +288,7 @@
+     sound("footstep"); step++;
+     if (step % 3 === 0 && heroPoint(a)) burst(a, 5, SAND, 0.5, 0.3, 1, 0.03);
+     if (Number.isFinite(d.k) && d.k !== 0) {
+-      // Keep the first point in scalar storage: tile transforms use b/c as scratch vectors.
+-      var from = point(d.from, a), x = a.x, y = a.y, z = a.z;
+-      var to = point(d.to, a);
+-      if (from && to) a.set((x + a.x) / 2, (y + a.y) / 2, (z + a.z) / 2);
+-      else if (!heroPoint(a)) return;
++      if (!readPoint(d.at, a) && !point(d.from, a) && !heroPoint(a)) return;
+       burst(a, 8, TEAL, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
+     }
+   }
+@@ -294,7 +296,8 @@
+     if (name === "mechTick") sound("tick");
+     if (name === "mechSnap") sound("snap");
+     if (name === "mechLocked") sound("locked");
+-    if (!handlePoint(d.id, a)) return;
++    var positioned = readPoint(d.pos, a);
++    if (!positioned && !handlePoint(d.id, a)) return;
+     if (name === "mechGrab") burst(a, 3, BRASS, 0.45, 0.45, 0);
+     if (name === "mechMove") {
+       if (moveFrame === frameId) return; moveFrame = frameId;
+@@ -303,13 +306,14 @@
+     if (name === "mechTick") { burst(a, 3, SAND, 0.35, 0.25, 1); burst(a, 1, BRASS, 0.3, 0.6, 0); }
+     if (name === "mechSnap") {
+       burst(a, 10, BRASS, 0.65, 0.8, 0); burst(a, 7, SAND, 0.6, 0.4, 1);
+-      var g = G.groups[d.id]; if (g.pivotNode) g.pivotNode.getWorldPosition(a);
++      var g = G.groups && G.groups[d.id];
++      if (!positioned && g && g.pivotNode && g.pivotNode.getWorldPosition) g.pivotNode.getWorldPosition(a);
+       ring(a, GOLD, 1, 0.65, 0.5);
+     }
+     if (name === "mechLocked") burst(a, 4, 0xa38e7b, 0.4, 0.2, 1);
+   }
+   function plate(d) {
+-    sound("plate"); if (!point(d.tile, a)) return;
++    sound("plate"); if (!readPoint(d.pos, a) && !point(d.tile, a)) return;
+     ring(a, 0xffbd68, 1.5, 0.8, 0.6);
+     var count = scaled(16);
+     for (var i = 0; i < count; i++) {
+@@ -340,7 +344,10 @@
+       bind(name, function (d) { mechanism(name, d); });
+     });
+     bind("plate", plate);
+-    bind("glimmer", function (d) { sound("glimmer"); if (point(d.tile, a)) burst(a, 20, TEAL, 1.6, 1.4, 0, 0.023); });
++    bind("glimmer", function (d) {
++      sound("glimmer");
++      if (readPoint(d.pos, a) || point(d.tile, a)) burst(a, 20, TEAL, 1.6, 1.4, 0, 0.023);
++    });
+     bind("beacon", beacon); bind("levelComplete", complete);
+     bind("restart", function () { clearTransient(false); });
+     bind("levelStart", function (d) {
+@@ -427,13 +434,14 @@
+   }
+   function sound(name) {
+     try {
+-      if (!G || !unlocked || !ctx || ctx.state !== "running" || G.save && G.save.sound === false ||
+-        !Object.prototype.hasOwnProperty.call(played, name)) return;
++      if (!Object.prototype.hasOwnProperty.call(played, name)) return;
++      // Count requests, including locked, muted and rate-limited calls; playback still needs a gesture.
++      played[name]++;
++      if (!G || !unlocked || !ctx || ctx.state !== "running" || G.save && G.save.sound === false) return;
+       var now = ctx.currentTime;
+       if (name === "footstep" && now - lastStep < 0.08 || name === "tick" && now - lastTick < 0.03) return;
+       if (name === "footstep") lastStep = now;
+       if (name === "tick") lastTick = now;
+-      played[name]++;
+       var at = now + 0.005;
+       if (name === "click") tone(1600, at, 0.025, 0.08);
+       else if (name === "footstep") {
+@@ -488,10 +496,11 @@
+     try {
+       if (!G) return;
+       unlocked = true; if (!ctx) makeAudio();
++      poll = 0;
+       if (ctx && ctx.state === "suspended") {
+-        var promise = ctx.resume(); if (promise && promise.catch) promise.catch(report);
++        return ctx.resume().then(function () { audioFrame(); }, report);
+       }
+-      poll = 0;
++      audioFrame();
+     } catch (e) { report(e); }
+   }
+   function wind() {
+

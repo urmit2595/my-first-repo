@@ -1358,3 +1358,6 @@ async function open(page = "index.html?test", opts = {}) {
 
 module.exports = { open, ROOT, VENDOR };
 
+codex
+The existing module already has the API, joint hierarchy, mesh batching, and world-space scarf simulation. The screenshots show that the materials are too pale and the cap hides much of the flame from the iso camera. I’ll keep that structure, widen the lantern and torso, and adjust the flame placement, scarf, and animation poses.
+
