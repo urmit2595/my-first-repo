@@ -1,0 +1,4 @@
+A very long horizontal strip (wide aspect 8:1) on a flat pure #FF00FF magenta background: the underside edge of a floating rock or ceiling seen from the side. At the top a band of dark teal stone and moss, then a ragged moss lip with hanging roots, vines, ivy leaves, and a few glowing amber droplets hanging DOWN. Straight horizontal layout, continuous, fills the full width, magenta background below the hanging things. Painterly and highly detailed, rich textures, warm dusk rim light from behind, saturated harmonious palette with teal and violet accents, no text, no letters, no logos.
+
+
+refs: /home/user/my-first-repo/glowmoth/art-src/style/style-1.png

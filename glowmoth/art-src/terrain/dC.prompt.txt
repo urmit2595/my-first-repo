@@ -1,0 +1,4 @@
+A sprite sheet of 6 separated objects, side view, each fully isolated with wide gaps, on a flat pure #FF00FF magenta background: (1) cluster of glowing crystals growing from a rock, (2) second different crystal cluster in rock, (3) second mossy stone, (4) a hanging vine with glowing flowers hanging down from the top, (5) a tiny wooden signpost with a blank board, (6) a short brass pipe spout pouring a small waterfall of water with splash. Each object has its base at the bottom. Nothing overlaps or touches, no ground plane, no shadows on the background. Painterly and highly detailed, rich textures, warm dusk rim light from behind, saturated harmonious palette with teal and violet accents, no text, no letters, no logos.
+
+
+refs: /home/user/my-first-repo/glowmoth/art-src/style/style-1.png

@@ -1,0 +1,4 @@
+A sprite sheet of 6 separated objects, side view, each fully isolated with wide gaps, on a flat pure #FF00FF magenta background: (1) flowering bush with glowing violet and white flowers, (2) second different flowering bush, (3) small brass gear half-buried in moss, (4) second larger brass gear half-buried in rock, (5) brass pipe elbow with rivets, (6) brass pipe with a round valve wheel. Each object has its base at the bottom. Nothing overlaps or touches, no ground plane, no shadows on the background. Painterly and highly detailed, rich textures, warm dusk rim light from behind, saturated harmonious palette with teal and violet accents, no text, no letters, no logos.
+
+
+refs: /home/user/my-first-repo/glowmoth/art-src/style/style-1.png

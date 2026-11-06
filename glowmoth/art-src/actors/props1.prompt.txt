@@ -1,0 +1,5 @@
+The reference image is for style and design only: match its painterly, super detailed dusk look and the designs of its objects closely. Generate each object on its own with very wide gaps between objects, nothing touching the image edges, no ground, no cast shadow, consistent warm light from the upper left. Everything faces right where it has a direction.
+Background: perfectly flat pure green #00FF00, no green-ish colours in the objects other than moss. Four objects in a 2x2 grid: 1) a mossy log lying horizontally, side view, bark with moss and tiny flowers, cut ends visible; 2) a mossy round boulder, front-on circular, grey-teal stone with moss on top; 3) a big brass gear wheel, front-on, circular, spokes and teeth, riveted, aged brass; 4) a wooden plank, horizontal, weathered planks with iron nails, brass end caps. Painterly and highly detailed, rich textures, warm dusk rim light, saturated harmonious palette, no text, no letters, no logos.
+
+
+refs: /home/user/my-first-repo/glowmoth/art-src/style/style-1.png
