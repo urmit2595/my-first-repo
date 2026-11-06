@@ -144,6 +144,7 @@ const ROAD = 6;               // road half-width
 const SPEED = 8.5;            // squad forward speed (units/s)
 const BULLET_SPEED = 72, BULLET_RANGE = 46;
 const MAX_SHOOTERS = 48;
+const START_SQUAD = 5;
 const WEAPONS = [
   { name: "PISTOL", img: "assets/w-pistol.png", dmg: 1, rate: 1, spread: 1 },
   { name: "RIFLE", img: "assets/w-rifle.png", dmg: 1.4, rate: 1.35, spread: 1 },
@@ -416,7 +417,7 @@ function labelSolid(o) {
   else drawLabel(o.lab, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" ? "#ffe066" : "#fff");
 }
 function enemy(type, x, z, level) {
-  const hpScale = 1 + (level - 1) * 0.18;
+  const hpScale = 1 + (level - 1) * 0.1;
   const def = { zombie: { hp: 2, r: 0.42, h: 1.45, sp: 2.6, dmg: 1 }, grunt: { hp: 2, r: 0.42, h: 1.45, sp: 3.2, dmg: 1 }, brute: { hp: 22, r: 0.85, h: 2.3, sp: 2.2, dmg: 5 } }[type];
   return { type, x, z, hp: def.hp * hpScale, maxHp: def.hp * hpScale, r: def.r, h: def.h, sp: def.sp * (0.85 + Math.random() * 0.3), dmg: def.dmg, state: "idle", t: Math.random() * 4, flash: 0, dieT: 0 };
 }
@@ -440,33 +441,35 @@ function generateLevel(level) {
     gates.push(makeGate(z, ["+", 6], ["+", -8])); z -= 26;
     horde(z, 16, 4.5, 10);
   } else {
+    // every level opens with a free boost so the squad isn't wiped by the first wave
+    gates.push(makeGate(z, ["+", 4 + d], ["+", 8 + d])); z -= 26;
     const pool = ["gates", "horde", "lanes", "tyres", "gates", "case", "brutes", "horde"];
     while (z > -length + 30) {
       const seg = pool[Math.floor(r() * pool.length)];
       if (seg === "gates") {
-        const good = [["+", 5 + Math.floor(r() * 5 * d)], ["x", 2], ["+", 10 + d * 3]], bad = [["+", -(3 + Math.floor(r() * 4 * d))], ["x", 1], ["+", -(8 + d * 2)]];
+        const good = [["+", 5 + Math.floor(r() * 5 * d)], ["x", 2], ["+", 10 + d * 3]], bad = [["+", -(2 + Math.floor(r() * 2 * d))], ["x", 1], ["+", -(5 + d)]];
         const pair = r() < 0.5 ? [good[Math.floor(r() * 3)], bad[Math.floor(r() * 3)]] : [bad[Math.floor(r() * 3)], good[Math.floor(r() * 3)]];
         gates.push(makeGate(z, pair[0], pair[1])); z -= 22;
-      } else if (seg === "horde") { horde(z, 10 + d * 6, 4.5, 8 + d); z -= 24 + d; }
+      } else if (seg === "horde") { horde(z, 6 + d * 3, 4.5, 8 + d); z -= 24 + d; }
       else if (seg === "lanes") { // the ad's layout: +1 column left, crate + +99 column right, horde in the middle
         const n = 6 + Math.floor(d / 2);
         for (let i = 0; i < n; i++) solids.push(makeSolid("blockBlue", -4.6, z - i * 2.6, 3 + d, { reward: 1 + Math.floor(d / 3) }));
         solids.push(makeSolid("crate", 4.5, z, 25 + d * 10, {}));
         for (let i = 0; i < 3; i++) solids.push(makeSolid("blockYellow", 4.5, z - 3 - i * 2.8, 18 + d * 6, { reward: 10 + d * 5 }));
-        horde(z - 2, 14 + d * 7, 2.4, n * 2.6); z -= n * 2.6 + 18;
+        horde(z - 2, 8 + d * 3, 2.4, n * 2.6); z -= n * 2.6 + 18;
       } else if (seg === "tyres") {
         for (const x of [-3.6, 0, 3.6]) if (r() < 0.75) solids.push(makeSolid("tyres", x, z, 10 + d * 5, {}));
         z -= 18;
       } else if (seg === "case") {
         solids.push(makeSolid("weaponCase", (r() < 0.5 ? -1 : 1) * 3.3, z, 30 + d * 18, { weapon: 1 + Math.floor(r() * (level >= 4 ? 4 : 3)) }));
-        horde(z - 4, 6 + d * 2, 2, 4); z -= 24;
+        horde(z - 4, 4 + d, 2, 4); z -= 24;
       } else if (seg === "brutes") {
-        for (let i = 0; i < 1 + Math.floor(d / 2); i++) enemies.push(enemy("brute", (r() * 2 - 1) * 3.5, z - i * 3, level));
-        horde(z - 2, 6 + d * 3, 4.5, 6); z -= 26;
+        for (let i = 0; i < 1 + Math.floor(d / 3); i++) enemies.push(enemy("brute", (r() * 2 - 1) * 3.5, z - i * 3, level));
+        horde(z - 2, 4 + d * 2, 4.5, 6); z -= 26;
       }
     }
   }
-  const bossHp = Math.round(60 * Math.pow(level, 1.35) + 40);
+  const bossHp = Math.round(40 * Math.pow(level, 1.3) + 40);
   return { level, theme, length, gates, solids, enemies, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
 }
 
@@ -504,7 +507,7 @@ function startLevel(level) {
   floatsEl.innerHTML = "";
   L = generateLevel(level);
   Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, reached: 0, winT: 0 });
-  addSoldiers(1);
+  addSoldiers(START_SQUAD);
   $("levelName").textContent = L.theme.name; $("levelNo").textContent = `Level ${level}`;
   setWeapon(0);
 }
@@ -558,7 +561,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && (st
 
 // ---------- simulation ----------
 const ENEMY_ASPECT = { zombie: 0.86, grunt: 0.787, brute: 0.946 };
-function fireRate() { return (1 / 0.34) * WEAPONS[L.weapon].rate; }
+function fireRate() { return (1 / 0.3) * WEAPONS[L.weapon].rate; }
 function damage() { return WEAPONS[L.weapon].dmg; }
 
 function step(dt) {
@@ -597,7 +600,7 @@ function step(dt) {
     if (!o.alive || !(prevZ > o.z + 0.4 && L.sz <= o.z + 0.4)) continue;
     const hit = L.soldiers.filter(s => Math.abs(s.x - o.x) < o.hw + 0.2).length;
     if (!hit) continue;
-    const lose = Math.min(hit, Math.ceil(o.hp / 4) + 1);
+    const lose = Math.min(hit, Math.ceil(o.hp / 10) + 1);
     killSoldiers(lose, o.x); breakSolid(o, false); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a");
   }
   // shooting (gates/solids above may have changed the count)
@@ -633,7 +636,7 @@ function step(dt) {
       if (oz >= g.z && b.z <= g.z) {
         const h = g.halves.find(h => Math.abs(b.x - h.x) < h.hw);
         if (h && h.op === "+") { h.acc = (h.acc || 0) + b.dmg * 0.35; if (h.acc >= 1) { const inc = Math.floor(h.acc); h.acc -= inc; h.v = Math.min(h.v + inc, 99); refreshGate(g); } }
-        else if (h && h.op === "x") { h.acc = (h.acc || 0) + b.dmg * 0.02; if (h.acc >= 1 && h.v < 5) { h.acc = 0; h.v++; refreshGate(g); } }
+        else if (h && h.op === "x") { h.acc = (h.acc || 0) + b.dmg * 0.02; if (h.acc >= 1 && h.v < 3) { h.acc = 0; h.v++; refreshGate(g); } }
         hit = true; break;
       }
     }
@@ -675,7 +678,7 @@ function step(dt) {
     if (b0.slamT > 2.6) {
       b0.slamT = 0; L.shake = 0.4; sfx("boom"); vibe(120);
       const dist = L.sz - b0.z;
-      if (dist < 12) { const k = 2 + L.level; killSoldiers(k); flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); }
+      if (dist < 12) { const k = 1 + Math.ceil(L.level / 2); killSoldiers(k); flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); }
       L.fx.push({ x: b0.x, y: 0.5, z: b0.z + 2, f: 9, t: 0, dur: 0.5, size: 5 });
     }
     if (b0.z + 2.6 > L.sz - R) killSoldiers(L.soldiers.length);
