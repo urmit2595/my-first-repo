@@ -2701,3 +2701,17 @@ page parameters passed ?anim=walk&t=1.2&view=large
 page parameters passed ?walkto=1
 page parameters passed ?yaw=180&t=0
 
+codex
+- Reworked globe, flame-face, aged brass, torso, gauge, and boots; API preserved.
+- Added richer knitted scarf, twisted fringed tails, and body/arm collision handling.
+- Strengthened poses, foot lift, glow, and halo.
+- Updated floor and labels; direct checks pass: 30 draw calls, 56,278 triangles.
+- Known limitation: sandbox blocks Chromium, so revised PNG appearance remains unverified.
+tokens used
+95,802
+- Reworked globe, flame-face, aged brass, torso, gauge, and boots; API preserved.
+- Added richer knitted scarf, twisted fringed tails, and body/arm collision handling.
+- Strengthened poses, foot lift, glow, and halo.
+- Updated floor and labels; direct checks pass: 30 draw calls, 56,278 triangles.
+- Known limitation: sandbox blocks Chromium, so revised PNG appearance remains unverified.
+codex exit 0
