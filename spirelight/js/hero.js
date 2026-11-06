@@ -203,7 +203,7 @@
       [0.044,0.111],[0.027,0.137],[0.019,0.158],[0.009,0.178],[0,0.197]]);
     var fp = flameShape.attributes.position, colors = new Float32Array(fp.count * 3), color = new THREE.Color();
     for (i = 0; i < fp.count; i++) {
-      var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.118);
+      var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.097);
       fp.setX(i, fp.getX(i) + Math.sin(bend * 6.8) * 0.038 * bend);
       fp.setZ(i, fp.getZ(i) + bend * 0.08);
       fp.setY(i, fy * 1.1);

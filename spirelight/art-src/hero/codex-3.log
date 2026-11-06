@@ -1606,3 +1606,98 @@ JS' in /home/user/my-first-repo/spirelight
 codex
 Wick remains within budget at 30 draw calls and about 57k triangles on high quality. The walk checks show alternating planted feet and bent knees; I’ve increased the foot lift. A geometry check also found the cap still hiding the flame tip from the iso angle, so I’m adjusting that clearance.
 
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/hero.js';s=open(p).read().replace('(fy - 0.1) / 0.118','(fy - 0.1) / 0.097');open(p,'w').write(s)
+PY
+node <<'JS'
+const fs=require('fs'),vm=require('vm'),THREE=require('/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js');const ctx=new Proxy({},{get:(o,k)=>o[k]||(o[k]=k.startsWith('create')?()=>({addColorStop(){}}):()=>{})});global.document={createElement:()=>({getContext:()=>ctx})};global.window={};vm.runInThisContext(fs.readFileSync('js/hero.js','utf8'));
+for(const anim of ['idle','walk','climb','celebrate','bump','ride','wave']){const h=window.Hero.create(THREE);h.object3D.rotation.y=35*Math.PI/180;h.setAnim(anim);for(let i=1;i<=72;i++)h.update(1/60,i/60);let metal=[];h.object3D.traverse(o=>{if(o.isMesh&&o.material.metalness>.1)metal.push(o)});const f=h.object3D.getObjectByName('living flame'),pos=f.children[0].geometry.attributes.position;const ray=new THREE.Raycaster(),dir=new THREE.Vector3(1,1,1).normalize();let tip=new THREE.Vector3();for(let i=0;i<pos.count;i++)if(pos.getY(i)>tip.y)tip.fromBufferAttribute(pos,i);let target=tip.clone().applyMatrix4(f.matrixWorld);ray.set(target.clone().addScaledVector(dir,2),dir.clone().negate());const hits=ray.intersectObjects(metal);console.log({anim,tipClear:"'!(hits.length&&hits[0].distance<1.995)});h.dispose();}
+JS' in /home/user/my-first-repo/spirelight
+ succeeded in 241ms:
+{ anim: 'idle', tipClear: true }
+{ anim: 'walk', tipClear: true }
+{ anim: 'climb', tipClear: true }
+{ anim: 'celebrate', tipClear: true }
+{ anim: 'bump', tipClear: true }
+{ anim: 'ride', tipClear: true }
+{ anim: 'wave', tipClear: true }
+
+exec
+/bin/bash -lc 'git diff -- js/hero.js tests/hero.html' in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+diff --git a/spirelight/js/hero.js b/spirelight/js/hero.js
+index 0b92ed0..b70d069 100644
+--- a/spirelight/js/hero.js
++++ b/spirelight/js/hero.js
+@@ -203,7 +203,7 @@
+       [0.044,0.111],[0.027,0.137],[0.019,0.158],[0.009,0.178],[0,0.197]]);
+     var fp = flameShape.attributes.position, colors = new Float32Array(fp.count * 3), color = new THREE.Color();
+     for (i = 0; i < fp.count; i++) {
+-      var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.118);
++      var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.097);
+       fp.setX(i, fp.getX(i) + Math.sin(bend * 6.8) * 0.038 * bend);
+       fp.setZ(i, fp.getZ(i) + bend * 0.08);
+       fp.setY(i, fy * 1.1);
+
+exec
+/bin/bash -lc "node <<'JS'
+const fs=require('fs'),vm=require('vm'),assert=require('assert');const THREE=require('/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js');const ctx=new Proxy({},{get:(o,k)=>o[k]||(o[k]=k.startsWith('create')?()=>({addColorStop(){}}):()=>{})});global.document={createElement:()=>({getContext:()=>ctx})};global.window={};vm.runInThisContext(fs.readFileSync('js/hero.js','utf8'));
+for(const quality of ['low','med','high']) {
+ const h=window.Hero.create(THREE,{quality});let calls=0,tris=0;const box=new THREE.Box3();
+ h.object3D.traverse(o=>{if(o.isMesh){calls++;tris+=(o.geometry.index?o.geometry.index.count:o.geometry.attributes.position.count)/3;if("'!o.name.startsWith('"'scarf')){o.geometry.computeBoundingBox();box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));}}if(o.isSprite){calls++;tris+=2;}});
+ assert(calls<=35&&tris<=60000);assert(h.light.parent===h.object3D);h.setAnim('unknown');assert.equal(h.anim,'idle');
+ let steps=0;h.onStep=()=>{steps++;throw Error('Intentional callback failure');};
+ for(const anim of ['walk','climb','celebrate','bump','ride','wave','idle']) {h.setAnim(anim);for(let f=0;f<90;f++){h.object3D.position.x=f*.005;h.object3D.rotation.y=f*.01;h.update(1/60,f/60,{speed:1.4,grounded:f<80});}h.object3D.traverse(o=>{assert(o.matrixWorld.elements.every(Number.isFinite));if(o.isMesh)assert(o.geometry.attributes.position.array.every(Number.isFinite));});}
+ assert(steps>0);h.setGlow(0);for(let f=0;f<120;f++)h.update(1/60,f/60);assert(h.light.intensity<.001);h.setGlow(2);for(let f=0;f<120;f++)h.update(1/60,f/60);assert(h.light.intensity>2.5);h.dispose();h.dispose();assert.equal(h.object3D.children.length,0);
+ console.log({quality,drawCalls:calls,triangles:tris,height:+(box.max.y-box.min.y).toFixed(3),steps,API:'pass'});
+}
+for(const t of [.3,.6,.9]){const h=window.Hero.create(THREE);h.setAnim('walk');for(let f=1;f<=t*60;f++)h.update(1/60,f/60);const soles=['L','R'].map(s=>new THREE.Vector3(0,-.066,.025).applyMatrix4(h.object3D.getObjectByName('ankle.'+s).matrixWorld).y);assert(Math.max(...soles)>.025);assert(Math.abs(Math.min(...soles))<.001);console.log({walkTime:t,soleHeights:soles.map(y=>+y.toFixed(4))});h.dispose();}
+for(const s of fs.readFileSync('tests/hero.html','utf8').matchAll(/<script>([\\s\\S]*?)<\\/script>/g))new vm.Script(s[1]);console.log('Test-page syntax: pass');
+JS
+node --check js/hero.js
+git diff --check" in /home/user/my-first-repo/spirelight
+ succeeded in 414ms:
+{
+  quality: 'low',
+  drawCalls: 29,
+  triangles: 24024,
+  height: 0.866,
+  steps: 7,
+  API: 'pass'
+}
+{
+  quality: 'med',
+  drawCalls: 30,
+  triangles: 54380,
+  height: 0.865,
+  steps: 7,
+  API: 'pass'
+}
+{
+  quality: 'high',
+  drawCalls: 30,
+  triangles: 57062,
+  height: 0.866,
+  steps: 7,
+  API: 'pass'
+}
+{ walkTime: 0.3, soleHeights: [ 0.0271, 0.0002 ] }
+{ walkTime: 0.6, soleHeights: [ 0, 0.0327 ] }
+{ walkTime: 0.9, soleHeights: [ 0.0256, 0 ] }
+Test-page syntax: pass
+
+codex
+Reworked the dome, upright ring, curved ribs, and flame/eye placement.
+Brightened brass, glass highlights, halo, and longer teal scarf tails.
+Enlarged boots/hands, increased foot lift, and added the 3× pixel inset.
+API checks pass; high quality uses 30 draws and 57,062 triangles.
+Screenshot verification remains blocked: both attempts failed with `listen EPERM`.
+tokens used
+55,606
+Reworked the dome, upright ring, curved ribs, and flame/eye placement.
+Brightened brass, glass highlights, halo, and longer teal scarf tails.
+Enlarged boots/hands, increased foot lift, and added the 3× pixel inset.
+API checks pass; high quality uses 30 draws and 57,062 triangles.
+Screenshot verification remains blocked: both attempts failed with `listen EPERM`.
+codex exit 0

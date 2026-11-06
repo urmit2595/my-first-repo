@@ -9,7 +9,7 @@
 
   var Game = { ready: false, state: "loading", levels: [], levelIndex: -1, level: null, geom: null, groups: {}, decor: [],
     hero: null, time: 0, dt: 0, reducedMotion: false, quality: "high", THREE: null,
-    insets: { top: 72, bottom: 96, side: 14 }, test: TEST, paused: false };
+    insets: { top: 72, bottom: 96, side: 14 }, test: TEST, paused: false, timeScale: TEST ? 3 : 1 };
   window.Game = Game;
 
   // ------------------------------------------------------------------ bus
@@ -873,10 +873,14 @@
 
   function handlePosOf(g) {
     var out = [0, 0, 0];
-    if (g.handle) { handleRefWorld(g, g.cur, out); var v = new THREE.Vector3(out[0], out[1], out[2]); var node = g.handle.on === "self" ? g.contentNode : Game.groups.base.contentNode; node.updateWorldMatrix(true, false); /* ref coords are reference world coords */ return mechPointForHandle(g); }
-    return [g.pivot[0], g.pivot[1], g.pivot[2]];
+    return mechPointForHandle(g);
   }
-  function mechPointForHandle(g) { var o = [0, 0, 0]; handleRefWorld(g, g.cur, o); return o; }
+  function mechPointForHandle(g) {
+    var o = [0, 0, 0];
+    if (g.handle) { handleRefWorld(g, g.cur, o); return o; }
+    var c = g.blockRef || (g.cells[0] ? [g.cells[0][0] + 0.5, g.cells[0][1] + 1, g.cells[0][2] + 0.5] : g.pivot);
+    return mechPointArr(g, g.cur, c[0], c[1], c[2], o);
+  }
 
   function tickMech(g, dt) {
     if (g.state === "spring") {
@@ -1062,6 +1066,8 @@
     off();
     return { ok: ok, ms: Math.round(performance.now() - t0), why: why };
   };
+  Game.handleScreen = function (id) { var g = Game.groups[id]; if (!g || !g.handle) return null; var o = [0, 0, 0]; handleRefWorld(g, g.cur, o); return worldToScreen(o, {}); };
+  Game.heroScreen = function () { return worldToScreen([heroW.pos.x, heroW.pos.y + 0.4, heroW.pos.z], {}); };
   Game.debug = function () {
     var gv = {}; for (var id in Game.groups) gv[id] = Game.groups[id].value;
     var reach = []; try { if (Game.geom) reach = Array.from(Game.geom.reachable(heroW.tile)); } catch (e) {}
@@ -1218,7 +1224,7 @@
     requestAnimationFrame(frame);
     if (!Game.ready) return;
     var rdt = lastT ? Math.min(TEST ? 0.1 : 0.05, (ms - lastT) / 1000) : 0.016; lastT = ms;
-    var dt = rdt * TS;
+    var dt = rdt * Game.timeScale;
     Game.dt = rdt; Game.time += rdt;
     // fps tracking
     if (ms && rdt > 0) { fpsAvg += (Math.min(120, 1 / rdt) - fpsAvg) * 0.05; }
