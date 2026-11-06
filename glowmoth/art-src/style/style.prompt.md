@@ -1,0 +1,10 @@
+Target in-game screenshot (art-direction style frame) for an ORIGINAL side-scrolling mobile game. Landscape 16:9. NO text, NO UI, NO logos, NO numbers.
+
+Scene: "the Clockwood", an ancient forest at dusk overgrown around giant brass clockwork, seen exactly from the side like a 2D side-scroller, with deep layered parallax:
+- Background: warm dusk sky (amber, rose and violet gradient) with soft clouds; distant colossal tree trunks wrapped around enormous brass gears and a far clock tower, hazy with atmospheric perspective; god rays slanting through the canopy.
+- Midground: a waterfall over mossy stone ruins with slowly turning brass gears, hanging vines, glowing teal mushrooms and fireflies.
+- Play layer (sharp, in focus): an organic cave-like passage with mossy rocky ground along the bottom and rock and roots hanging from the top; deep teal and indigo stone covered in lush moss, ferns and tiny glowing flowers along the edges, brass pipes and cogs embedded in the rock, and warm rim light from the sky behind outlining every edge.
+- Gameplay elements: in the left third, a small swarm of five glowmoths flying to the right: tiny round fuzzy moths with a glowing amber belly, big translucent iridescent wings and feathery antennae, each with a soft bloom glow and a short glowing trail. Ahead of them: a large spinning brass saw-gear with sharp teeth mounted on a rocky outcrop, a floating glowing seed pickup (a luminous green orb with a seed inside), a puff of white steam from a brass vent in the floor, and at the far right a tall ornate brass lantern standing on a rock, not yet lit.
+- Extreme foreground: blurred dark-green leaves and a branch in the bottom-left corner for depth.
+
+Render style: painterly and highly detailed, rich textures, cinematic lighting, soft bloom on light sources, saturated but harmonious dusk palette, volumetric haze between the layers, crisp readable play layer. Not black silhouettes: every surface has colour and rim light.

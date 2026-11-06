@@ -1,0 +1,4 @@
+A very long horizontal strip (wide aspect 8:1) on a flat pure #00FF00 green background: the top edge of a terrain mass seen from the side. A thick mossy lip of rich green moss with a ragged upper line, with grass blades, small ferns and tiny glowing violet and white flowers growing UP from it. Below the moss lip, a short band of dark teal stone fading into the moss. Straight horizontal layout, continuous, the strip fills the full width, with green background above the plants. Painterly and highly detailed, rich textures, warm dusk rim light from behind, saturated harmonious palette with teal and violet accents, no text, no letters, no logos.
+
+
+refs: /home/user/my-first-repo/glowmoth/art-src/style/style-1.png

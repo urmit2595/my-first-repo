@@ -1,0 +1,5 @@
+The reference image is for style and design only: match its painterly, super detailed dusk look and the designs of its objects closely. Generate each object on its own with very wide gaps between objects, nothing touching the image edges, no ground, no cast shadow, consistent warm light from the upper left. Everything faces right where it has a direction.
+Background: pure solid BLACK #000000. Five glowing glass orbs in a row with wide gaps, each a perfect circle with a soft outer glow and sparkles, like the glowing green seed orb in the reference. Each has a distinct inner symbol drawn as a small object: 1) green orb with a sprouting seed with two leaves (exactly like the reference orb); 2) rose-pink orb with an opening pink flower; 3) blue orb with a small faceted crystal; 4) white-cyan orb with swirling wind curls; 5) violet orb with a crescent moon. Painterly and highly detailed, rich textures, warm dusk rim light, saturated harmonious palette, no text, no letters, no logos.
+
+
+refs: /home/user/my-first-repo/glowmoth/art-src/style/style-1.png
