@@ -356,17 +356,17 @@ window.Scenery = (() => {
       const gt = tex("ground", "ground", cfg.ground), gTile = tile("ground", 10), b = new Batch();
       const x0 = -170, x1 = 170;
       b.quad([[x0, -0.03, Z0], [x1, -0.03, Z0], [x1, -0.03, Z1], [x0, -0.03, Z1]], [[x0 / gTile, Z0 / gTile], [x1 / gTile, Z0 / gTile], [x1 / gTile, Z1 / gTile], [x0 / gTile, Z1 / gTile]], white, [0, 1, 0]);
-      const m = new T.Mesh(b.geometry(), L({ map: gt, vertexColors: true, color: id === "ruins" ? lin(0xcfc4b8) : white })); m.receiveShadow = true; world.add(m);
+      const m = new T.Mesh(b.geometry(), L({ map: gt, vertexColors: true, color: id === "ruins" ? lin(0xcfc4b8) : new T.Color(1, 1, 1).multiplyScalar(cfg.dim || 1) })); m.receiveShadow = true; world.add(m);
     }
 
     // road --------------------------------------------------------------------
     const roadTex = isPier ? tex("deck", "deck", 0x7a5a3a) : (CM.road);
-    const rTile = isPier ? tile("deck", 3) * 2 : 7;
+    const rTile = isPier ? tile("deck", 3) : 7;
     {
       const b = new Batch(), x0 = -ROAD, x1 = ROAD, y = 0;
       const uv = (x, z) => (isPier ? [z / rTile, x / rTile] : [x / rTile, z / rTile]);
       b.quad([[x0, y, Z0], [x1, y, Z0], [x1, y, Z1], [x0, y, Z1]], [uv(x0, Z0), uv(x1, Z0), uv(x1, Z1), uv(x0, Z1)], white, [0, 1, 0]);
-      const m = new T.Mesh(b.geometry(), L({ map: roadTex, vertexColors: true, color: isPier ? lin(0xcfb8a0) : new T.Color(0.72, 0.68, 0.66) })); m.receiveShadow = true; world.add(m);
+      const m = new T.Mesh(b.geometry(), L({ map: roadTex, vertexColors: true, color: isPier ? lin(0xcfb8a0) : new T.Color(0.72, 0.68, 0.66).multiplyScalar(cfg.dim || 1) })); m.receiveShadow = true; world.add(m);
     }
     // curbs (yellow/black hazard stripes) ------------------------------------------
     {
@@ -376,11 +376,24 @@ window.Scenery = (() => {
         const side = (xa, ya, xb, yb, h) => b.quad([[xa, ya, Z0], [xa, ya, Z1], [xb, yb, Z1], [xb, yb, Z0]], [cuv(Z0, 0), cuv(Z1, 0), cuv(Z1, 1), cuv(Z0, 1)], white, h);
         side(xi, 0, xi, yc, [-s, 0, 0]); side(xi, yc, xc, yt, [-s, 1, 0]); side(xc, yt, xo, yt, [0, 1, 0]); side(xo, yt, xo, 0.15, [s, 0, 0]);
       }
-      const m = new T.Mesh(b.geometry(), L({ map: CM.curb, vertexColors: true })); m.receiveShadow = true; m.castShadow = true; world.add(m);
+      const m = new T.Mesh(b.geometry(), L(isPier ? { vertexColors: true, color: lin(0x6b4a2c) } : { map: CM.curb, vertexColors: true })); m.receiveShadow = true; m.castShadow = true; world.add(m);
+    }
+    // soft contact darkening along the curbs
+    {
+      const ao = CM._ao ||= (() => { const c = mkCanvas(64, 4), x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 64, 0); g.addColorStop(0, "rgba(0,0,0,0.2)"); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 64, 4); return mkTex(c, { srgb: false, repeat: false }); })();
+      const b = new Batch(), y = 0.008;
+      for (const s of [-1, 1]) b.quad([[s * ROAD, y, Z0], [s * (ROAD - 0.8), y, Z0], [s * (ROAD - 0.8), y, Z1], [s * ROAD, y, Z1]], [[0, 0], [1, 0], [1, 1], [0, 1]], white, [0, 1, 0]);
+      const m = new T.Mesh(b.geometry(), new T.MeshBasicMaterial({ map: ao, transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })); m.renderOrder = 1; world.add(m);
+    }
+    S.pools = [];
+    if (cfg.dim) { // arena floodlight pools that travel with the squad
+      const pt = CM._pool ||= (() => { const c = mkCanvas(128, 128), x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.5, "rgba(255,255,255,0.45)"); g.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return mkTex(c, { srgb: false, repeat: false }); })();
+      const pm = new T.MeshBasicMaterial({ map: pt, color: 0xcfe0ff, transparent: true, opacity: 0.35, blending: T.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
+      for (let k = 0; k < 4; k++) { const m = new T.Mesh(new T.PlaneBufferGeometry(16, 16).rotateX(-Math.PI / 2), pm); m.renderOrder = 2; m.position.y = 0.04; m.userData.off = [6, -10, -26, -42][k]; m.userData.dx = k % 2 ? 1.6 : -1.6; S.pools.push(m); world.add(m); }
     }
     // sidewalks -------------------------------------------------------------------
     {
-      const sw = isPier ? tex("deck", "deck", 0x7a5a3a) : tex("sidewalk", "concrete", 0xa0a0a8), st = isPier ? tile("deck", 3) * 1.3 : tile("sidewalk", 4);
+      const sw = isPier ? tex("deck", "deck", 0x7a5a3a) : tex("sidewalk", "concrete", 0xa0a0a8), st = isPier ? tile("deck", 3) * 0.65 : tile("sidewalk", 4);
       const b = new Batch(), yt = 0.2, xi = ROAD + 0.62, xo = 11.0, yb = hasWater ? -1.3 : -0.05;
       const wt = cfg.walkTone || (id === "ruins" ? 0.85 : 1), sh = new T.Color(wt, wt, wt);
       for (const s of [-1, 1]) {
@@ -408,15 +421,15 @@ window.Scenery = (() => {
         const w = 0.13, x = s * (ROAD - 0.45), l = 8.8, v0 = r2() * 0.8;
         b.quad([[x - w / 2, y, z], [x + w / 2, y, z], [x + w / 2, y, z - l], [x - w / 2, y, z - l]], [[0, v0], [1, v0], [1, v0 + 0.2], [0, v0 + 0.2]], white, [0, 1, 0]);
       }
-      const m = new T.Mesh(b.geometry(), L({ map: CM.paint, alphaTest: 0.4, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); m.receiveShadow = true; world.add(m);
+      const m = new T.Mesh(b.geometry(), L({ map: CM.paint, alphaTest: 0.4, vertexColors: true, transparent: isPier, opacity: isPier ? 0.5 : 1, depthWrite: !isPier, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); m.receiveShadow = true; world.add(m);
     }
     // road decals -------------------------------------------------------------------
-    if (CM.decals && CM.decalJson) {
+    if (CM.decals && CM.decalJson && !isPier) {
       const dj = CM.decalJson, sz = dj._size || [CM.decalImg.width, CM.decalImg.height], names = Object.keys(dj).filter(k => k[0] !== "_");
-      const W = { "crack-branch": 2.8, "crack-long": 3, drain: 1.0, manhole: 1.15, skid: 1.5, "skid-b": 1.9, pothole: 1.5, patch: 2.3, oil: 1.7 };
+      const W = { "crack-branch": 2.8, "crack-long": 3, drain: 0.9, manhole: 0.95, skid: 1.5, "skid-b": 1.9, pothole: 1.5, patch: 2.3, oil: 1.7 };
       const wt = { "crack-branch": 3, "crack-long": 3, drain: 0.6, manhole: 0.7, skid: 1.5, "skid-b": 1.5, pothole: 0.8, patch: 2, oil: 1.2 };
       const tot = names.reduce((a, n) => a + (wt[n] || 1), 0), b = new Batch(), r3 = srand(length * 29 + 7), y = 0.012;
-      for (let z = Z0 - 6; z > Z1 + 40; z -= 6 + r3() * 7) {
+      for (let z = Z0 - 6; z > Z1 + 40; z -= 3 + r3() * 3.5) {
         let q = r3() * tot, nm = names[0]; for (const n of names) { q -= wt[n] || 1; if (q <= 0) { nm = n; break; } }
         const [rx, ry, rw, rh] = dj[nm], w = W[nm] || 1.6, h = w * rh / rw;
         let x = (r3() * 2 - 1) * (ROAD - 1.1), ang = nm === "drain" ? 0 : (nm.startsWith("skid") || nm.startsWith("crack")) ? (r3() - 0.5) * 0.7 : r3() * Math.PI * 2;
@@ -624,18 +637,28 @@ window.Scenery = (() => {
     const list = [], blobs = [];
     const blocked = (side, z, w) => occ.some(o => o.side === side && o.kind !== "lot" && o.kind !== "alley" && z < o.z0 + w / 2 && z > o.z1 - w / 2);
     const inGap = (side, z) => occ.some(o => o.side === side && (o.kind === "lot" || o.kind === "alley") && z <= o.z0 && z >= o.z1);
-    const add = (it, x, y, z, ground = true, sink = 0) => {
-      const h = it.h * rr(0.92, 1.1), w = h * it.rect[2] / it.rect[3], flip = it.flip !== false && rnd() < 0.5 ? 1 : 0;
+    const add = (it, x, y, z, ground = true, sink = 0, k = 1, fl = -1) => {
+      const h = it.h * k * rr(0.92, 1.1), w = h * it.rect[2] / it.rect[3], flip = fl >= 0 ? fl : (it.flip !== false && rnd() < 0.5 ? 1 : 0);
       list.push({ it, x, y: y - sink * h, z, w, h, flip });
       if (ground) blobs.push({ x: x + h * 0.14 + w * 0.05, y: y + 0.03, z: z + h * 0.08, l: Math.max(w * 0.8, h * 0.5), wd: Math.max(w * 0.4, 0.5) });
     };
     const useBuildings = !!cfg.rows && cfg.rows !== "desert" && cfg.rows !== "pier";
+    const tall = [];
+    if (cfg.rhythm && by.curb) for (let z = Z0 - 4; z > Z1 + 10; z -= cfg.rhythm) { const it = pick(by.curb); for (const side of [-1, 1]) add(it, side * 7.6, 0.2, z, true, 0, 1, side < 0 ? 0 : 1); }
     for (const side of [-1, 1]) {
-      if (by.curb) for (let z = Z0 - rr(0, 10); z > Z1 + 10; z -= rr(cfg.curb[0], cfg.curb[1])) { const it = pick(by.curb); if (!blocked(side, z, 1.5)) add(it, side * rr(7.15, 7.9), 0.2, z); }
+      if (by.curb && !cfg.rhythm) for (let z = Z0 - rr(0, 10); z > Z1 + 10; z -= rr(cfg.curb[0], cfg.curb[1])) {
+        const it = pick(by.curb); if (blocked(side, z, 1.5)) continue;
+        if (it.h >= 3) { if (tall.some(t => t.name === it.name && Math.abs(t.z - z) < 8)) continue; tall.push({ name: it.name, z }); }
+        add(it, side * rr(7.15, 7.9), 0.2, z);
+      }
       if (by.walk) for (let z = Z0 - rr(0, 4); z > Z1 + 10;) {
-        const it = pick(by.walk), h = it.h, w = h * it.rect[2] / it.rect[3];
-        if (!blocked(side, z, w)) { const xr = it.h > 3 ? [8.9, 9.6] : [8.25, 10.1]; add(it, side * rr(xr[0], xr[1]), 0.2, z); }
-        z -= Math.max(w * 0.7, 0.8) + rr(cfg.walk[0], cfg.walk[1]);
+        const it = pick(by.walk), h = it.h * 1.25, w = h * it.rect[2] / it.rect[3]; let used = w;
+        if (!blocked(side, z, w)) {
+          const x = it.h > 3 ? rr(8.9, 9.6) : (rnd() < 0.4 ? rr(7.2, 8.0) : rr(8.25, 10.1));
+          add(it, side * x, 0.2, z, true, 0, 1.25);
+          if (it.h <= 2 && rnd() < 0.5) { const n = 1 + (rnd() < 0.5 ? 1 : 0); for (let k = 0; k < n; k++) { const i2 = pick(by.walk); if (i2.h > 2) continue; const x2 = Math.min(10.2, Math.max(7.2, x + rr(-1, 1))); add(i2, side * x2, 0.2, z + (k ? 1 : -1) * rr(0.5, 1.1), true, 0, 1.25); used += 0.9; } }
+        }
+        z -= used * 0.7 + rr(cfg.walk[0], cfg.walk[1]);
       }
       if (by.lot) {
         if (useBuildings) { for (const o of occ) if (o.side === side && (o.kind === "lot" || o.kind === "alley")) { const len = o.z0 - o.z1, n = Math.max(1, Math.round(len / 7)); for (let k = 0; k < n; k++) add(pick(by.lot), side * rr(12.5, 20), 0, o.z0 - (k + rnd() * 0.8) * len / n); } }
@@ -659,7 +682,7 @@ window.Scenery = (() => {
       uniforms: T.UniformsUtils.merge([T.UniformsLib.fog, { tint: { value: new T.Color(1, 1, 1) } }]), fog: true,
       vertexShader: `attribute vec3 aOff; attribute vec2 aSize; attribute vec4 aRect; attribute float aFlip; varying vec2 vUv;
         #include <fog_pars_vertex>
-        void main(){ vec4 mvPosition = modelViewMatrix * vec4(aOff, 1.0); mvPosition.xy += position.xy * aSize; gl_Position = projectionMatrix * mvPosition;
+        void main(){ vec4 mvPosition = modelViewMatrix * vec4(aOff, 1.0); float dd = length(mvPosition.xyz); mvPosition.xy += position.xy * aSize; gl_Position = projectionMatrix * mvPosition; if (dd < 6.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
           float u = aFlip > 0.5 ? 1.0 - uv.x : uv.x; vUv = aRect.xy + vec2(u, uv.y) * aRect.zw;
           #include <fog_vertex>
         }`,
@@ -689,6 +712,7 @@ window.Scenery = (() => {
     if (!S.cfg) return;
     S.time += dt; if (S.water) S.water.uniforms.time.value = S.time;
     updateSun();
+    if (S.pools && S.pools.length && C.L) for (const m of S.pools) m.position.set(m.userData.dx + C.L.sx * 0.3, 0.04, C.L.sz + m.userData.off);
     const cam = C.camera;
     S.sky.position.copy(cam.position);
     if (S.back.visible) {
