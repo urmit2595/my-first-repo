@@ -790,7 +790,7 @@ function render(dt) {
   if (b.hp > 0 || b.state === "down") {
     let f = b.state === "down" ? 5 : b.slamT > 2.2 ? 4 : b.slamT > 1.8 ? 3 : Math.floor(b.t * 4) % 3;
     if (b.state === "wait") f = 3;
-    boss.push(b.x, 0, b.z, 7, 7, f, 1, b.flash > 0 ? 0.5 : 0); shadow.push(b.x, b.z, 6);
+    boss.push(b.x, 0, b.z, 7, 7, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); // brief flicker, not a constant white wash under heavy fire shadow.push(b.x, b.z, 6);
   }
   for (const bl of L.bullets) bl.splash ? fx.push(bl.x, 0.85, bl.z, 0.6, 2.4, 12, 1) : fx.push(bl.x, 1.0, bl.z, 0.3, 1.6, 12, 1);
   for (const f of L.fx) {
