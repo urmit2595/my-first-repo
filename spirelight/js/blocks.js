@@ -15,25 +15,24 @@
 
   // ---- material table: texture file, world units per texture tile, PBR constants, plain fallback colour ----------
   const MAT = {
-    sandstone: { tex: "sandstone", scale: 2.0, rough: 0.92, metal: 0.0, color: 0xfff2e4, fb: 0xc98c55, nrm: 1.0 },
+    sandstone: { tex: "sandstone", scale: 2.0, rough: 0.92, metal: 0.0, color: 0xf0c08e, fb: 0xc98c55, nrm: 1.0 },
     brick:     { tex: "brick",     scale: 2.6, rough: 0.88, metal: 0.0, color: 0xf0d8d0, fb: 0xa5503a, nrm: 1.1 },
-    marble:    { tex: "marble",    scale: 2.4, rough: 0.34, metal: 0.0, color: 0xe6dccc, fb: 0xeee2d0, nrm: 0.5 },
+    marble:    { tex: "marble",    scale: 2.4, rough: 0.6, metal: 0.0, color: 0xead3b4, fb: 0xeee2d0, nrm: 0.5 },
     darkstone: { tex: "darkstone", scale: 2.0, rough: 0.95, metal: 0.0, color: 0xe6d8e8, fb: 0x4a4056, nrm: 1.2 },
     brass:     { tex: "brass",     scale: 2.0, rough: 0.36, metal: 0.8, env: 1.0, color: 0xffeccc, fb: 0xc8963e, nrm: 0.9 },
     copper:    { tex: "copper",    scale: 2.4, rough: 0.5, metal: 0.55, env: 0.9, color: 0xf2fff8, fb: 0x4fa597, nrm: 0.9 },
-    slate:     { tex: "slate",     scale: 2.2, rough: 0.62, metal: 0.05, color: 0xf0eaff, fb: 0x3b3d5c, nrm: 1.2 },
+    slate:     { tex: "slate",     scale: 2.2, rough: 0.62, metal: 0.05, color: 0xd8d8e6, fb: 0x3b3d5c, nrm: 1.2 },
     wood:      { tex: "wood",      scale: 2.0, rough: 0.82, metal: 0.0, color: 0xf5e2d0, fb: 0x8a5a34, nrm: 1.0 },
     moss:      { tex: "moss",      scale: 1.5, rough: 1.0,  metal: 0.0, color: 0xe8f0d8, fb: 0x6f8f3a, nrm: 1.0 },
     hedge:     { tex: "hedge",     scale: 1.5, rough: 0.82, metal: 0.0, color: 0xeaf4e0, fb: 0x4d8a2c, nrm: 0.8 },
-    paver:     { tex: "paver",     scale: 1.7, rough: 0.74, metal: 0.0, color: 0xe4d3b4, fb: 0xefe2c6, nrm: 0.8 },
+    paver:     { tex: "paver",     scale: 1.7, rough: 0.85, metal: 0.0, color: 0xd9c7a6, fb: 0xefe2c6, nrm: 0.8 },
     brassTrim: { tex: "brass",     scale: 0.6, rough: 0.28, metal: 0.9, env: 1.3, color: 0xffe2a0, fb: 0xc8963e, nrm: 0.0 },
     grate:     { canvas: "grate",  scale: 1.0, rough: 0.4,  metal: 0.8, env: 1.0, color: 0xffffff, fb: 0x6a4a22, nrm: 0.0 },
     iron:      { scale: 1, rough: 0.45, metal: 0.8, env: 0.8, color: 0x4a4048, fb: 0x4a4048, nrm: 0.0 },
     darkiron:  { scale: 1, rough: 0.7, metal: 0.3, color: 0x120e16, fb: 0x120e16, nrm: 0.0 },
     grime:     { canvas: "grime", scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x28182a, soft: true, decal: true },
     window:    { canvas: "window", scale: 1.0, rough: 0.3, metal: 0.0, color: 0xffffff, fb: 0xffb35a, emissive: true },
-    mossStrip: { canvas: "mossStrip", scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x6f8f3a, alpha: true },
-    crack:     { canvas: "crack",  scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x241818, alpha: true, decal: true }
+    decal:     { canvas: "decal",  scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x6f8f3a, alpha: true, decal: true }
   };
   const STYLE_BODY = { sandstone: "sandstone", brick: "brick", marble: "marble", darkstone: "darkstone", brass: "brass",
     copper: "copper", slate: "slate", wood: "wood", column: "marble", hedge: "hedge" };
@@ -123,6 +122,12 @@
     }
     const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t;
   }
+  // one cutout atlas: moss strip on top (256x128), four crack variants below (2x2 of 128)
+  function drawDecalAtlas() {
+    const mc = drawMoss().image, cc = drawCracks().image, c = mkCanvas(256, 384), g = c.getContext("2d");
+    g.drawImage(mc, 0, 0); g.drawImage(cc, 0, 128);
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t;
+  }
   function drawGrime() {
     const W = 128, H = 128, c = mkCanvas(W, H), g = c.getContext("2d"), R = rng(909);
     g.clearRect(0, 0, W, H);
@@ -190,7 +195,7 @@
       Blocks.basePath = base;
     }
     try {
-      texCache.window = drawWindow(); texCache.mossStrip = drawMoss(); texCache.crack = drawCracks(); texCache.grate = drawGrate(); texCache.grime = drawGrime();
+      texCache.window = drawWindow(); texCache.decal = drawDecalAtlas(); texCache.grate = drawGrate(); texCache.grime = drawGrime();
     } catch (e) { console.warn("[blocks] canvas textures failed", e); }
     try { Blocks.envMap = makeEnv(); } catch (e) { Blocks.envMap = null; console.warn("[blocks] env failed", e); }
     const jobs = [];
@@ -212,6 +217,7 @@
     if (d.soft) { p.transparent = true; p.depthWrite = false; }
     if (d.alpha) { p.alphaTest = d.decal ? 0.3 : 0.5; p.side = THREE.DoubleSide; }
     if (d.emissive) { p.emissive = new THREE.Color(0xffffff); p.emissiveIntensity = 1.5; if (map) p.emissiveMap = map; else p.emissive = new THREE.Color(0xffb35a); }
+    if (!d.env) p.envMapIntensity = 0.3;
     const m = new THREE.MeshStandardMaterial(p);
     m.name = "blocks:" + key;
     if (d.env && Blocks.envMap && !Blocks.sceneEnv) { m.envMap = Blocks.envMap; m.envMapIntensity = d.env; } else if (d.env) m.envMapIntensity = d.env;
@@ -230,7 +236,7 @@
   // Call with scene.environment (or null). When World provides one, Blocks stops overriding it.
   Blocks.useSceneEnvironment = function (env) {
     Blocks.sceneEnv = env || null;
-    Object.keys(matCache).forEach(k => { const m = matCache[k]; if (m.userData.env) { m.envMap = env ? null : Blocks.envMap; m.needsUpdate = true; } });
+    Object.keys(matCache).forEach(k => { const m = matCache[k]; if (m.userData.env) { m.envMap = env ? null : Blocks.envMap; m.needsUpdate = true; } else m.envMapIntensity = 0.3; });
   };
   Blocks.setWindowGlow = function (k) { Blocks.windowGlow = k; };
   // Disposes the geometry of an object returned by build(). Materials are shared and cached, never disposed.
@@ -418,20 +424,20 @@
     const b = this.buf("mossStrip"), hA = a === 0 ? 2 : 0, r = this.h(salt, 50);
     const hgt = (small ? 0.1 : 0.2) + 0.1 * this.h(salt, 51), flip = r < 0.5, uo = this.h(salt, 52);
     const o = small ? 0.048 : 0.007, pts = [this.fp(a, s, -0.005, 1.0, o), this.fp(a, s, 1.005, 1.0, o), this.fp(a, s, 1.005, 1 - hgt, o), this.fp(a, s, -0.005, 1 - hgt, o)];
-    const uvs = [[uo, 1], [uo + 1, 1], [uo + 1, 0], [uo, 0]]; if (flip) { uvs[0][0] = uo + 1; uvs[1][0] = uo; uvs[2][0] = uo; uvs[3][0] = uo + 1; }
+    const u1 = uo * 0.5, uvs = flip ? [[u1 + 0.5, 1], [u1, 1], [u1, 0.68], [u1 + 0.5, 0.68]] : [[u1, 1], [u1 + 0.5, 1], [u1 + 0.5, 0.68], [u1, 0.68]];
     const nrm = [0, 0, 0]; nrm[a] = s ? 1 : -1;
     const tn = 0.6 + 0.25 * this.h(salt, 53), c = [tn, tn, tn];
     const cols = pts.map(P => { const v = this.color(a, s, P, c); return v; });
-    this.quadRaw("mossStrip", pts, nrm, uvs, cols);
+    this.quadRaw("decal", pts, nrm, uvs, cols);
   };
   Builder.prototype.crack = function (a, s, salt) {
     const q = Math.floor(this.h(salt, 60) * 4), sz = 0.5 + 0.3 * this.h(salt, 61);
     const hc = 0.25 + 0.5 * this.h(salt, 62), yc = 0.3 + 0.4 * this.h(salt, 63), mirror = this.h(salt, 64) < 0.5;
-    const u0 = (q & 1) * 0.5, v0 = (q >> 1) * 0.5;
+    const u0 = (q & 1) * 0.5, v0 = 1 - (128 + ((q >> 1) + 1) * 128) / 384;
     const pts = [this.fp(a, s, hc - sz / 2, yc - sz / 2, 0.004), this.fp(a, s, hc + sz / 2, yc - sz / 2, 0.004), this.fp(a, s, hc + sz / 2, yc + sz / 2, 0.004), this.fp(a, s, hc - sz / 2, yc + sz / 2, 0.004)];
-    const uvs = [[u0, v0], [u0 + 0.5, v0], [u0 + 0.5, v0 + 0.5], [u0, v0 + 0.5]]; if (mirror) { const t = uvs[0]; uvs[0] = uvs[1]; uvs[1] = t; const t2 = uvs[2]; uvs[2] = uvs[3]; uvs[3] = t2; }
+    const uvs = [[u0, v0 + 0.005], [u0 + 0.5, v0 + 0.005], [u0 + 0.5, v0 + 0.328], [u0, v0 + 0.328]]; if (mirror) { const t = uvs[0]; uvs[0] = uvs[1]; uvs[1] = t; const t2 = uvs[2]; uvs[2] = uvs[3]; uvs[3] = t2; }
     const nrm = [0, 0, 0]; nrm[a] = s ? 1 : -1;
-    this.quadRaw("crack", pts, nrm, uvs, pts.map(() => [1, 1, 1]));
+    this.quadRaw("decal", pts, nrm, uvs, pts.map(() => [1, 1, 1]));
   };
 
   // ---- walkable top test ---------------------------------------------------------------------------------------------------
@@ -489,8 +495,8 @@
         return [x, y, z];
       };
       const pts = [P(0.04, 0), P(0.96, 0), P(0.96, w), P(0.04, w)];
-      const uvs = [[uo, 1], [uo + 1, 1], [uo + 1, 0], [uo, 0]], tn = 0.55 + 0.25 * this.h(30 + k, 8);
-      this.quadRaw("mossStrip", pts, [0, 1, 0], uvs, pts.map(() => [tn, tn, tn]));
+      const u1 = uo * 0.5, uvs = [[u1, 1], [u1 + 0.5, 1], [u1 + 0.5, 0.68], [u1, 0.68]], tn = 0.55 + 0.25 * this.h(30 + k, 8);
+      this.quadRaw("decal", pts, [0, 1, 0], uvs, pts.map(() => [tn, tn, tn]));
     }
   };
   Builder.prototype.detailSide = function (a, s, salt, style, det, tint, walkTop) {
@@ -527,7 +533,7 @@
   Builder.prototype.vent = function (a, s, salt) {
     const hc = 0.3 + 0.4 * this.h(salt, 9), y0 = 0.3 + 0.12 * this.h(salt, 10), w = 0.07;
     this.faceBox(a, s, hc - w - 0.02, hc + w + 0.02, y0 - 0.02, y0 + 2 * w + 0.02, 0.018, 0.006, "iron", salt + 80, [1, 1, 1]);
-    for (let i = 0; i < 4; i++) this.faceBox(a, s, hc - w, hc + w, y0 + i * 0.036 + 0.004, y0 + i * 0.036 + 0.026, 0.024, 0.002, "darkiron", salt + 81 + i, [1, 1, 1]);
+    for (let i = 0; i < 4; i++) this.faceBox(a, s, hc - w, hc + w, y0 + i * 0.036 + 0.004, y0 + i * 0.036 + 0.026, 0.024, 0.002, "iron", salt + 81 + i, [0.16, 0.13, 0.18]);
   };
   Builder.prototype.ring = function (a, s, salt) {
     const hc = 0.3 + 0.4 * this.h(salt, 9), yc = 0.42 + 0.1 * this.h(salt, 10), N = 10, R0 = 0.05, R1 = 0.075;
@@ -693,8 +699,9 @@
       g.setIndex(bf.idx);
       const m = new THREE.Mesh(g, getMat(k, low));
       m.name = "blocks:" + k;
-      const decal = k === "crack" || k === "mossStrip";
+      const decal = k === "decal" || k === "grime";
       m.castShadow = !decal && k !== "window"; m.receiveShadow = true;
+      if (decal) { m.userData.cutout = true; m.renderOrder = 1; }
       root.add(m);
     }
   }
