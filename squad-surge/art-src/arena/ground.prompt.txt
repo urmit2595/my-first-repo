@@ -1,0 +1,4 @@
+Image type: a seamless TEXTURE, top-down orthographic view, evenly lit, no shadows, no perspective, fills the entire frame edge to edge. Subject: weathered painted grey-blue concrete floor of a military training arena with clearly visible mottled stains, scuff marks, tyre rubber streaks, hairline cracks, a few small chips and patches of repair; medium contrast detail; no painted lines, no markings, no objects, no text. The attached reference image is ONLY a style reference; do NOT reproduce its scene. Premium stylized 3D render look, soft clay materials, saturated but harmonious colours, no text, no letters, no numbers, no logos.
+
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

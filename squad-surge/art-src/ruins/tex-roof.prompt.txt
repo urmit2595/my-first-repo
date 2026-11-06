@@ -1,0 +1,3 @@
+Seamless tileable texture, top-down orthographic view, evenly lit, no shadows, no perspective, no large focal object, fills the whole frame edge to edge. Flat tar and gravel roof surface, dark grey with scattered gravel and patches. The attached reference image is ONLY a style reference: do not reproduce its scene, characters or layout. Premium stylized 3D render, toy-like, glossy plastic and soft clay materials, chunky rounded bevelled shapes, soft global illumination and gentle ambient occlusion, warm key light from the upper left, saturated but harmonious colours, crisp clean silhouettes, no outlines, no text, no letters, no numbers, no logos.
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

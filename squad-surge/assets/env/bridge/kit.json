@@ -1,0 +1,177 @@
+{
+ "theme": "bridge",
+ "textures": {},
+ "props": {
+  "atlas": "props.png",
+  "items": [
+   {
+    "name": "bridge-lamp",
+    "rect": [
+     828,
+     0,
+     360,
+     433
+    ],
+    "h": 5.5,
+    "zone": "curb",
+    "weight": 3
+   },
+   {
+    "name": "cone-a",
+    "rect": [
+     750,
+     856,
+     205,
+     238
+    ],
+    "h": 0.8,
+    "zone": "walk",
+    "weight": 3
+   },
+   {
+    "name": "cone-b",
+    "rect": [
+     959,
+     856,
+     205,
+     238
+    ],
+    "h": 0.8,
+    "zone": "walk",
+    "weight": 3
+   },
+   {
+    "name": "concrete-barrier",
+    "rect": [
+     0,
+     856,
+     380,
+     262
+    ],
+    "h": 1.1,
+    "zone": "walk",
+    "weight": 3
+   },
+   {
+    "name": "striped-barrier",
+    "rect": [
+     384,
+     856,
+     362,
+     262
+    ],
+    "h": 1.1,
+    "zone": "walk",
+    "weight": 2
+   },
+   {
+    "name": "wreck-blue",
+    "rect": [
+     1202,
+     443,
+     352,
+     271
+    ],
+    "h": 1.6,
+    "zone": "lot",
+    "weight": 1.5
+   },
+   {
+    "name": "wreck-white",
+    "rect": [
+     846,
+     443,
+     352,
+     273
+    ],
+    "h": 1.6,
+    "zone": "lot",
+    "weight": 1.5
+   },
+   {
+    "name": "booth",
+    "rect": [
+     0,
+     443,
+     394,
+     409
+    ],
+    "h": 2.8,
+    "zone": "lot",
+    "weight": 1
+   },
+   {
+    "name": "sandbags",
+    "rect": [
+     1558,
+     443,
+     434,
+     271
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 2
+   },
+   {
+    "name": "road-sign",
+    "rect": [
+     1459,
+     0,
+     292,
+     413
+    ],
+    "h": 3,
+    "zone": "curb",
+    "weight": 1.5
+   },
+   {
+    "name": "island",
+    "rect": [
+     0,
+     0,
+     421,
+     439
+    ],
+    "h": 11,
+    "zone": "far",
+    "weight": 2
+   },
+   {
+    "name": "sailboat",
+    "rect": [
+     425,
+     0,
+     399,
+     435
+    ],
+    "h": 4,
+    "zone": "water",
+    "weight": 2
+   },
+   {
+    "name": "tug",
+    "rect": [
+     398,
+     443,
+     444,
+     377
+    ],
+    "h": 3,
+    "zone": "water",
+    "weight": 2
+   },
+   {
+    "name": "buoy",
+    "rect": [
+     1192,
+     0,
+     263,
+     425
+    ],
+    "h": 1.6,
+    "zone": "water",
+    "weight": 2
+   }
+  ]
+ }
+}

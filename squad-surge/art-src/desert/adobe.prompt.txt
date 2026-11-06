@@ -1,0 +1,4 @@
+Single building facade game asset: a small adobe roadside building with flat roof and rounded corners, sand-coloured plaster, wooden door, two small windows with blue shutters, straight-on orthographic front elevation, no perspective, no side wall visible, ground floor at the bottom, the image stops at the flat roof edge, on a flat pure #00FF00 green background with wide margins all round. No signs with text. The attached reference image is ONLY a style reference for rendering quality; do not reproduce its scene, town or characters. Premium stylized 3D render, toy-like, glossy plastic and soft clay materials, chunky rounded bevelled shapes, soft global illumination and gentle ambient occlusion, warm key light from the upper left, saturated but harmonious colours, crisp clean silhouettes, no outlines, no text, no letters, no numbers, no logos.
+
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

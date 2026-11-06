@@ -1,0 +1,4 @@
+Image type: a building facade elevation: one concrete stadium grandstand wall on a flat pure #00FF00 green background. STRICT straight-on orthographic front elevation: a flat rectangle seen exactly head-on with no perspective and no visible side or top surfaces. A concrete lower wall at the bottom, above it 5 horizontal tiers of seats in dark blue and grey tones with a few red seats, supports and rails, lit at night by bright white floodlights. The image stops at the top edge of the top tier (no roof, no sky). Wide margins of green all round. The attached reference image is ONLY a style reference; do NOT reproduce its scene. Premium stylized 3D render, toy-like, soft clay materials, no outlines, no text, no letters, no numbers, no logos.
+
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

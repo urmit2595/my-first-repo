@@ -1,0 +1,317 @@
+{
+ "theme": "town",
+ "textures": {
+  "ground": {
+   "file": "ground.jpg",
+   "tile": 10
+  },
+  "sidewalk": {
+   "file": "sidewalk.jpg",
+   "tile": 4
+  },
+  "roof": {
+   "file": "roof.jpg",
+   "tile": 3
+  }
+ },
+ "facades": [
+  {
+   "file": "facades/townhouse-a.png",
+   "w": 7.05,
+   "h": 9.5
+  },
+  {
+   "file": "facades/corner-shop.png",
+   "w": 5.46,
+   "h": 6.5
+  },
+  {
+   "file": "facades/narrow-house.png",
+   "w": 4.89,
+   "h": 9.5
+  },
+  {
+   "file": "facades/townhouse-ruined.png",
+   "w": 7.31,
+   "h": 9.5
+  }
+ ],
+ "props": {
+  "atlas": "props.png",
+  "items": [
+   {
+    "name": "street-lamp",
+    "rect": [
+     1473,
+     0,
+     127,
+     399
+    ],
+    "h": 5,
+    "zone": "curb",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "power-pole",
+    "rect": [
+     1604,
+     0,
+     347,
+     390
+    ],
+    "h": 8,
+    "zone": "curb",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "barricade",
+    "rect": [
+     0,
+     1160,
+     312,
+     292
+    ],
+    "h": 1.6,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "sandbags",
+    "rect": [
+     551,
+     1160,
+     408,
+     246
+    ],
+    "h": 1.3,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "barrel",
+    "rect": [
+     316,
+     1160,
+     231,
+     289
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "crates",
+    "rect": [
+     436,
+     838,
+     339,
+     315
+    ],
+    "h": 1.6,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "bench",
+    "rect": [
+     779,
+     838,
+     385,
+     311
+    ],
+    "h": 1.1,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "planter",
+    "rect": [
+     1168,
+     838,
+     358,
+     306
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 1.5,
+    "flip": true
+   },
+   {
+    "name": "hydrant",
+    "rect": [
+     461,
+     471,
+     250,
+     354
+    ],
+    "h": 1,
+    "zone": "curb",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "car-teal",
+    "rect": [
+     1592,
+     471,
+     420,
+     333
+    ],
+    "h": 1.6,
+    "zone": "lot",
+    "weight": 1.5,
+    "flip": true
+   },
+   {
+    "name": "car-red",
+    "rect": [
+     1168,
+     471,
+     420,
+     334
+    ],
+    "h": 1.6,
+    "zone": "lot",
+    "weight": 1.5,
+    "flip": true
+   },
+   {
+    "name": "tree-a",
+    "rect": [
+     656,
+     0,
+     364,
+     409
+    ],
+    "h": 7,
+    "zone": "lot",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "tree-b",
+    "rect": [
+     0,
+     0,
+     366,
+     467
+    ],
+    "h": 8,
+    "zone": "lot",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "hedge",
+    "rect": [
+     1303,
+     1160,
+     343,
+     238
+    ],
+    "h": 1.4,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "shrub-pink",
+    "rect": [
+     963,
+     1160,
+     336,
+     243
+    ],
+    "h": 1.3,
+    "zone": "walk",
+    "weight": 1.5,
+    "flip": true
+   },
+   {
+    "name": "pallets",
+    "rect": [
+     0,
+     838,
+     432,
+     318
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "rubble",
+    "rect": [
+     1530,
+     838,
+     468,
+     301
+    ],
+    "h": 1.1,
+    "zone": "lot",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "handcart",
+    "rect": [
+     0,
+     471,
+     457,
+     363
+    ],
+    "h": 1.3,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "trough",
+    "rect": [
+     1024,
+     0,
+     445,
+     408
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "firewood",
+    "rect": [
+     715,
+     471,
+     449,
+     336
+    ],
+    "h": 1.1,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "clay-pot",
+    "rect": [
+     370,
+     0,
+     282,
+     411
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   }
+  ]
+ }
+}

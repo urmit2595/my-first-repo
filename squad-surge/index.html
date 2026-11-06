@@ -46,6 +46,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .home{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
 .home>*{pointer-events:auto}
 .logo{margin:calc(max(10px,env(safe-area-inset-top)) + 92px) auto 0;text-align:center;line-height:.9;transform:rotate(-4deg)}
+.logo img{display:block;width:84%;max-width:360px;margin:0 auto;filter:drop-shadow(0 8px 12px #0d163066)}
+.logo.has-img{transform:none}.logo.has-img b{display:none}
 .logo b{display:block;font:clamp(44px,15vw,72px) 'Lilita One',sans-serif;color:#fff;background:linear-gradient(#fff 30%,#bfe3ff 60%,#5fb4ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 4px 0 #0d1630) drop-shadow(0 -2px 0 #0d1630) drop-shadow(2px 0 0 #0d1630) drop-shadow(-2px 0 0 #0d1630)}
 .hint{align-self:center;display:grid;justify-items:center;gap:6px;pointer-events:none}
 .hint .pill{display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:8px;background:#0d1630cc;font:15px 'Lilita One',sans-serif}
@@ -101,7 +103,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
   <div class="weapon-tag" id="weaponTag" hidden><img id="weaponImg" src="assets/w-pistol.png" alt=""><span id="weaponName">PISTOL</span></div>
 
   <div class="home" id="home">
-    <div class="logo"><b>SQUAD</b><b>SURGE</b></div>
+    <div class="logo" id="logo"><img id="logoImg" src="assets/ui/logo.png" alt="Squad Surge" hidden><b>SQUAD</b><b>SURGE</b></div>
     <div>
       <div class="hint"><div class="pill">HOLD &amp; DRAG <span class="arrows"><i>◀</i><i>▶</i></span></div><div class="line"></div>
         <svg class="hand" viewBox="0 0 24 24" fill="#fff" stroke="#0d1630" stroke-width="1.2"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10h.5V8.5a1.5 1.5 0 0 1 3 0V10h.5v-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.6 14a1.5 1.5 0 0 1 2.4-1.8L9 14z"/></svg></div>
@@ -180,6 +182,12 @@ const THEMES = [
 // ---------- DOM ----------
 const $ = id => document.getElementById(id);
 const gameEl = $("game"), canvas = $("view");
+{ // title logo image, with the text logo as fallback
+  const img = $("logoImg");
+  img.onload = () => { img.hidden = false; $("logo").classList.add("has-img"); };
+  img.onerror = () => img.remove();
+  if (img.complete && img.naturalWidth) img.onload();
+}
 
 // ---------- three setup ----------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });

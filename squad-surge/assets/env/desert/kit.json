@@ -1,0 +1,210 @@
+{
+ "theme": "desert",
+ "textures": {
+  "ground": {
+   "file": "ground.jpg",
+   "tile": 10
+  },
+  "sidewalk": {
+   "file": "sidewalk.jpg",
+   "tile": 4
+  }
+ },
+ "facades": [
+  {
+   "file": "facades/adobe.png",
+   "w": 6.88,
+   "h": 3.4
+  },
+  {
+   "file": "facades/diner.png",
+   "w": 8.14,
+   "h": 3.6
+  }
+ ],
+ "props": {
+  "atlas": "props.png",
+  "items": [
+   {
+    "name": "saguaro-a",
+    "rect": [
+     1592,
+     0,
+     243,
+     345
+    ],
+    "h": 4.5,
+    "zone": "lot",
+    "weight": 3
+   },
+   {
+    "name": "saguaro-b",
+    "rect": [
+     1330,
+     0,
+     258,
+     358
+    ],
+    "h": 4,
+    "zone": "lot",
+    "weight": 3
+   },
+   {
+    "name": "prickly-pear",
+    "rect": [
+     0,
+     573,
+     283,
+     302
+    ],
+    "h": 1.5,
+    "zone": "walk",
+    "weight": 2
+   },
+   {
+    "name": "shrub-a",
+    "rect": [
+     399,
+     879,
+     295,
+     241
+    ],
+    "h": 1.1,
+    "zone": "walk",
+    "weight": 3
+   },
+   {
+    "name": "shrub-b",
+    "rect": [
+     698,
+     879,
+     293,
+     238
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 3
+   },
+   {
+    "name": "boulder-a",
+    "rect": [
+     1549,
+     573,
+     339,
+     275
+    ],
+    "h": 2.2,
+    "zone": "lot",
+    "weight": 2
+   },
+   {
+    "name": "boulder-b",
+    "rect": [
+     995,
+     879,
+     328,
+     214
+    ],
+    "h": 1.4,
+    "zone": "walk",
+    "weight": 2
+   },
+   {
+    "name": "pickup",
+    "rect": [
+     746,
+     573,
+     453,
+     294
+    ],
+    "h": 1.7,
+    "zone": "lot",
+    "weight": 1.5
+   },
+   {
+    "name": "oil-drums",
+    "rect": [
+     1203,
+     573,
+     342,
+     289
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 2
+   },
+   {
+    "name": "fence",
+    "rect": [
+     0,
+     879,
+     395,
+     247
+    ],
+    "h": 1.4,
+    "zone": "walk",
+    "weight": 2
+   },
+   {
+    "name": "road-sign",
+    "rect": [
+     1058,
+     0,
+     268,
+     381
+    ],
+    "h": 3.2,
+    "zone": "curb",
+    "weight": 1.5
+   },
+   {
+    "name": "palm-a",
+    "rect": [
+     0,
+     0,
+     390,
+     569
+    ],
+    "h": 8,
+    "zone": "lot",
+    "weight": 1.5
+   },
+   {
+    "name": "palm-b",
+    "rect": [
+     394,
+     0,
+     368,
+     465
+    ],
+    "h": 6.5,
+    "zone": "lot",
+    "weight": 1.5
+   },
+   {
+    "name": "bus",
+    "rect": [
+     287,
+     573,
+     455,
+     296
+    ],
+    "h": 3.2,
+    "zone": "lot",
+    "weight": 1
+   },
+   {
+    "name": "water-tower",
+    "rect": [
+     766,
+     0,
+     288,
+     425
+    ],
+    "h": 10,
+    "zone": "far",
+    "weight": 1
+   }
+  ]
+ }
+}

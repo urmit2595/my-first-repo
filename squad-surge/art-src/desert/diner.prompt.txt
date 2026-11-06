@@ -1,0 +1,4 @@
+Single building facade game asset: a small roadside diner / service station front, one storey, flat roof, teal and cream walls, large glass windows, blank empty sign boards (no text), a canopy over the front, straight-on orthographic front elevation, no perspective, no side wall visible, ground floor at the bottom, the image stops at the roof edge, on a flat pure #00FF00 green background with wide margins all round. The attached reference image is ONLY a style reference for rendering quality; do not reproduce its scene, town or characters. Premium stylized 3D render, toy-like, glossy plastic and soft clay materials, chunky rounded bevelled shapes, soft global illumination and gentle ambient occlusion, warm key light from the upper left, saturated but harmonious colours, crisp clean silhouettes, no outlines, no text, no letters, no numbers, no logos.
+
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

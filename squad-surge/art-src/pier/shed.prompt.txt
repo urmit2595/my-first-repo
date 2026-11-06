@@ -1,0 +1,4 @@
+Single building facade game asset: a wooden harbour boat shed front, weathered blue-grey vertical planks, big double doors, a small window, blank empty sign board, straight-on orthographic front elevation, no perspective, no side wall visible, ground floor at the bottom, the image stops at the eaves, on a flat pure #00FF00 green background with wide margins all round. The attached reference image is ONLY a style reference for rendering quality; do not reproduce its scene, town or characters. Premium stylized 3D render, toy-like, glossy plastic and soft clay materials, chunky rounded bevelled shapes, soft global illumination and gentle ambient occlusion, warm key light from the upper left, saturated but harmonious colours, crisp clean silhouettes, no outlines, no text, no letters, no numbers, no logos.
+
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

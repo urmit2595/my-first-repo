@@ -1,0 +1,8 @@
+# Intermediates that tools/kit_tools.py rebuilds from the raw generations (keyed copies, per-object cuts, previews, rejects)
+*-k.png
+*_k.png
+*-keyed.png
+cut*/
+fc-*/
+*rejected*
+*-half.jpg

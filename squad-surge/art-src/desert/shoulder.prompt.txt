@@ -1,0 +1,4 @@
+Seamless texture, top-down orthographic view of dusty pale gravel road shoulder with small crushed stones and dry dirt, evenly lit, no shadows, no perspective, fills the whole frame, no objects. The attached reference image is ONLY a style reference for rendering quality; do not reproduce its scene, town or characters. Premium stylized 3D render, toy-like, glossy plastic and soft clay materials, chunky rounded bevelled shapes, soft global illumination and gentle ambient occlusion, warm key light from the upper left, saturated but harmonious colours, crisp clean silhouettes, no outlines, no text, no letters, no numbers, no logos.
+
+
+refs: /home/user/my-first-repo/squad-surge/art-src/style/style-a.png

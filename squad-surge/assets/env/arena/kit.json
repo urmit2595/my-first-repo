@@ -1,0 +1,212 @@
+{
+ "theme": "arena",
+ "textures": {
+  "ground": {
+   "file": "ground.jpg",
+   "tile": 8
+  },
+  "sidewalk": {
+   "file": "sidewalk.jpg",
+   "tile": 4
+  }
+ },
+ "facades": [
+  {
+   "file": "facades/stand-a.png",
+   "w": 14,
+   "h": 6.4
+  },
+  {
+   "file": "facades/stand-b.png",
+   "w": 14,
+   "h": 5.3
+  }
+ ],
+ "props": {
+  "atlas": "props.png",
+  "items": [
+   {
+    "name": "floodlight-tower",
+    "rect": [
+     0,
+     0,
+     265,
+     768
+    ],
+    "h": 12,
+    "zone": "far",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "barrier",
+    "rect": [
+     955,
+     1190,
+     451,
+     289
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "tyres",
+    "rect": [
+     1410,
+     1190,
+     418,
+     276
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "sandbags",
+    "rect": [
+     0,
+     1509,
+     537,
+     227
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "ammo-crates",
+    "rect": [
+     504,
+     1190,
+     447,
+     292
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "oil-drums",
+    "rect": [
+     1324,
+     772,
+     397,
+     329
+    ],
+    "h": 1.3,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "steel-barricade",
+    "rect": [
+     0,
+     1190,
+     500,
+     315
+    ],
+    "h": 1.3,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "flag-pole",
+    "rect": [
+     617,
+     0,
+     283,
+     496
+    ],
+    "h": 6,
+    "zone": "curb",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "watch-tower",
+    "rect": [
+     269,
+     0,
+     344,
+     522
+    ],
+    "h": 7,
+    "zone": "lot",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "obstacle-wall",
+    "rect": [
+     1165,
+     0,
+     422,
+     430
+    ],
+    "h": 2.5,
+    "zone": "lot",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "searchlight",
+    "rect": [
+     904,
+     0,
+     257,
+     443
+    ],
+    "h": 2,
+    "zone": "curb",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "supply-pallet",
+    "rect": [
+     533,
+     772,
+     442,
+     380
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "fuel-cans",
+    "rect": [
+     979,
+     772,
+     341,
+     349
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "training-dummies",
+    "rect": [
+     0,
+     772,
+     529,
+     414
+    ],
+    "h": 1.8,
+    "zone": "lot",
+    "weight": 1,
+    "flip": true
+   }
+  ]
+ }
+}
