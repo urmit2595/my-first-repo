@@ -993,3 +993,23 @@ async function open(page = "index.html?test", opts = {}) {
 
 module.exports = { open, ROOT, VENDOR };
 
+codex
+The reference’s key features are its broad lantern head, curled flame, chunky teal scarf, and rounded brass fittings. I’m building around those proportions and merging fittings by joint to keep draw calls low. The scarf tails will simulate in world space so they respond to movement and turns.
+
+exec
+/bin/bash -lc 'ls -la js tests; git status --short' in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+js:
+total 8
+drwxr-xr-x  2 root root 4096 Nov  6 20:09 .
+drwxr-xr-x 13 root root 4096 Nov  6 20:24 ..
+
+tests:
+total 84
+drwxr-xr-x  2 root root  4096 Nov  6 20:24 .
+drwxr-xr-x 13 root root  4096 Nov  6 20:24 ..
+-rw-r--r--  1 root root 16810 Nov  6 20:24 fx-brief.md
+-rw-r--r--  1 root root 50586 Nov  6 20:24 fx-codex-1.log
+-rw-r--r--  1 root root  3887 Nov  6 20:14 testbed.js
+ M art-src/hero/codex-1.log
+

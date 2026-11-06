@@ -864,3 +864,287 @@ The save lives in localStorage under the key `spirelight-v1`.
   `- [from → to] request`. The orchestrator relays it. Never edit another agent's file.
 - Do not commit or push. The orchestrator does that.
 
+exec
+/bin/bash -lc 'for p in /AGENTS.md /home/AGENTS.md /home/user/AGENTS.md /home/user/my-first-repo/AGENTS.md /home/user/my-first-repo/spirelight/AGENTS.md; do if [ -f "$p" ]; then cat "$p"; fi; done
+cat tests/testbed.js tools/shot.js tools/harness.js index.html' in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+// Spirelight testbed: a minimal true-isometric three.js scene for testing one module on its own.
+// Include three.min.js (and any examples/js you need) first, then this file, then your module, then:
+//
+//   Testbed.start({ height: 10, center: [0, 1, 0], bg: 0x241a3a, lights: true, grid: true }, (tb) => {
+//     // tb.THREE, tb.scene, tb.camera, tb.renderer, tb.key (DirectionalLight), tb.hemi, tb.time
+//     tb.scene.add(myObject);
+//     tb.onFrame((dt, t) => { ... });      // per-frame callback
+//     return promiseOrNothing;             // window.__ready becomes true after it settles (and 2 frames rendered)
+//   });
+//
+// Camera: orthographic, looking along -(1,1,1) with +y up, exactly the game's projection (design.md section 4).
+(function () {
+  "use strict";
+  const Testbed = {};
+  Testbed.start = function (opts, setup) {
+    opts = opts || {};
+    const THREE = window.THREE;
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;display:block";
+    document.body.style.margin = "0";
+    document.body.style.background = "#000";
+    document.body.appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = opts.exposure || 1.0;
+    renderer.shadowMap.enabled = opts.shadows !== false;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(opts.bg != null ? opts.bg : 0x241a3a);
+    const H = opts.height || 10, c = opts.center || [0, 0, 0];
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -200, 400);
+    camera.position.set(c[0] + 50, c[1] + 50, c[2] + 50);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(c[0], c[1], c[2]);
+    const tb = { THREE, scene, camera, renderer, canvas, time: 0, frames: [], onFrame(fn) { this.frames.push(fn); } };
+    if (opts.lights !== false) {
+      tb.hemi = new THREE.HemisphereLight(0xb9c7ff, 0x5a3a52, 0.55);
+      scene.add(tb.hemi);
+      tb.key = new THREE.DirectionalLight(0xffd2a0, 1.6);
+      tb.key.position.set(c[0] - 12, c[1] + 20, c[2] + 8);
+      tb.key.target.position.set(c[0], c[1], c[2]);
+      tb.key.castShadow = true;
+      tb.key.shadow.mapSize.set(2048, 2048);
+      const s = tb.key.shadow.camera; s.left = -H; s.right = H; s.top = H; s.bottom = -H; s.near = 0.5; s.far = 80;
+      tb.key.shadow.bias = -0.0005;
+      scene.add(tb.key, tb.key.target);
+    }
+    if (opts.grid) {
+      const g = new THREE.GridHelper(20, 20, 0x6a5a8a, 0x3a2f55);
+      g.position.set(c[0], 0, c[2]);
+      scene.add(g);
+    }
+    function resize() {
+      const w = window.innerWidth, h = window.innerHeight, a = w / h;
+      renderer.setSize(w, h, false);
+      camera.left = -H * a / 2; camera.right = H * a / 2; camera.top = H / 2; camera.bottom = -H / 2;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener("resize", resize);
+    resize();
+    let last = performance.now(), rendered = 0;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; tb.time += dt;
+      for (const f of tb.frames) { try { f(dt, tb.time); } catch (e) { console.error(e); } }
+      renderer.render(scene, camera);
+      rendered++;
+      requestAnimationFrame(frame);
+    }
+    window.Testbed.tb = tb;
+    Promise.resolve().then(() => setup && setup(tb)).then(() => {
+      requestAnimationFrame(frame);
+      const wait = () => (rendered >= 2 ? (window.__ready = true) : requestAnimationFrame(wait));
+      wait();
+    }).catch(e => { console.error(e); window.__ready = true; window.__error = String(e && e.message || e); });
+    return tb;
+  };
+  window.Testbed = Testbed;
+})();
+#!/usr/bin/env node
+// Screenshot any Spirelight page headlessly and print errors.
+//
+//   node tools/shot.js PAGE OUT.png [--w 1280] [--h 720] [--dpr 1] [--wait 1500] [--until "window.__ready"]
+//                      [--eval "js expression (awaited), result printed as JSON"] [--mobile] [--reduced] [--log]
+//
+// PAGE is relative to spirelight/, e.g. "index.html?test" or "tests/hero.html". --until waits (up to 60 s) for an
+// expression to be truthy before the --wait delay; it defaults to "window.__ready || (window.Game && Game.ready)".
+const path = require("path");
+const { open, ROOT } = require("./harness");
+const argv = process.argv.slice(2), pos = [], opt = {};
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i].startsWith("--")) { const k = argv[i].slice(2), v = argv[i + 1]; if (v === undefined || v.startsWith("--")) opt[k] = "1"; else { opt[k] = v; i++; } }
+  else pos.push(argv[i]);
+}
+const [page = "index.html?test", out = "design/qa/shot.png"] = pos;
+(async () => {
+  const h = await open(page, { w: +(opt.w || 1280), h: +(opt.h || 720), dpr: +(opt.dpr || 1), mobile: !!opt.mobile, reducedMotion: !!opt.reduced, log: !!opt.log });
+  const until = opt.until || "window.__ready || (window.Game && Game.ready)";
+  await h.page.waitForFunction(until, null, { timeout: 60000 }).catch(() => h.errors.push("timeout waiting for: " + until));
+  if (opt.eval) {
+    const r = await h.page.evaluate(`(async () => (${opt.eval}))()`).catch(e => "EVAL ERROR " + e.message);
+    console.log(JSON.stringify(r));
+  }
+  await h.page.waitForTimeout(+(opt.wait || 1500));
+  const file = path.resolve(ROOT, out);
+  await h.page.screenshot({ path: file });
+  console.log("saved " + path.relative(ROOT, file));
+  console.log(h.errors.length ? "ERRORS:\n" + [...new Set(h.errors)].slice(0, 30).join("\n") : "errors: none");
+  await h.close();
+})().catch(e => { console.error("FAIL", e.message); process.exit(1); });
+// Shared headless harness for Spirelight tests (Playwright + swiftshader).
+// Serves the spirelight/ folder on a random port and swaps the CDN libraries for local copies (the CDNs are blocked
+// in this sandbox). Use it from your own test scripts:
+//
+//   const { open } = require("./harness");
+//   const h = await open("tests/blocks.html", { w: 1280, h: 720 });   // page path relative to spirelight/
+//   await h.page.waitForFunction(() => window.__ready);              // your page sets window.__ready = true
+//   await h.page.screenshot({ path: "design/qa/blocks.png" });
+//   console.log(h.errors);                                            // console errors, page errors, HTTP >= 400
+//   await h.close();
+const http = require("http"), fs = require("fs"), path = require("path");
+const { chromium } = require("playwright");
+
+const ROOT = path.resolve(__dirname, "..");
+const VENDOR = process.env.SL_VENDOR || "/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor";
+const TYPES = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".css": "text/css",
+  ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".woff2": "font/woff2",
+  ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav" };
+
+function serve() {
+  const server = http.createServer((req, res) => {
+    const u = decodeURIComponent(req.url.split("?")[0]);
+    const f = path.join(ROOT, u === "/" ? "index.html" : u);
+    if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end("not found"); }
+    res.writeHead(200, { "content-type": TYPES[path.extname(f).toLowerCase()] || "application/octet-stream" });
+    fs.createReadStream(f).pipe(res);
+  });
+  return new Promise(r => server.listen(0, "127.0.0.1", () => r(server)));
+}
+
+async function open(page = "index.html?test", opts = {}) {
+  const server = await serve();
+  const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist",
+    "--autoplay-policy=no-user-gesture-required"] });
+  const ctx = await browser.newContext({ viewport: { width: opts.w || 1280, height: opts.h || 720 },
+    deviceScaleFactor: opts.dpr || 1, isMobile: !!opts.mobile, hasTouch: !!opts.mobile,
+    reducedMotion: opts.reducedMotion ? "reduce" : "no-preference" });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on("pageerror", e => errors.push("PAGEERROR " + e.message));
+  p.on("console", m => {
+    const t = m.text();
+    if ((m.type() === "error" || m.type() === "warning") && !/GPU stall|GL Driver|swiftshader|WebGL-|ReadPixels/i.test(t)) errors.push(m.type() + " " + t);
+    if (opts.log) console.log("[page]", m.type(), t);
+  });
+  p.on("response", r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`); });
+  await p.route("**/three.min.js", r => r.fulfill({ path: path.join(VENDOR, "three/build/three.min.js"), contentType: "application/javascript" }));
+  await p.route("**/three@0.128.0/examples/js/**", r => r.fulfill({ path: path.join(VENDOR, "three/examples/js", r.request().url().split("/examples/js/")[1]), contentType: "application/javascript" }));
+  await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  if (opts.save !== false) await p.addInitScript(s => { try { if (s) localStorage.setItem("spirelight-v1", JSON.stringify(s)); } catch (e) {} }, opts.save || { unlocked: 99, sound: false, music: false });
+  const url = `http://127.0.0.1:${server.address().port}/${page.replace(/^\//, "")}`;
+  await p.goto(url);
+  return { page: p, browser, ctx, errors, url, close: async () => { await browser.close(); server.close(); } };
+}
+
+module.exports = { open, ROOT, VENDOR };
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#120d24">
+<title>Spirelight</title>
+<link rel="icon" href="data:,">
+<style>
+@font-face{font-family:'Sl Display';src:url(assets/fonts/display.woff2) format('woff2');font-display:block}
+:root{--ink:#120d24;--amber:#ffb35a;--glow:#ffd98a;--teal:#4fd6c9;--brass:#c8963e;--paver:#efe2c6;--text:#fff4e2}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:#0b0818;color:var(--text);font-family:'Sl Display',Georgia,serif;color-scheme:dark}
+#game{position:fixed;inset:0;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ui{position:absolute;inset:0;pointer-events:none}
+#ui>*{pointer-events:auto}
+.loading{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 58%,#3a2450,#0b0818 70%);z-index:50;transition:opacity .7s}
+.loading.done{opacity:0;pointer-events:none}
+.loading .orb{width:44px;height:44px;margin:auto;border-radius:50%;background:radial-gradient(circle at 42% 40%,#fff3c4,#ffb35a 45%,#ff7a1a00 70%);box-shadow:0 0 40px 12px #ffb35a55;animation:breathe 1.8s ease-in-out infinite}
+.loading p{margin:18px 0 0;text-align:center;letter-spacing:.32em;font-size:13px;opacity:.75}
+.loading .err{color:#ffb4ab;font:14px system-ui,sans-serif;max-width:340px;text-align:center;letter-spacing:0;opacity:1}
+@keyframes breathe{50%{transform:scale(1.15);box-shadow:0 0 60px 20px #ffb35a77}}
+@media (prefers-reduced-motion:reduce){.loading .orb{animation:none}}
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="view" aria-label="Spirelight game view"></canvas>
+  <div id="ui"></div>
+  <div class="loading" id="loading"><div><div class="orb"></div><p>KINDLING</p><p class="err" id="loadErr"></p></div></div>
+</div>
+
+<!-- three.js r128 + add-ons (design.md section 7) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FXAAShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<!-- game modules -->
+<script src="js/geom.js"></script>
+<script src="levels/levels.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/decor.js"></script>
+<script src="js/world.js"></script>
+<script src="js/hero.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/ui.js"></script>
+<script>
+"use strict";
+(async function boot() {
+  const err = m => { document.getElementById("loadErr").textContent = m; };
+  try {
+    if (!window.THREE) throw new Error("Could not load the game libraries. Check your connection and reload.");
+    if (!window.Game) throw new Error("The game engine failed to load.");
+    await Game.init({ canvas: document.getElementById("view"), root: document.getElementById("game"), ui: document.getElementById("ui") });
+    try { window.FX && FX.setup && FX.setup(Game); } catch (e) { console.error(e); }
+    try { window.UI && UI.setup && UI.setup(Game); } catch (e) { console.error(e); }
+    Game.start();   // URL flags: ?level=N starts that level, otherwise the title screen
+    document.getElementById("loading").classList.add("done");
+  } catch (e) { console.error(e); err(e.message || String(e)); }
+})();
+</script>
+</body>
+</html>
+
+exec
+/bin/bash -lc 'ls -la js tests art-src/style && git status --short' in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+art-src/style:
+total 2008
+drwxr-xr-x 2 root root    4096 Nov  6 20:10 .
+drwxr-xr-x 8 root root    4096 Nov  6 20:09 ..
+-rw-r--r-- 1 root root     157 Nov  6 20:10 style-1.log
+-rw-r--r-- 1 root root 2033520 Nov  6 20:10 style-1.png
+-rw-r--r-- 1 root root    1447 Nov  6 20:10 style-1.prompt.in
+-rw-r--r-- 1 root root    1448 Nov  6 20:10 style-1.prompt.txt
+
+js:
+total 8
+drwxr-xr-x  2 root root 4096 Nov  6 20:09 .
+drwxr-xr-x 13 root root 4096 Nov  6 20:24 ..
+
+tests:
+total 96
+drwxr-xr-x  2 root root  4096 Nov  6 20:24 .
+drwxr-xr-x 13 root root  4096 Nov  6 20:24 ..
+-rw-r--r--  1 root root 16810 Nov  6 20:24 fx-brief.md
+-rw-r--r--  1 root root 64726 Nov  6 20:24 fx-codex-1.log
+-rw-r--r--  1 root root  3887 Nov  6 20:14 testbed.js
+ M art-src/hero/codex-1.log
+ M tests/fx-codex-1.log
+
+exec
+/bin/bash -lc "rg --files /tmp /home/user/my-first-repo -g 'three.min.js' -g 'package.json' -g 'AGENTS.md' 2>/dev/null" in /home/user/my-first-repo/spirelight
+ exited 2 in 0ms:
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/fonts/fontsource-lilita-one-5.3.0/package/package.json
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/fonts/fontsource-nunito-5.3.0/package/package.json
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/fonts2/package/package.json
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/package.json
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/package.json
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/package/package.json
+
+codex
+The geometry and decor modules aren’t present yet, so FX will use only the documented APIs and handle missing data quietly. I’m using three scene draw calls: glow particles, dust particles, and pooled rings. Light shafts and the beacon flash will be DOM overlays.
+

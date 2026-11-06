@@ -1,0 +1,2 @@
+Seamless tileable material texture, perfectly flat straight-on orthographic top-down view of a surface filling the entire square frame edge to edge, even soft diffuse lighting with no directional shadows, no vignette, no perspective, no text. Surface of a single continuous pale cream limestone paving stone #efe2c6 with NO joints and NO grid lines and no borders: fine pitting, soft mottling, faint hairline cracks, tiny fossil flecks, subtle worn polish, warm ivory with slight honey and grey variation. Rich detailed PBR albedo look. Square image.
+

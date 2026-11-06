@@ -498,7 +498,7 @@ Game.bus.on(ev, fn) / off(ev, fn) / emit(ev, data)
 Game.state            // "loading" | "title" | "play" | "paused" | "complete"
 Game.levels           // playable levels (LEVELS without "title"), Game.levelIndex, Game.level, Game.geom (SpireGeom world)
 Game.groups           // { id: { def, pivotNode, contentNode, value, moving, handle } }
-Game.decor            // [{ item, object3D, worldPos() }] for the current level (FX uses it for the cascade)
+Game.decor            // [{ item, object3D, worldPos(target?) → THREE.Vector3 (world; fills target if given) }] for the current level (FX uses it for the cascade)
 Game.hero             // { object3D, tile, walking, api (the Hero instance) }
 Game.time, Game.dt, Game.reducedMotion, Game.quality
 Game.save             // { unlocked: 1, done: { [levelId]: { glimmers: n } }, sound: true, music: true, quality: "auto" }
@@ -534,23 +534,25 @@ The save lives in localStorage under the key `spirelight-v1`.
 
 ## 8. Events (`Game.bus`)
 
+All positions in event payloads are world coordinates as `[x, y, z]` arrays.
+
 | event | data | when |
 |---|---|---|
 | `title` | `{}` | title screen shown |
 | `levelStart` | `{ index, level }` | level built, intro card time |
-| `tap` | `{ x, y, tile, reachable }` | a walk tap (x, y in CSS px) |
+| `tap` | `{ x, y, tile, reachable, pos }` | a walk tap (x, y in CSS px; tile = walkable id or null; pos = its world stand point or null) |
 | `path` | `{ points: [[x,y,z]...] }` | a walk begins (world stand points) |
-| `heroStep` | `{ from, to, k }` | each tile transition (k ≠ 0 means impossible join) |
+| `heroStep` | `{ from, to, k, at }` | each tile transition: from/to are walkable ids, k ≠ 0 means an impossible join, at = world [x,y,z] of the junction on the `from` side |
 | `heroStop` | `{ tile }` | the walk ended |
 | `mechGrab` | `{ id, kind }` | a handle was grabbed |
 | `mechMove` | `{ id, value, delta }` | every frame while a mechanism moves |
-| `mechTick` | `{ id }` | every 15° (rotor) or 0.25 units (slider) passed |
-| `mechSnap` | `{ id, value }` | settled on an allowed value |
+| `mechTick` | `{ id, pos }` | every 15° (rotor) or 0.25 units (slider) passed (pos = handle world position) |
+| `mechSnap` | `{ id, value, pos }` | settled on an allowed value (pos = handle world position) |
 | `mechLocked` | `{ id }` | the move was refused (Wick on an x/z rotor) |
-| `plate` | `{ tile, group }` | a plate was pressed |
-| `glimmer` | `{ tile, count, total }` | a glimmer was collected |
+| `plate` | `{ tile, group, pos }` | a plate was pressed (pos = plate world position) |
+| `glimmer` | `{ tile, count, total, pos }` | a glimmer was collected (pos = its world position) |
 | `goal` | `{ index }` | Wick reached the goal |
-| `beacon` | `{ index, pos: [x,y,z] }` | the beacon ignites (cascade time) |
+| `beacon` | `{ index, pos }` | the beacon ignites: the engine has just called the beacon decor's `ignite()`; FX runs the cascade (`setLit` on the other decor) and the particles. pos = world [x,y,z] of the beacon flame |
 | `levelComplete` | `{ index, glimmers, total, next }` | show the complete card |
 | `restart` | `{ index }` | the level restarted |
 | `pause` | `{ paused }` | the game was paused or resumed |
