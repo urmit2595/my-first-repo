@@ -142,6 +142,9 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/scenery.js"></script>
+<script src="js/objects3d.js"></script>
+<script src="js/juice.js"></script>
 <script>
 "use strict";
 // ---------- persistence ----------
@@ -166,12 +169,12 @@ const WEAPONS = [
   { name: "BAZOOKA", img: "assets/w-bazooka.png", dmg: 7, rate: 0.4, spread: 1, splash: 2.6 },
 ];
 const THEMES = [
-  { name: "OLD TOWN", sky: ["#f9c48f", "#fde8c9"], fog: 0xf6d2aa, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "zombie", deco: "city", landmark: "tower" },
-  { name: "GOLDEN BRIDGE", sky: ["#6fb6ff", "#d8eeff"], fog: 0xbfe0ff, ground: null, water: 0x2f8fd0, road: "t-asphalt", side: "t-concrete", enemy: "grunt", deco: "bridge" },
-  { name: "OLD PIER", sky: ["#7fd3e6", "#e9fbff"], fog: 0xc6eef5, ground: null, water: 0x1d9fb8, road: "t-concrete", side: "t-cobble", enemy: "zombie", deco: "pier" },
-  { name: "RUINED CITY", sky: ["#9aa7b8", "#e7d6c2"], fog: 0xcfc6bb, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "grunt", deco: "city" },
-  { name: "DESERT HIGHWAY", sky: ["#ffb36b", "#ffe9b8"], fog: 0xf5d6a0, ground: "t-dirt", road: "t-asphalt", side: "t-dirt", enemy: "zombie", deco: "desert" },
-  { name: "WAR ARENA", sky: ["#24345f", "#5a6d9a"], fog: 0x3b4c78, ground: null, water: 0x1a2546, road: "t-concrete", side: "t-concrete", enemy: "grunt", deco: "arena" },
+  { id: "town", name: "OLD TOWN", sky: ["#f9c48f", "#fde8c9"], fog: 0xf6d2aa, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "zombie", deco: "city", landmark: "tower" },
+  { id: "bridge", name: "GOLDEN BRIDGE", sky: ["#6fb6ff", "#d8eeff"], fog: 0xbfe0ff, ground: null, water: 0x2f8fd0, road: "t-asphalt", side: "t-concrete", enemy: "grunt", deco: "bridge" },
+  { id: "pier", name: "OLD PIER", sky: ["#7fd3e6", "#e9fbff"], fog: 0xc6eef5, ground: null, water: 0x1d9fb8, road: "t-concrete", side: "t-cobble", enemy: "zombie", deco: "pier" },
+  { id: "ruins", name: "RUINED CITY", sky: ["#9aa7b8", "#e7d6c2"], fog: 0xcfc6bb, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "grunt", deco: "city" },
+  { id: "desert", name: "DESERT HIGHWAY", sky: ["#ffb36b", "#ffe9b8"], fog: 0xf5d6a0, ground: "t-dirt", road: "t-asphalt", side: "t-dirt", enemy: "zombie", deco: "desert" },
+  { id: "arena", name: "WAR ARENA", sky: ["#24345f", "#5a6d9a"], fog: 0x3b4c78, ground: null, water: 0x1a2546, road: "t-concrete", side: "t-concrete", enemy: "grunt", deco: "arena" },
 ];
 
 // ---------- DOM ----------
@@ -182,9 +185,9 @@ const gameEl = $("game"), canvas = $("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(52, 9 / 16, 0.5, 400);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a6a, 0.85));
-const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-6, 14, 8); scene.add(sun);
+const BASE_FOV = 52;
+const CAM = { h: 12.5, back: 12, ahead: 16 }; // chase camera: height, distance behind the squad, aim point ahead of it
+const camera = new THREE.PerspectiveCamera(BASE_FOV, 9 / 16, 0.5, 400);
 const loader = new THREE.TextureLoader();
 const TEX = {};
 function loadTex(name, file) {
@@ -198,26 +201,37 @@ addEventListener("resize", resize);
 
 // ---------- instanced sprite layers ----------
 const SPRITE_VS = `
+#include <fog_pars_vertex>
 attribute vec3 aOff; attribute vec2 aScale; attribute vec3 aFrame;
 uniform vec2 grid; varying vec2 vUv; varying float vA; varying float vFlash;
 void main(){
-  vec4 mv = modelViewMatrix * vec4(aOff, 1.0);
-  mv.xy += position.xy * aScale;
-  gl_Position = projectionMatrix * mv;
+  vec4 mvPosition = modelViewMatrix * vec4(aOff, 1.0);
+  mvPosition.xy += position.xy * aScale;
+  gl_Position = projectionMatrix * mvPosition;
   float f = aFrame.x; float c = mod(f, grid.x); float r = floor(f / grid.x + 0.001);
   vUv = vec2((c + uv.x) / grid.x, 1.0 - (r + 1.0 - uv.y) / grid.y);
   vA = aFrame.y; vFlash = aFrame.z;
+  #include <fog_vertex>
 }`;
 const SPRITE_FS = `
-uniform sampler2D map; varying vec2 vUv; varying float vA; varying float vFlash;
+#include <fog_pars_fragment>
+uniform sampler2D map; uniform vec3 tint; varying vec2 vUv; varying float vA; varying float vFlash;
 void main(){
   vec4 t = texture2D(map, vUv);
   if (t.a * vA < 0.5) discard;
-  gl_FragColor = vec4(mix(t.rgb, vec3(1.0), vFlash), 1.0);
+  gl_FragColor = vec4(mix(t.rgb * tint, vec3(1.0), vFlash), 1.0);
+  #include <fog_fragment>
 }`;
 const FX_FS = `
+#include <fog_pars_fragment>
 uniform sampler2D map; varying vec2 vUv; varying float vA; varying float vFlash;
-void main(){ vec4 t = texture2D(map, vUv); gl_FragColor = vec4(t.rgb * vA, 1.0); }`;
+void main(){
+  vec4 t = texture2D(map, vUv); gl_FragColor = vec4(t.rgb * vA, 1.0);
+  #ifdef USE_FOG
+    gl_FragColor.rgb *= 1.0 - smoothstep(fogNear, fogFar, fogDepth); // additive: fade out instead of tinting
+  #endif
+}`;
+const spriteLayers = [];
 class SpriteLayer {
   constructor(tex, cols, rows, max, { additive = false, anchor = 0 } = {}) {
     const base = new THREE.PlaneBufferGeometry(1, 1); base.translate(0, 0.5 - anchor, 0);
@@ -229,13 +243,15 @@ class SpriteLayer {
     this.aFr = new THREE.InstancedBufferAttribute(this.fr, 3).setUsage(THREE.DynamicDrawUsage);
     g.setAttribute("aOff", this.aOff); g.setAttribute("aScale", this.aSc); g.setAttribute("aFrame", this.aFr);
     g.instanceCount = 0;
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]); // merge first: it would clone a texture value
+    Object.assign(uniforms, { map: { value: tex }, grid: { value: new THREE.Vector2(cols, rows) }, tint: { value: new THREE.Color(1, 1, 1) } });
     const mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: tex }, grid: { value: new THREE.Vector2(cols, rows) } },
+      uniforms, fog: true,
       vertexShader: SPRITE_VS, fragmentShader: additive ? FX_FS : SPRITE_FS,
       transparent: additive, depthWrite: !additive, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     });
     this.mesh = new THREE.Mesh(g, mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = additive ? 5 : 1;
-    this.g = g; this.max = max; this.n = 0; scene.add(this.mesh);
+    this.g = g; this.max = max; this.n = 0; this.additive = additive; scene.add(this.mesh); spriteLayers.push(this);
   }
   begin() { this.n = 0; }
   push(x, y, z, w, h, frame, alpha = 1, flash = 0) {
@@ -297,7 +313,20 @@ function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; 
 
 // ---------- world / level ----------
 let L = null;               // current level state
-const world = new THREE.Group(); scene.add(world);
+const world = new THREE.Group(); scene.add(world);   // scenery, owned by js/scenery.js
+const track = new THREE.Group(); scene.add(track);   // gate and solid visuals, owned by js/objects3d.js
+// event bus: the game emits, the look-and-feel modules listen (design/overhaul.md section 6)
+const bus = {
+  h: {},
+  on(name, fn) { (this.h[name] ||= []).push(fn); },
+  emit(name, data) { const hs = this.h[name]; if (hs) for (const fn of hs) { try { fn(data); } catch (e) { console.error(`bus ${name}`, e); } } },
+};
+function setSpriteTint(color) { const c = new THREE.Color(color); for (const l of spriteLayers) if (!l.additive) l.mesh.material.uniforms.tint.value.copy(c); }
+const ctx = {
+  THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng,
+  get WEAPONS() { return WEAPONS; }, get L() { return L; }, get state() { return state; }, get layers() { return layers; },
+  sfx: (...a) => sfx(...a), vibe: ms => vibe(ms), floatText: (...a) => floatText(...a),
+};
 const SLAM_R = 3.0, SLAM_WARN = 1.6, SLAM_AT = 2.6; // boss slam: red ring warns, then hits soldiers inside it
 const slamRing = new THREE.Mesh(new THREE.RingBufferGeometry(SLAM_R - 0.5, SLAM_R, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, depthWrite: false }));
 slamRing.rotation.x = -Math.PI / 2; slamRing.renderOrder = 2; slamRing.visible = false; scene.add(slamRing);
@@ -306,136 +335,30 @@ slamFill.rotation.x = -Math.PI / 2; slamFill.renderOrder = 2; slamFill.visible =
 const slamCenter = b => [b.x, b.z + 7];
 let layers = null;          // sprite layers
 const floatsEl = $("floats");
-const tmpV = new THREE.Vector3();
+const tmpV = new THREE.Vector3(), lookAt = new THREE.Vector3();
 
 const LEVEL_NAMES = ["OLD TOWN", "RED BRIDGE", "SALT PIER", "BROKEN BLOCKS", "DUNE ROAD", "IRON ARENA", "MARKET STREET", "STORM BRIDGE", "FOG HARBOR", "ASH DISTRICT", "SUN CANYON", "LAST STAND"];
 function levelName(level) { const lap = Math.ceil(level / LEVEL_NAMES.length); return LEVEL_NAMES[(level - 1) % LEVEL_NAMES.length] + (lap > 1 ? ` ${lap}` : ""); }
 function themeFor(level) { return THEMES[(level - 1) % THEMES.length]; }
-function skyTexture(top, bottom) {
-  const c = document.createElement("canvas"); c.width = 4; c.height = 256; const x = c.getContext("2d");
-  const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, top); g.addColorStop(1, bottom); x.fillStyle = g; x.fillRect(0, 0, 4, 256);
-  return new THREE.CanvasTexture(c);
-}
-function repeatTex(name, rx, ry) { const t = TEX[name].clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); return t; }
-function windowTexture(color) {
-  const c = document.createElement("canvas"); c.width = 64; c.height = 128; const x = c.getContext("2d");
-  x.fillStyle = color; x.fillRect(0, 0, 64, 128);
-  for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) { x.fillStyle = Math.random() < 0.3 ? "#1a1a1a" : "#3d4a5c"; x.fillRect(6 + k * 20, 8 + r * 24, 12, 15); }
-  return new THREE.CanvasTexture(c);
-}
-
-function buildEnvironment(theme, length) {
-  while (world.children.length) world.remove(world.children[0]);
-  scene.background = skyTexture(theme.sky[0], theme.sky[1]);
-  scene.fog = new THREE.Fog(theme.fog, 45, 150);
-  const span = length + 140, cz = -length / 2 + 20;
-  // ground / water
-  const ground = new THREE.Mesh(new THREE.PlaneBufferGeometry(220, span),
-    theme.ground ? new THREE.MeshLambertMaterial({ map: repeatTex(theme.ground, 18, span / 12) }) : new THREE.MeshLambertMaterial({ color: theme.water }));
-  ground.rotation.x = -Math.PI / 2; ground.position.set(0, theme.ground ? -0.05 : -2.5, cz); world.add(ground);
-  // sidewalks
-  for (const s of [-1, 1]) {
-    const side = new THREE.Mesh(new THREE.BoxBufferGeometry(4, 0.4, span), new THREE.MeshLambertMaterial({ map: repeatTex(theme.side, 1, span / 4) }));
-    side.position.set(s * (ROAD + 2.4), -0.18, cz); world.add(side);
-    const rail = new THREE.Mesh(new THREE.BoxBufferGeometry(0.4, 0.55, span), new THREE.MeshLambertMaterial({ color: 0x8b93a3 }));
-    rail.position.set(s * (ROAD + 0.25), 0.27, cz); world.add(rail);
-  }
-  const road = new THREE.Mesh(new THREE.PlaneBufferGeometry(ROAD * 2, span), new THREE.MeshLambertMaterial({ map: repeatTex(theme.road, 1.5, span / 8) }));
-  road.rotation.x = -Math.PI / 2; road.position.set(0, 0, cz); world.add(road);
-  if (!theme.ground) { // pillars under bridge / pier
-    for (let z = 10; z > -length - 60; z -= 22) for (const s of [-1, 1]) {
-      const p = new THREE.Mesh(new THREE.BoxBufferGeometry(1.2, 6, 1.2), new THREE.MeshLambertMaterial({ color: theme.deco === "pier" ? 0x7a5a3a : 0x9aa3b5 }));
-      p.position.set(s * (ROAD + 3.5), -3, z); world.add(p);
-    }
-  }
-  const r = rng(length * 7 + 3);
-  if (theme.deco === "city") {
-    for (let z = 20; z > -length - 80; z -= 9 + r() * 8) for (const s of [-1, 1]) {
-      if (r() < 0.25) continue;
-      const h = 4 + r() * 9, w = 5 + r() * 4;
-      const colors = ["#e9e2d4", "#c9b79c", "#d8c3a5", "#b8a08a", "#f1ece2"];
-      const b = new THREE.Mesh(new THREE.BoxBufferGeometry(w, h, 6), new THREE.MeshLambertMaterial({ map: windowTexture(colors[Math.floor(r() * colors.length)]) }));
-      b.position.set(s * (ROAD + 7 + w / 2 + r() * 6), h / 2 - 0.1, z); b.rotation.y = (r() - 0.5) * 0.3; world.add(b);
-      if (r() < 0.3) { // wrecked car
-        const car = new THREE.Mesh(new THREE.BoxBufferGeometry(2.2, 0.9, 1.3), new THREE.MeshLambertMaterial({ color: 0xd97a2b }));
-        car.position.set(s * (ROAD + 4.8), 0.45, z + 4); car.rotation.set(0, r() * 2, r() < 0.5 ? Math.PI : 0.3); world.add(car);
-      }
-    }
-  } else if (theme.deco === "bridge") {
-    for (let z = 0; z > -length - 80; z -= 60) for (const s of [-1, 1]) {
-      const t = new THREE.Mesh(new THREE.BoxBufferGeometry(1.4, 22, 1.4), new THREE.MeshLambertMaterial({ color: 0xc8432f }));
-      t.position.set(s * (ROAD + 3.2), 11, z); world.add(t);
-    }
-    for (const s of [-1, 1]) {
-      const cable = new THREE.Mesh(new THREE.BoxBufferGeometry(0.15, 0.15, length + 120), new THREE.MeshLambertMaterial({ color: 0xc8432f }));
-      cable.position.set(s * (ROAD + 3.2), 9, -length / 2); world.add(cable);
-    }
-  } else if (theme.deco === "desert") {
-    for (let z = 20; z > -length - 80; z -= 6 + r() * 10) for (const s of [-1, 1]) {
-      const h = 1.5 + r() * 2.5;
-      const c = new THREE.Mesh(new THREE.CylinderBufferGeometry(0.35, 0.4, h, 6), new THREE.MeshLambertMaterial({ color: 0x4f8a3a }));
-      c.position.set(s * (ROAD + 5 + r() * 25), h / 2, z); world.add(c);
-      if (r() < 0.2) { const rock = new THREE.Mesh(new THREE.DodecahedronBufferGeometry(1.5 + r() * 2), new THREE.MeshLambertMaterial({ color: 0xc08a55 })); rock.position.set(s * (ROAD + 10 + r() * 20), 0.5, z); world.add(rock); }
-    }
-  } else if (theme.deco === "arena") {
-    for (const s of [-1, 1]) {
-      const wall = new THREE.Mesh(new THREE.BoxBufferGeometry(1, 2.5, length + 140), new THREE.MeshLambertMaterial({ color: 0x5d6884 }));
-      wall.position.set(s * (ROAD + 4.6), 1.1, cz); world.add(wall);
-    }
-  }
-  if (theme.landmark === "tower") { // lattice radio tower on the horizon
-    const g = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color: 0x8a6a55 });
-    const legs = new THREE.CylinderBufferGeometry(0.6, 3.2, 22, 4, 1, true);
-    const l1 = new THREE.Mesh(legs, m); l1.position.y = 11; g.add(l1);
-    const l2 = new THREE.Mesh(new THREE.CylinderBufferGeometry(0.15, 0.7, 20, 4), m); l2.position.y = 31; g.add(l2);
-    const deck = new THREE.Mesh(new THREE.BoxBufferGeometry(5, 0.6, 5), m); deck.position.y = 8; deck.rotation.y = Math.PI / 4; g.add(deck);
-    g.position.set(8, 0, -length - 70); g.scale.setScalar(1.6); world.add(g);
-  }
-}
 
 // ---------- level generation ----------
+const isGood = h => h.op === "x" ? h.v >= 1 : h.v >= 0;
+const gateText = h => h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
 function makeGate(z, left, right) {
   const gate = { kind: "gate", z, used: false, halves: [] };
-  for (const [s, spec] of [[-1, left], [1, right]]) {
-    const plane = new THREE.Mesh(new THREE.PlaneBufferGeometry(ROAD - 0.2, 3.2), new THREE.MeshBasicMaterial({ map: TEX.gateBlue, transparent: true, opacity: 0.88, depthWrite: false }));
-    plane.position.set(s * ROAD / 2, 1.6, z); world.add(plane);
-    const lab = makeLabel(256, 128);
-    const lp = new THREE.Mesh(new THREE.PlaneBufferGeometry(3.6, 1.8), new THREE.MeshBasicMaterial({ map: lab.tex, transparent: true, depthWrite: false }));
-    lp.position.set(s * ROAD / 2, 1.7, z + 0.05); lp.renderOrder = 3; world.add(lp);
-    const posts = new THREE.Mesh(new THREE.BoxBufferGeometry(0.25, 3.4, 0.25), new THREE.MeshLambertMaterial({ color: 0xdfe6f2 }));
-    posts.position.set(s * (ROAD - 0.05), 1.7, z); world.add(posts);
-    gate.halves.push({ x: s * ROAD / 2, hw: ROAD / 2, op: spec[0], v: spec[1], plane, lab, side: s });
-  }
-  const mid = new THREE.Mesh(new THREE.BoxBufferGeometry(0.3, 3.4, 0.3), new THREE.MeshLambertMaterial({ color: 0xdfe6f2 }));
-  mid.position.set(0, 1.7, z); world.add(mid);
-  refreshGate(gate); return gate;
+  for (const [s, spec] of [[-1, left], [1, right]]) gate.halves.push({ x: s * ROAD / 2, hw: ROAD / 2, op: spec[0], v: spec[1], side: s });
+  Obj3D.gate(gate); refreshGate(gate); return gate;
 }
-function refreshGate(gate) {
-  for (const h of gate.halves) {
-    const good = h.op === "x" ? h.v >= 1 : h.v >= 0;
-    h.plane.material.map = good ? TEX.gateBlue : TEX.gateRed;
-    drawLabel(h.lab, h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`));
-  }
-}
-// solid shootable objects: blocks, crates, tyres, weapon cases
+function refreshGate(gate) { for (const h of gate.halves) Obj3D.gateHalf(gate, h, isGood(h), gateText(h)); }
+// solid shootable objects: blocks, crates, tyres, weapon cases, ammo boxes (hw = half-width for bullets and collisions)
+const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3 };
 function makeSolid(kind, x, z, hp, extra = {}) {
-  const spec = {
-    blockBlue: { tex: "blockBlue", w: 2.1, h: 2.1, hw: 1.1 }, blockYellow: { tex: "blockYellow", w: 2.3, h: 2.3, hw: 1.2 },
-    crate: { tex: "crate", w: 2.3, h: 2.2, hw: 1.2 }, tyres: { tex: "tyres", w: 1.7, h: 1.9, hw: 0.9 }, ammo: { tex: "ammo", w: 2.0, h: 1.66, hw: 1.05 }, weaponCase: { tex: "weaponCase", w: 2.6, h: 1.85, hw: 1.3 },
-  }[kind];
-  const mesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(spec.w, spec.h), new THREE.MeshBasicMaterial({ map: TEX[spec.tex], alphaTest: 0.5 }));
-  mesh.position.set(x, spec.h / 2, z); world.add(mesh);
-  const depth = new THREE.Mesh(new THREE.BoxBufferGeometry(spec.w * 0.92, spec.h * 0.92, 1.2), new THREE.MeshLambertMaterial({ color: { blockBlue: 0x1f5fd6, blockYellow: 0xd99a00, crate: 0x7a4a22, tyres: 0x222222, ammo: 0x4a5a2a, weaponCase: 0x5c6a80 }[kind] }));
-  depth.position.set(x, spec.h / 2, z - 0.62); world.add(depth);
-  const lab = makeLabel(256, 128);
-  const lp = new THREE.Mesh(new THREE.PlaneBufferGeometry(spec.w * 0.95, spec.w * 0.47), new THREE.MeshBasicMaterial({ map: lab.tex, transparent: true, depthWrite: false }));
-  lp.position.set(x, kind === "weaponCase" || kind === "ammo" ? spec.h + 0.55 : spec.h * 0.5, z + 0.08); lp.renderOrder = 3; world.add(lp);
-  const o = { kind, x, z, hw: spec.hw, hp, maxHp: hp, alive: true, mesh, depth, lp, lab, hitT: 0, ...extra };
-  labelSolid(o); return o;
+  const o = { kind, x, z, hw: SOLID_HW[kind], hp, maxHp: hp, alive: true, ...extra };
+  Obj3D.solid(o); labelSolid(o); return o;
 }
 function labelSolid(o) {
-  if (o.kind === "blockBlue" || o.kind === "blockYellow") drawLabel(o.lab, `+${o.reward}`);
-  else drawLabel(o.lab, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" ? "#ffe066" : o.kind === "ammo" ? "#9dff7a" : "#fff");
+  if (o.kind === "blockBlue" || o.kind === "blockYellow") Obj3D.solidLabel(o, `+${o.reward}`, "#fff");
+  else Obj3D.solidLabel(o, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" ? "#ffe066" : o.kind === "ammo" ? "#9dff7a" : "#fff");
 }
 function enemy(type, x, z, level) {
   const hpScale = 1 + (level - 1) * 0.1;
@@ -445,7 +368,7 @@ function enemy(type, x, z, level) {
 function generateLevel(level) {
   const theme = themeFor(level), r = rng(level * 9973 + 17);
   const length = Math.min(200 + level * 35, 520);
-  buildEnvironment(theme, length);
+  Obj3D.clear(); Scenery.build(theme, length);
   const gates = [], solids = [], enemies = [];
   const etype = theme.enemy, d = level;
   const horde = (z, n, spread = 4.2, depth = 6) => {
@@ -501,10 +424,12 @@ function generateLevel(level) {
 function slot(i) { const r = 0.5 * Math.sqrt(i), a = i * 2.39996; return [Math.cos(a) * r, Math.sin(a) * r * 0.85]; }
 function squadRadius(n) { return 0.5 * Math.sqrt(Math.max(1, n)) + 0.35; }
 function addSoldiers(n) {
-  for (let i = 0; i < n && L.soldiers.length < 600; i++) {
+  let added = 0;
+  for (let i = 0; i < n && L.soldiers.length < 600; i++, added++) {
     const [ox, oz] = slot(L.soldiers.length);
-    L.soldiers.push({ x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, ph: Math.random() * 4 });
+    L.soldiers.push({ x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, ph: Math.random() * 4, born: L.time });
   }
+  if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
 }
 function killSoldiers(n, nearX = null) {
   for (let k = 0; k < n && L.soldiers.length; k++) {
@@ -513,6 +438,7 @@ function killSoldiers(n, nearX = null) {
     const s = L.soldiers[idx]; L.fx.push({ x: s.x, y: 0.6, z: s.z, f: 4, t: 0, dur: 0.35, size: 1.1 });
     L.soldiers.splice(idx, 1);
   }
+  if (n > 0) bus.emit("soldiersLost", { n, total: L.soldiers.length });
 }
 
 // ---------- floating text ----------
@@ -534,17 +460,26 @@ function startLevel(level) {
   addSoldiers(START_SQUAD);
   $("levelName").textContent = levelName(level); $("levelNo").textContent = `Level ${level}`;
   setWeapon(0);
+  bus.emit("levelStart", { level, name: levelName(level), theme: L.theme });
 }
-function setWeapon(i) { L.weapon = i; $("weaponImg").src = WEAPONS[i].img; weaponLabel(); }
+// switch level once its theme's art is loaded (shows the loading screen only if that takes a moment)
+async function goLevel(level, next) {
+  const slow = setTimeout(() => show("loading", true), 200);
+  await Scenery.preload(themeFor(level)).catch(e => console.warn("preload failed", e));
+  clearTimeout(slow); show("loading", false);
+  startLevel(level); setState(next);
+}
+function setWeapon(i) { L.weapon = i; $("weaponImg").src = WEAPONS[i].img; weaponLabel(); bus.emit("weapon", { index: i, name: WEAPONS[i].name }); }
 function weaponLabel() { $("weaponName").textContent = WEAPONS[L.weapon].name + (L.rateMult > 1 ? ` · RATE x${L.rateMult.toFixed(1)}` : ""); }
 function show(id, on) { $(id).hidden = !on; }
 function setState(s) {
-  state = s;
+  const from = state; state = s;
   const playing = s === "play" || s === "boss";
   show("home", s === "home"); show("progress", playing || s === "paused"); show("pauseBtn", playing); show("settingsBtn", s === "home");
   show("weaponTag", playing); show("count", playing);
   show("levelsBtn", s === "home"); show("levelsModal", s === "levels"); if (s === "levels") renderLevels();
   show("bossbar", s === "boss"); show("winModal", s === "win"); show("loseModal", s === "lose"); show("pauseModal", s === "paused");
+  if (from !== s) bus.emit("state", { from, to: s });
 }
 
 // ---------- input ----------
@@ -577,9 +512,9 @@ function togglePause() {
 $("pauseBtn").onclick = togglePause; $("settingsBtn").onclick = () => { resumeState = "home"; setState("paused"); };
 $("levelsBtn").onclick = () => setState("levels"); $("levelsClose").onclick = () => setState("home");
 $("resumeBtn").onclick = () => setState(resumeState);
-$("quitBtn").onclick = () => { startLevel(save.level); setState("home"); };
-$("nextBtn").onclick = () => { startLevel(save.level); setState("home"); };
-$("retryBtn").onclick = () => { startLevel(save.level); setState("play"); };
+$("quitBtn").onclick = () => goLevel(save.level, "home");
+$("nextBtn").onclick = () => goLevel(save.level, "home");
+$("retryBtn").onclick = () => goLevel(save.level, "play");
 function syncToggles() {
   for (const [id, k] of [["soundBtn", "sound"], ["vibeBtn", "vibe"]]) { $(id).setAttribute("aria-pressed", save[k]); $(id).textContent = save[k] ? "ON" : "OFF"; }
 }
@@ -588,7 +523,7 @@ $("vibeBtn").onclick = () => { save.vibe = !save.vibe; persist(); syncToggles();
 document.addEventListener("visibilitychange", () => { if (document.hidden && (state === "play" || state === "boss")) togglePause(); });
 
 // ---------- simulation ----------
-const ENEMY_ASPECT = { zombie: 0.86, grunt: 0.787, brute: 0.946 };
+const ENEMY_ASPECT = { zombie: 0.861, grunt: 0.787, brute: 0.946 };
 function fireRate() { return (1 / 0.3) * WEAPONS[L.weapon].rate * L.rateMult; }
 function damage() { return WEAPONS[L.weapon].dmg; }
 
@@ -604,7 +539,7 @@ function step(dt) {
   const prevZ = L.sz;
   if (state === "play") {
     L.sz -= SPEED * dt;
-    if (L.sz <= -L.length) { L.sz = -L.length; state = "boss"; setState("boss"); L.boss.state = "walk"; vibe(80); }
+    if (L.sz <= -L.length) { L.sz = -L.length; state = "boss"; setState("boss"); L.boss.state = "walk"; vibe(80); bus.emit("bossStart", { boss: L.boss }); }
   }
   // soldiers follow formation
   L.soldiers.forEach((s, i) => {
@@ -621,7 +556,8 @@ function step(dt) {
     const after = h.op === "x" ? Math.round(before * h.v) : before + h.v;
     if (after > before) { addSoldiers(after - before); sfx("gate"); floatText(L.sx, 2, L.sz, h.op === "x" ? `x${h.v}` : `+${after - before}`, "#7fd0ff"); }
     else if (after < before) { killSoldiers(before - after); sfx("bad"); vibe(60); flashRed(); floatText(L.sx, 2, L.sz, `${after - before}`, "#ff6a5a"); }
-    for (const hh of g.halves) hh.plane.material.opacity = 0.35;
+    Obj3D.gateUsed(g, h);
+    bus.emit("gatePass", { gate: g, half: h, before, after });
   }
   // squad runs into unbroken solids: soldiers in that column die, object breaks
   for (const o of L.solids) {
@@ -663,8 +599,8 @@ function step(dt) {
     if (!hit) for (const g of gatesNear) {
       if (oz >= g.z && b.z <= g.z) {
         const h = g.halves.find(h => Math.abs(b.x - h.x) < h.hw);
-        if (h && h.op === "+") { h.acc = (h.acc || 0) + b.dmg * 0.35; if (h.acc >= 1) { const inc = Math.floor(h.acc); h.acc -= inc; h.v = Math.min(h.v + inc, 99); refreshGate(g); } }
-        else if (h && h.op === "x") { h.acc = (h.acc || 0) + b.dmg * 0.02; if (h.acc >= 1 && h.v < 3) { h.acc = 0; h.v++; refreshGate(g); } }
+        if (h && h.op === "+") { h.acc = (h.acc || 0) + b.dmg * 0.35; if (h.acc >= 1) { const inc = Math.floor(h.acc); h.acc -= inc; h.v = Math.min(h.v + inc, 99); refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
+        else if (h && h.op === "x") { h.acc = (h.acc || 0) + b.dmg * 0.02; if (h.acc >= 1 && h.v < 3) { h.acc = 0; h.v++; refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
         hit = true; break;
       }
     }
@@ -703,7 +639,8 @@ function step(dt) {
     b0.t += dt; b0.flash = Math.max(0, b0.flash - dt);
     b0.z += 1.1 * dt;
     if (b0.slamT < SLAM_WARN) b0.x += (L.sx - b0.x) * dt * 0.4; // the boss stops aiming once the warning ring shows: dodge sideways
-    b0.slamT += dt;
+    const prevSlam = b0.slamT; b0.slamT += dt;
+    if (prevSlam < SLAM_WARN && b0.slamT >= SLAM_WARN) bus.emit("bossWarn", { boss: b0 });
     if (b0.slamT > SLAM_AT) {
       b0.slamT = 0; L.shake = 0.4; sfx("boom"); vibe(120);
       const [cx, cz] = slamCenter(b0), cap = 2 + L.level;
@@ -712,6 +649,8 @@ function step(dt) {
         const sd = L.soldiers[i];
         if (Math.hypot(sd.x - cx, sd.z - cz) < SLAM_R) { L.fx.push({ x: sd.x, y: 0.6, z: sd.z, f: 4, t: 0, dur: 0.35, size: 1.1 }); L.soldiers.splice(i, 1); k++; }
       }
+      if (k) bus.emit("soldiersLost", { n: k, total: L.soldiers.length });
+      bus.emit("bossSlam", { boss: b0, killed: k });
       if (k) { flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); } else if (L.sz - b0.z < 14) floatText(L.sx, 2.5, L.sz, "DODGED!", "#7fd0ff");
       L.fx.push({ x: cx, y: 0.3, z: cz, f: 9, t: 0, dur: 0.5, size: SLAM_R * 1.6 });
     }
@@ -729,23 +668,23 @@ function step(dt) {
   if (L.soldiers.length === 0 && (state === "play" || state === "boss")) lose();
 }
 function hitSolid(o, dmg) {
-  o.hp -= dmg; o.hitT = 0.06;
+  o.hp -= dmg; Obj3D.solidHit(o); bus.emit("solidHit", { o });
   if (Math.random() < 0.25) L.fx.push({ x: o.x + (Math.random() - 0.5) * o.hw, y: 1 + Math.random(), z: o.z + 0.3, f: 4, t: 0, dur: 0.15, size: 0.8 });
   if (o.hp <= 0) breakSolid(o, true); else labelSolid(o);
 }
 function breakSolid(o, earned) {
-  o.alive = false; for (const m of [o.mesh, o.depth, o.lp]) world.remove(m);
+  o.alive = false; Obj3D.solidBreak(o); bus.emit("solidBreak", { o, earned });
   L.fx.push({ x: o.x, y: 1, z: o.z, f: 9, t: 0, dur: 0.45, size: 3 });
   if (!earned) return;
   sfx("hit");
   if (o.reward) { addSoldiers(o.reward); floatText(o.x, 2.2, o.z, `+${o.reward}`, "#7fd0ff"); L.fx.push({ x: o.x, y: 1.4, z: o.z, f: 14, t: 0, dur: 0.4, size: 1.8 }); }
-  if (o.ammo) { L.rateMult = Math.min(2.2, L.rateMult * 1.35); weaponLabel(); floatText(o.x, 2.6, o.z, "FIRE RATE UP!", "#9dff7a"); sfx("gate"); vibe(40); }
+  if (o.ammo) { L.rateMult = Math.min(2.2, L.rateMult * 1.35); weaponLabel(); bus.emit("rateUp", { mult: L.rateMult }); floatText(o.x, 2.6, o.z, "FIRE RATE UP!", "#9dff7a"); sfx("gate"); vibe(40); }
   if (o.weapon) { if (o.weapon > L.weapon) setWeapon(o.weapon); floatText(o.x, 2.6, o.z, WEAPONS[L.weapon].name + "!", "#ffe066"); sfx("win"); vibe(60); }
 }
 function hitEnemy(e, dmg) {
-  e.hp -= dmg; e.flash = 0.07;
+  e.hp -= dmg; e.flash = 0.07; bus.emit("enemyHit", { e });
   if (e.hp <= 0) {
-    e.state = "dying"; e.dieT = 0;
+    e.state = "dying"; e.dieT = 0; bus.emit("enemyDie", { e });
     if (e.type === "brute") { L.fx.push({ x: e.x, y: 0.5, z: e.z, f: 9, t: 0, dur: 0.45, size: 3 }); L.shake = 0.2; sfx("boom"); }
     else if (Math.random() < 0.3) L.fx.push({ x: e.x, y: 0.9, z: e.z, f: 6, t: 0, dur: 0.3, size: 1 });
   }
@@ -754,6 +693,7 @@ function bossDown() {
   L.boss.state = "down"; L.shake = 0.6; sfx("boom"); vibe(200);
   for (let k = 0; k < 6; k++) L.fx.push({ x: L.boss.x + (Math.random() - 0.5) * 4, y: Math.random() * 4, z: L.boss.z + 1, f: 9, t: -k * 0.08, dur: 0.6, size: 4 });
   L.winT = 1.2; // counted in step() so pausing can't swallow the win
+  bus.emit("bossDown", { boss: L.boss });
 }
 let flashTimer = 0;
 function flashRed() { const f = $("flash"); f.style.opacity = 1; clearTimeout(flashTimer); flashTimer = setTimeout(() => f.style.opacity = 0, 140); }
@@ -767,7 +707,7 @@ function renderLevels() {
     b.className = "lvtile" + (n === save.level ? " cur" : ""); b.disabled = !open;
     b.innerHTML = open ? `<b class="stroke">${n}</b><small>${levelName(n)}</small><span class="st">${starIcons(save.stars[n] || 0)}</span>` : `<b>🔒</b><small>${n}</small>`;
     b.setAttribute("aria-label", open ? `Level ${n}, ${levelName(n)}, ${save.stars[n] || 0} stars` : `Level ${n}, locked`);
-    b.onclick = () => { save.level = n; persist(); startLevel(n); setState("home"); };
+    b.onclick = () => { save.level = n; persist(); goLevel(n, "home"); };
     grid.appendChild(b);
   }
   grid.querySelector(".cur")?.scrollIntoView({ block: "nearest" });
@@ -782,6 +722,8 @@ function win() {
   $("stars").innerHTML = starIcons(stars);
   $("winSub").textContent = `${n} soldiers survived · ${levelName(L.level)}${newBest ? " · NEW BEST!" : ""}`;
   sfx("win"); setState("win");
+  bus.emit("win", { stars, n, level: L.level, newBest });
+  Scenery.preload(themeFor(L.level + 1)).catch(() => {}); // fetch the next theme while the player looks at the stars
 }
 function explode(x, z, dmg, radius, skip = null) {
   L.fx.push({ x, y: 0.6, z, f: 9, t: 0, dur: 0.4, size: radius * 1.3 });
@@ -796,22 +738,29 @@ function lose() {
   const prev = save.best[L.level] || 0; save.best[L.level] = Math.max(prev, L.reached); persist();
   $("losePct").textContent = state === "boss" ? "BOSS" : `${pct}%`;
   $("loseBest").textContent = prev && prev < 1 ? `Best: ${Math.floor(prev * 100)}%` : "";
+  const atBoss = state === "boss";
   sfx("bad"); vibe(200); setState("lose");
+  bus.emit("lose", { pct, atBoss });
 }
 
 // ---------- render ----------
+function popScale(t) { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); } // ease-out-back 0..1
 function render(dt) {
   const n = L.soldiers.length, R = squadRadius(n);
   const shake = L.shake > 0 && !matchMedia("(prefers-reduced-motion: reduce)").matches ? (Math.random() - 0.5) * L.shake * 0.8 : 0;
-  const camH = 12.5 + Math.min(6, R * 1.2), camBack = 12 + Math.min(6, R);
+  const camH = CAM.h + Math.min(6, R * 1.2), camBack = CAM.back + Math.min(6, R);
   camera.position.set(L.sx * 0.45 + shake, camH, L.sz + camBack);
-  camera.lookAt(L.sx * 0.45, 0, L.sz - 16);
+  lookAt.set(L.sx * 0.45, 0, L.sz - CAM.ahead); camera.lookAt(lookAt);
+  camera.fov = BASE_FOV;
+  bus.emit("frame", { dt, camera, look: lookAt, L, state }); // Juice may move the camera (then re-aim it at `look`) and change the fov
+  camera.updateProjectionMatrix();
   const { sold, enem, brute, boss, fx, shadow } = layers;
   sold.begin(); enem.begin(); brute.begin(); boss.begin(); fx.begin(); shadow.begin();
   const firing = state === "play" || state === "boss";
   for (const s of L.soldiers) {
     s.ph += dt * 11; const f = Math.floor(s.ph) % 4 + (firing ? 4 : 0);
-    sold.push(s.x, 0, s.z, 1.3 * 0.518, 1.3, f); shadow.push(s.x, s.z, 0.8);
+    const age = s.born === undefined ? 1 : (L.time - s.born) / 0.25, k = age >= 1 ? 1 : popScale(Math.max(0, age));
+    sold.push(s.x, 0, s.z, 1.3 * 0.512 * k, 1.3 * k, f); shadow.push(s.x, s.z, 0.8 * k);
   }
   const eTex = L.theme.enemy;
   for (const e of L.enemies) {
@@ -836,7 +785,6 @@ function render(dt) {
     fx.push(f.x, f.y - f.size / 2, f.z, f.size, f.size, frame, base >= 14 ? 1 - p : 1);
   }
   sold.end(); enem.end(); brute.end(); boss.end(); fx.end(); shadow.end();
-  // solids flash when hit
   const warn = state === "boss" && L.boss.hp > 0 && L.boss.slamT >= SLAM_WARN;
   slamRing.visible = slamFill.visible = warn;
   if (warn) {
@@ -844,7 +792,8 @@ function render(dt) {
     slamRing.position.set(cx, 0.06, cz); slamFill.position.set(cx, 0.05, cz);
     slamRing.material.opacity = 0.55 + 0.45 * Math.abs(Math.sin(L.time * 14)); slamFill.scale.setScalar(Math.max(0.05, p));
   }
-  for (const o of L.solids) if (o.alive) { o.hitT = Math.max(0, o.hitT - dt); o.mesh.scale.setScalar(o.hitT > 0 ? 1.06 : 1); }
+  Obj3D.update(dt);
+  Scenery.update(dt);
   renderer.render(scene, camera);
   // squad count badge above the squad
   if (!$("count").hidden) {
@@ -889,12 +838,14 @@ function frame(now) {
   const enemyLayers = { zombie: new SpriteLayer(TEX.zombie, 4, 2, 900), grunt: new SpriteLayer(TEX.grunt, 4, 2, 900) };
   Object.defineProperty(layers, "enem", { get: () => { const k = L.theme.enemy; const other = k === "zombie" ? "grunt" : "zombie"; enemyLayers[other].begin(); enemyLayers[other].end(); return enemyLayers[k]; } });
   resize(); syncToggles();
+  Scenery.setup(ctx); Obj3D.setup(ctx); Juice.setup(ctx);
+  await Scenery.preload(themeFor(save.level)).catch(e => console.warn("preload failed", e));
   startLevel(save.level); setState("home");
   $("loading").hidden = true;
   requestAnimationFrame(frame);
 })();
 // test hooks (read by the headless playtest bot)
-window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, save };
+window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, goLevel, save, bus, ctx, cam: CAM };
 </script>
 
 </body></html>
