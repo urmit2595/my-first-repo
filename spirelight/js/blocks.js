@@ -15,20 +15,22 @@
 
   // ---- material table: texture file, world units per texture tile, PBR constants, plain fallback colour ----------
   const MAT = {
-    sandstone: { tex: "sandstone", scale: 2.0, rough: 0.92, metal: 0.0, color: 0xffeedd, fb: 0xc98c55, nrm: 1.0 },
+    sandstone: { tex: "sandstone", scale: 2.0, rough: 0.92, metal: 0.0, color: 0xfff2e4, fb: 0xc98c55, nrm: 1.0 },
     brick:     { tex: "brick",     scale: 2.6, rough: 0.88, metal: 0.0, color: 0xf0d8d0, fb: 0xa5503a, nrm: 1.1 },
     marble:    { tex: "marble",    scale: 2.4, rough: 0.34, metal: 0.0, color: 0xe6dccc, fb: 0xeee2d0, nrm: 0.5 },
     darkstone: { tex: "darkstone", scale: 2.0, rough: 0.95, metal: 0.0, color: 0xe6d8e8, fb: 0x4a4056, nrm: 1.2 },
-    brass:     { tex: "brass",     scale: 2.0, rough: 0.42, metal: 0.55, color: 0xffeccc, fb: 0xc8963e, nrm: 0.9 },
-    copper:    { tex: "copper",    scale: 2.4, rough: 0.55, metal: 0.35, color: 0xf2fff8, fb: 0x4fa597, nrm: 0.9 },
+    brass:     { tex: "brass",     scale: 2.0, rough: 0.36, metal: 0.8, env: 1.0, color: 0xffeccc, fb: 0xc8963e, nrm: 0.9 },
+    copper:    { tex: "copper",    scale: 2.4, rough: 0.5, metal: 0.55, env: 0.9, color: 0xf2fff8, fb: 0x4fa597, nrm: 0.9 },
     slate:     { tex: "slate",     scale: 2.2, rough: 0.62, metal: 0.05, color: 0xf0eaff, fb: 0x3b3d5c, nrm: 1.2 },
     wood:      { tex: "wood",      scale: 2.0, rough: 0.82, metal: 0.0, color: 0xf5e2d0, fb: 0x8a5a34, nrm: 1.0 },
     moss:      { tex: "moss",      scale: 1.5, rough: 1.0,  metal: 0.0, color: 0xe8f0d8, fb: 0x6f8f3a, nrm: 1.0 },
     hedge:     { tex: "hedge",     scale: 1.5, rough: 0.82, metal: 0.0, color: 0xeaf4e0, fb: 0x4d8a2c, nrm: 0.8 },
     paver:     { tex: "paver",     scale: 1.7, rough: 0.74, metal: 0.0, color: 0xe4d3b4, fb: 0xefe2c6, nrm: 0.8 },
-    brassTrim: { tex: "brass",     scale: 0.6, rough: 0.34, metal: 0.6, color: 0xffe2a0, fb: 0xc8963e, nrm: 0.0 },
-    grate:     { canvas: "grate",  scale: 1.0, rough: 0.5,  metal: 0.6, color: 0xffffff, fb: 0x6a4a22, nrm: 0.0 },
-    iron:      { scale: 1, rough: 0.5, metal: 0.7, color: 0x4a4048, fb: 0x4a4048, nrm: 0.0 },
+    brassTrim: { tex: "brass",     scale: 0.6, rough: 0.28, metal: 0.9, env: 1.3, color: 0xffe2a0, fb: 0xc8963e, nrm: 0.0 },
+    grate:     { canvas: "grate",  scale: 1.0, rough: 0.4,  metal: 0.8, env: 1.0, color: 0xffffff, fb: 0x6a4a22, nrm: 0.0 },
+    iron:      { scale: 1, rough: 0.45, metal: 0.8, env: 0.8, color: 0x4a4048, fb: 0x4a4048, nrm: 0.0 },
+    darkiron:  { scale: 1, rough: 0.7, metal: 0.3, color: 0x120e16, fb: 0x120e16, nrm: 0.0 },
+    grime:     { canvas: "grime", scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x28182a, soft: true, decal: true },
     window:    { canvas: "window", scale: 1.0, rough: 0.3, metal: 0.0, color: 0xffffff, fb: 0xffb35a, emissive: true },
     mossStrip: { canvas: "mossStrip", scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x6f8f3a, alpha: true },
     crack:     { canvas: "crack",  scale: 1.0, rough: 1.0, metal: 0.0, color: 0xffffff, fb: 0x241818, alpha: true, decal: true }
@@ -37,11 +39,12 @@
     copper: "copper", slate: "slate", wood: "wood", column: "marble", hedge: "hedge" };
   // detail probabilities per style: window, trim band, moss strip, crack
   const DETAIL = {
-    sandstone: { win: 0.2, trim: 0.2, moss: 0.3, crack: 0.1 }, brick: { win: 0.2, trim: 0.1, moss: 0.15, crack: 0.08 },
-    marble: { win: 0.12, trim: 0.3, moss: 0.05, crack: 0.04 }, darkstone: { win: 0, trim: 0, moss: 0.42, crack: 0.14 },
+    sandstone: { win: 0.2, trim: 0.18, moss: 0.5, crack: 0.1 }, brick: { win: 0.2, trim: 0.1, moss: 0.15, crack: 0.08 },
+    marble: { win: 0.12, trim: 0.3, moss: 0.05, crack: 0.04 }, darkstone: { win: 0, trim: 0, moss: 0.62, crack: 0.14 },
     brass: { win: 0, trim: 0, moss: 0, crack: 0 }, copper: { win: 0, trim: 0, moss: 0.05, crack: 0 },
     slate: { win: 0, trim: 0, moss: 0.08, crack: 0.05 }, wood: { win: 0, trim: 0, moss: 0.06, crack: 0.05 }
   };
+  const DETAIL_OVERRIDE = true;
   const TEX_FILES = ["sandstone", "brick", "marble", "darkstone", "brass", "copper", "slate", "wood", "moss", "hedge", "paver"];
 
   function hash(a, b, c, d) {
@@ -120,6 +123,34 @@
     }
     const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t;
   }
+  function drawGrime() {
+    const W = 128, H = 128, c = mkCanvas(W, H), g = c.getContext("2d"), R = rng(909);
+    g.clearRect(0, 0, W, H);
+    for (let i = 0; i < 9; i++) {
+      const x = 10 + R() * (W - 20), w = 3 + R() * 9, len = H * (0.45 + R() * 0.55), a = 0.25 + R() * 0.4;
+      const gr = g.createLinearGradient(0, 0, 0, len);
+      gr.addColorStop(0, "rgba(38,24,34," + a + ")"); gr.addColorStop(0.6, "rgba(38,24,34," + a * 0.5 + ")"); gr.addColorStop(1, "rgba(38,24,34,0)");
+      g.fillStyle = gr; g.beginPath(); g.moveTo(x - w / 2, 0); g.lineTo(x + w / 2, 0); g.lineTo(x + w * 0.2, len); g.lineTo(x - w * 0.2, len); g.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  }
+  function makeEnv() {
+    if (!renderer || !THREE.PMREMGenerator) return null;
+    const sc = new THREE.Scene(), n = 48, geo = new THREE.SphereGeometry(10, n, 24), col = [];
+    const pos = geo.attributes.position, top = new THREE.Color(0x4a3c9c), mid = new THREE.Color(0xc07a8a), bot = new THREE.Color(0xff9a52), tmp = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i) / 10; if (y > 0) tmp.copy(mid).lerp(top, Math.pow(y, 0.7)); else tmp.copy(mid).lerp(bot, Math.min(1, -y * 1.4));
+      tmp.multiplyScalar(0.9); col.push(tmp.r, tmp.g, tmp.b);
+    }
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    sc.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    const patch = new THREE.Mesh(new THREE.PlaneGeometry(7, 5), new THREE.MeshBasicMaterial({ color: new THREE.Color(6.5, 4.2, 2.0), side: THREE.DoubleSide }));
+    patch.position.set(-5, 5.2, 4.5); patch.lookAt(0, 0, 0); sc.add(patch);
+    const p2 = new THREE.Mesh(new THREE.PlaneGeometry(4, 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 1.6, 3.0), side: THREE.DoubleSide }));
+    p2.position.set(6, 6, -4); p2.lookAt(0, 0, 0); sc.add(p2);
+    const pm = new THREE.PMREMGenerator(renderer); const rt = pm.fromScene(sc, 0.03); pm.dispose();
+    geo.dispose(); return rt.texture;
+  }
   function drawGrate() {
     const S = 256, c = mkCanvas(S, S), g = c.getContext("2d");
     g.fillStyle = "#1c120a"; g.fillRect(0, 0, S, S);
@@ -159,8 +190,9 @@
       Blocks.basePath = base;
     }
     try {
-      texCache.window = drawWindow(); texCache.mossStrip = drawMoss(); texCache.crack = drawCracks(); texCache.grate = drawGrate();
+      texCache.window = drawWindow(); texCache.mossStrip = drawMoss(); texCache.crack = drawCracks(); texCache.grate = drawGrate(); texCache.grime = drawGrime();
     } catch (e) { console.warn("[blocks] canvas textures failed", e); }
+    try { Blocks.envMap = makeEnv(); } catch (e) { Blocks.envMap = null; console.warn("[blocks] env failed", e); }
     const jobs = [];
     TEX_FILES.forEach(n => {
       jobs.push(loadTex(n, true).then(t => { if (t) texCache[n] = t; }));
@@ -177,10 +209,13 @@
     const map = d.canvas ? texCache[d.canvas] : texCache[d.tex];
     if (map) { p.map = map; p.color = new THREE.Color(d.color); } else p.color = new THREE.Color(d.fb);
     if (!low && d.tex && d.nrm > 0 && texCache[d.tex + "_n"]) { p.normalMap = texCache[d.tex + "_n"]; p.normalScale = new THREE.Vector2(d.nrm, d.nrm); }
+    if (d.soft) { p.transparent = true; p.depthWrite = false; }
     if (d.alpha) { p.alphaTest = d.decal ? 0.3 : 0.5; p.side = THREE.DoubleSide; }
     if (d.emissive) { p.emissive = new THREE.Color(0xffffff); p.emissiveIntensity = 1.5; if (map) p.emissiveMap = map; else p.emissive = new THREE.Color(0xffb35a); }
     const m = new THREE.MeshStandardMaterial(p);
     m.name = "blocks:" + key;
+    if (d.env && Blocks.envMap && !Blocks.sceneEnv) { m.envMap = Blocks.envMap; m.envMapIntensity = d.env; } else if (d.env) m.envMapIntensity = d.env;
+    m.userData.env = d.env || 0;
     if (d.decal) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2; }
     if (d.emissive) windowMats.push(m);
     return (matCache[ck] = m);
@@ -191,6 +226,11 @@
       const k = Blocks.windowGlow * (0.95 + 0.05 * Math.sin(t * 1.7) + 0.02 * Math.sin(t * 5.3));
       for (const m of windowMats) m.emissiveIntensity = 1.5 * k;
     } catch (e) { /* ignore */ }
+  };
+  // Call with scene.environment (or null). When World provides one, Blocks stops overriding it.
+  Blocks.useSceneEnvironment = function (env) {
+    Blocks.sceneEnv = env || null;
+    Object.keys(matCache).forEach(k => { const m = matCache[k]; if (m.userData.env) { m.envMap = env ? null : Blocks.envMap; m.needsUpdate = true; } });
   };
   Blocks.setWindowGlow = function (k) { Blocks.windowGlow = k; };
   // Disposes the geometry of an object returned by build(). Materials are shared and cached, never disposed.
@@ -273,10 +313,11 @@
     for (let fi = 0; fi < 6; fi++) {
       if (!draw[fi]) continue;
       const a = fi >> 1, s = fi & 1, b1 = (a + 1) % 3, c1 = (a + 2) % 3, pts = [], uvs = [], cols = [];
+      let ft = tint; if (opts.faceVar) { const v = 1 + (this.h(salt * 6 + fi, 90) - 0.5) * 0.14, w = (this.h(salt * 6 + fi, 91) - 0.5) * 0.05; ft = [tint[0] * (v + w), tint[1] * v, tint[2] * (v - w)]; }
       for (const [cb, cc] of CB) {
         const P = [0, 0, 0]; P[a] = s ? hi[a] : lo[a];
         P[b1] = cb ? hi[b1] - b : lo[b1] + b; P[c1] = cc ? hi[c1] - b : lo[c1] + b;
-        pts.push(P); uvs.push(this.uvFor(mats[fi], a, P, salt * 6 + fi)); cols.push(this.color(a, s, P, tint, aoOff));
+        pts.push(P); uvs.push(this.uvFor(mats[fi], a, P, salt * 6 + fi)); cols.push(this.color(a, s, P, ft, aoOff));
       }
       this.quadRaw(mats[fi], pts, nrm[fi], uvs, cols);
     }
@@ -334,7 +375,7 @@
     o.push([-hw, y0 + rectH]); return o;
   }
   Builder.prototype.windowOn = function (a, s, tintBase, salt) {
-    const hw = 0.17, y0 = 0.12, rectH = 0.38, totalH = rectH + hw, seg = 8;
+    const hw = 0.17, y0 = 0.28, rectH = 0.3, totalH = rectH + hw, seg = 8;
     const nrm = [0, 0, 0]; nrm[a] = s ? 1 : -1;
     const inner = archOutline(hw, y0, rectH, seg), outer = archOutline(hw + 0.05, y0 - 0.035, rectH, seg);
     // glass: fan
@@ -370,15 +411,16 @@
     }
     // sill
     this.faceBox(a, s, 0.5 - hw - 0.06, 0.5 + hw + 0.06, y0 - 0.075, y0 - 0.03, 0.05, 0.008, mat, salt + 31, tint);
+    if (!this.low) this.grime(a, s, 0.5, 0.42, y0 - 0.075, y0 - 0.075 + 0.0 + 0.2, salt, 1);
   };
 
-  Builder.prototype.mossStrip = function (a, s, salt) {
+  Builder.prototype.mossStrip = function (a, s, salt, small) {
     const b = this.buf("mossStrip"), hA = a === 0 ? 2 : 0, r = this.h(salt, 50);
-    const hgt = 0.2 + 0.1 * this.h(salt, 51), flip = r < 0.5, uo = this.h(salt, 52);
-    const pts = [this.fp(a, s, -0.005, 1.0, 0.007), this.fp(a, s, 1.005, 1.0, 0.007), this.fp(a, s, 1.005, 1 - hgt, 0.007), this.fp(a, s, -0.005, 1 - hgt, 0.007)];
+    const hgt = (small ? 0.1 : 0.2) + 0.1 * this.h(salt, 51), flip = r < 0.5, uo = this.h(salt, 52);
+    const o = small ? 0.048 : 0.007, pts = [this.fp(a, s, -0.005, 1.0, o), this.fp(a, s, 1.005, 1.0, o), this.fp(a, s, 1.005, 1 - hgt, o), this.fp(a, s, -0.005, 1 - hgt, o)];
     const uvs = [[uo, 1], [uo + 1, 1], [uo + 1, 0], [uo, 0]]; if (flip) { uvs[0][0] = uo + 1; uvs[1][0] = uo; uvs[2][0] = uo; uvs[3][0] = uo + 1; }
     const nrm = [0, 0, 0]; nrm[a] = s ? 1 : -1;
-    const tn = 0.85 + 0.3 * this.h(salt, 53), c = [tn, tn, tn];
+    const tn = 0.6 + 0.25 * this.h(salt, 53), c = [tn, tn, tn];
     const cols = pts.map(P => { const v = this.color(a, s, P, c); return v; });
     this.quadRaw("mossStrip", pts, nrm, uvs, cols);
   };
@@ -419,37 +461,90 @@
     for (let fi = 0; fi < 6; fi++) { const d = nb[fi]; draw[fi] = this.occ(c[0] + d[0], c[1] + d[1], c[2] + d[2]) ? 0 : 1; }
     const mats = [body, body, body, body, body, body];
     const walkTop = this.walkTop(c[0], c[1], c[2]);
+    const stoneish = style === "sandstone" || style === "brick" || style === "marble" || style === "darkstone";
+    const capped = !walkTop && draw[3] && stoneish;
     const det = DETAIL[style] || DETAIL.sandstone;
-    if (!walkTop && draw[3]) {
-      // rough top: mossy for stone styles, roof tiles / metal / planks otherwise
-      let tm = body;
-      if (style === "sandstone" || style === "brick" || style === "marble" || style === "darkstone") tm = this.h(3, 80) < 0.5 ? "moss" : body;
-      mats[3] = tm;
-    }
-    this.box([c[0], c[1], c[2]], [c[0] + 1, c[1] + 1, c[2] + 1], this.low ? 0.03 : 0.035, mats, draw, 0, { tint });
-    // paver slab with brass inlay
+    if (capped) mats[3] = "darkstone";
+    this.box([c[0], c[1], c[2]], [c[0] + 1, c[1] + 1, c[2] + 1], this.low ? 0.03 : 0.035, mats, draw, 0, { tint, faceVar: true });
     if (walkTop) this.paverSlab(c, style);
+    if (capped) this.stoneCap(c, draw, nb);
     // wall details on exposed sides
     for (const [a, s, fi] of [[0, 1, 1], [0, 0, 0], [2, 1, 5], [2, 0, 4]]) {
       if (!draw[fi]) continue;
-      const salt = 10 + fi;
-      this.detailSide(a, s, salt, style, det, tint, draw[3]);
+      this.detailSide(a, s, 10 + fi, style, det, tint, walkTop);
     }
   };
-  Builder.prototype.detailSide = function (a, s, salt, style, det, tint, topExposed) {
-    const c = this.cell;
-    if (!(style in DETAIL)) return;
-    if (det.win && this.h(salt, 1) < det.win) this.windowOn(a, s, tint, salt);
+  // dark weathered stone cap on non-walkable tops, with moss creeping in from the edges
+  Builder.prototype.stoneCap = function (c, draw, nb) {
+    const I = 0.05, lo = [c[0] + I, c[1] + 0.99, c[2] + I], hi = [c[0] + 1 - I, c[1] + 1.03, c[2] + 1 - I];
+    const t = [this.tint[0] * 0.92, this.tint[1] * 0.9, this.tint[2] * 0.95];
+    this.box(lo, hi, 0.014, Array(6).fill("darkstone"), [1, 1, 0, 1, 1, 1], 3, { tint: t, faceVar: true });
     if (this.low) return;
-    const trimmed = det.trim && this.h(salt, 2) < det.trim;
-    if (trimmed) {
-      const mat = this.styleBody, tn = [tint[0] * 1.07, tint[1] * 1.05, tint[2] * 1.0];
-      this.faceBox(a, s, -0.01, 1.01, 0.8, 0.92, 0.035, 0.012, mat, salt + 40, tn);
-      this.faceBox(a, s, -0.01, 1.01, 0.92, 0.96, 0.02, 0.008, mat, salt + 41, tn);
-      for (let i = 0; i < 6; i++) this.faceBox(a, s, 0.07 + i * 0.15, 0.07 + i * 0.15 + 0.09, 0.725, 0.8, 0.03, 0.006, mat, salt + 42 + i, tn);
+    const dirs = [[-1, 0, 0, 0, 0], [1, 0, 0, 1, 0], [0, 0, -1, 2, 0], [0, 0, 1, 3, 1]];
+    for (const [dx, , dz, k] of dirs) {
+      if (this.occ(c[0] + dx, c[1], c[2] + dz) || this.h(30 + k, 5) > 0.7) continue;
+      const w = 0.2 + 0.12 * this.h(30 + k, 6), y = c[1] + 1.034, uo = this.h(30 + k, 7);
+      const P = (h, d) => { // h along the edge 0..1, d inward distance
+        const x = dx ? (dx < 0 ? c[0] + 0.04 + d : c[0] + 0.96 - d) : c[0] + h, z = dz ? (dz < 0 ? c[2] + 0.04 + d : c[2] + 0.96 - d) : c[2] + h;
+        return [x, y, z];
+      };
+      const pts = [P(0.04, 0), P(0.96, 0), P(0.96, w), P(0.04, w)];
+      const uvs = [[uo, 1], [uo + 1, 1], [uo + 1, 0], [uo, 0]], tn = 0.55 + 0.25 * this.h(30 + k, 8);
+      this.quadRaw("mossStrip", pts, [0, 1, 0], uvs, pts.map(() => [tn, tn, tn]));
     }
-    if (det.moss && !trimmed && this.h(salt, 3) < det.moss && !this.occ(c[0], c[1] + 1, c[2])) this.mossStrip(a, s, salt);
+  };
+  Builder.prototype.detailSide = function (a, s, salt, style, det, tint, walkTop) {
+    const c = this.cell, mat = this.styleBody;
+    if (!(style in DETAIL)) return;
+    const light = [tint[0] * 1.1, tint[1] * 1.08, tint[2] * 1.03];
+    const hasWin = det.win && this.h(salt, 1) < det.win;
+    if (hasWin) this.windowOn(a, s, tint, salt);
+    if (this.low) return;
+    // carved cornice under every exposed walkable top edge (stays within 0.04 of the cell silhouette)
+    if (walkTop && (style === "sandstone" || style === "brick" || style === "marble" || style === "darkstone" || style === "slate")) {
+      this.faceBox(a, s, -0.01, 1.01, 0.925, 1.0, 0.04, 0.01, mat, salt + 40, light);
+      this.faceBox(a, s, -0.01, 1.01, 0.905, 0.925, 0.022, 0.006, mat, salt + 41, [light[0] * 0.92, light[1] * 0.92, light[2] * 0.92]);
+      for (let i = 0; i < 7; i++) this.faceBox(a, s, 0.035 + i * 0.14, 0.035 + i * 0.14 + 0.08, 0.845, 0.905, 0.03, 0.006, mat, salt + 42 + i, light);
+    }
+    // plinth on the lowest course of a stack
+    if (!this.occ(c[0], c[1] - 1, c[2]) && style !== "brass" && style !== "copper" && style !== "wood")
+      this.faceBox(a, s, -0.01, 1.01, 0.0, 0.1, 0.035, 0.01, mat, salt + 60, [tint[0] * 0.93, tint[1] * 0.92, tint[2] * 0.95]);
+    // occasional string course mid-wall
+    if (!hasWin && det.trim && this.h(salt, 2) < det.trim) {
+      this.faceBox(a, s, -0.01, 1.01, 0.5, 0.57, 0.03, 0.01, mat, salt + 70, light);
+      this.faceBox(a, s, -0.01, 1.01, 0.57, 0.6, 0.018, 0.006, mat, salt + 71, light);
+    }
+    // vents and iron rings (never on window faces)
+    if (!hasWin && style !== "darkstone") {
+      const r = this.h(salt, 8);
+      if (r < 0.05) this.vent(a, s, salt);
+      else if (r < 0.09) this.ring(a, s, salt);
+    }
+    if (det.moss && this.h(salt, 3) < det.moss && !this.occ(c[0], c[1] + 1, c[2]) && !walkTop) this.mossStrip(a, s, salt);
+    else if (det.moss && walkTop && this.h(salt, 3) < det.moss * 0.7) this.mossStrip(a, s, salt, true);
     if (det.crack && this.h(salt, 4) < det.crack) this.crack(a, s, salt);
+  };
+  Builder.prototype.vent = function (a, s, salt) {
+    const hc = 0.3 + 0.4 * this.h(salt, 9), y0 = 0.3 + 0.12 * this.h(salt, 10), w = 0.07;
+    this.faceBox(a, s, hc - w - 0.02, hc + w + 0.02, y0 - 0.02, y0 + 2 * w + 0.02, 0.018, 0.006, "iron", salt + 80, [1, 1, 1]);
+    for (let i = 0; i < 4; i++) this.faceBox(a, s, hc - w, hc + w, y0 + i * 0.036 + 0.004, y0 + i * 0.036 + 0.026, 0.024, 0.002, "darkiron", salt + 81 + i, [1, 1, 1]);
+  };
+  Builder.prototype.ring = function (a, s, salt) {
+    const hc = 0.3 + 0.4 * this.h(salt, 9), yc = 0.42 + 0.1 * this.h(salt, 10), N = 10, R0 = 0.05, R1 = 0.075;
+    const nrm = [0, 0, 0]; nrm[a] = s ? 1 : -1;
+    this.faceBox(a, s, hc - 0.03, hc + 0.03, yc + R1 - 0.03, yc + R1 + 0.03, 0.02, 0.004, "iron", salt + 90, [1, 1, 1]);
+    for (let i = 0; i < N; i++) {
+      const t0 = i / N * 6.2832, t1 = (i + 1) / N * 6.2832;
+      const q = [this.fp(a, s, hc + R0 * Math.cos(t0), yc + R0 * Math.sin(t0), 0.03), this.fp(a, s, hc + R0 * Math.cos(t1), yc + R0 * Math.sin(t1), 0.03),
+        this.fp(a, s, hc + R1 * Math.cos(t1), yc + R1 * Math.sin(t1), 0.03), this.fp(a, s, hc + R1 * Math.cos(t0), yc + R1 * Math.sin(t0), 0.03)];
+      this.quadRaw("iron", q, nrm, q.map(() => [0.5, 0.5]), q.map(() => [0.9, 0.9, 0.9]));
+    }
+  };
+  Builder.prototype.grime = function (a, s, hc, wd, yTop, len, salt, strength) {
+    const k = strength, pts = [this.fp(a, s, hc - wd / 2, yTop, 0.005), this.fp(a, s, hc + wd / 2, yTop, 0.005), this.fp(a, s, hc + wd / 2, yTop - len, 0.005), this.fp(a, s, hc - wd / 2, yTop - len, 0.005)];
+    const nrm = [0, 0, 0]; nrm[a] = s ? 1 : -1; const uo = this.h(salt, 95) < 0.5;
+    const uvs = uo ? [[0, 1], [1, 1], [1, 0], [0, 0]] : [[1, 1], [0, 1], [0, 0], [1, 0]];
+    this.quadRaw("grime", pts, nrm, uvs, pts.map(() => [k, k, k]));
   };
 
   Builder.prototype.paverSlab = function (c, style) {

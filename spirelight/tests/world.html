@@ -38,6 +38,7 @@ Testbed.start({ height: +(q.get("h") || 15), center: [3, 3.5, 3], lights: false,
   tb.scene.add(tower);
   tb.renderer.shadowMap.enabled = true;
 
+  if (q.get("noenv")) World.noEnv = true;
   return World.init(THREE, tb.renderer, tb.scene, tb.camera).then(() => {
     World.setTheme(q.get("theme") || "dusk", true);
     World.fit({ min: [0, 0, 0], max: [9, 7, 8] });

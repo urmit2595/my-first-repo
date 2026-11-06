@@ -477,3 +477,764 @@
     return best;
   }
   function normVal(g, v) { return g.kind === "rotor" ? ((Math.round(v) % 360) + 360) % 360 : Math.round(v * 1000) / 1000; }
+
+  // ------------------------------------------------------------------ level loading
+  function hashStr(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+  function expandBlocks(gd) {
+    var map = new Map();
+    (gd.blocks || []).forEach(function (b) {
+      var style = b.style || "sandstone", kind = b.kind === "veil" ? "veil" : "cube";
+      function put(x, y, z, o) { map.set(x + "," + y + "," + z, Object.assign({ cell: [x, y, z], style: style, walk: kind === "veil" ? false : b.walk !== false, kind: kind, up: null, id: undefined }, o || {})); }
+      if (b.box) {
+        var a = b.box, x0 = Math.min(a[0], a[3]), x1 = Math.max(a[0], a[3]), y0 = Math.min(a[1], a[4]), y1 = Math.max(a[1], a[4]), z0 = Math.min(a[2], a[5]), z1 = Math.max(a[2], a[5]);
+        for (var x = x0; x <= x1; x++) for (var y = y0; y <= y1; y++) for (var z = z0; z <= z1; z++) put(x, y, z);
+      } else if (b.at) put(b.at[0], b.at[1], b.at[2], { id: b.id });
+      else if (b.stair) put(b.stair[0], b.stair[1], b.stair[2], { kind: "stair", up: b.up, id: b.id });
+    });
+    return Array.from(map.values());
+  }
+
+  var fxRoot = null, ringGeo = null, ringMat = null;
+  function buildRingAssets() {
+    fxRoot = new THREE.Group(); fxRoot.name = "fx"; scene.add(fxRoot);
+    ringGeo = new THREE.RingGeometry(0.40, 0.48, 48);
+    ringMat = new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+  }
+  function makeRing(scale) {
+    var m = new THREE.Mesh(ringGeo, ringMat.clone()); m.renderOrder = 999; m.scale.setScalar(scale || 1); m.frustumCulled = false; fxRoot.add(m); return m;
+  }
+
+  function disposeLevel() {
+    for (var i = levelRoot.children.length - 1; i >= 0; i--) {
+      var c = levelRoot.children[i]; levelRoot.remove(c);
+      c.traverse(function (o) { if (o.geometry) { try { o.geometry.dispose(); } catch (e) {} } });
+    }
+    for (var j = fxRoot.children.length - 1; j >= 0; j--) { var r = fxRoot.children[j]; fxRoot.remove(r); if (r.material) r.material.dispose(); }
+    rings = []; ripples = []; pending = []; drag = null; decorUpdaters = []; Game.decor = []; Game.groups = {};
+  }
+
+  function decorWorldPos(entry, target) {
+    var it = entry.item, f = FACES[it.face || "+y"] || FACES["+y"], v = target || new THREE.Vector3();
+    var node = entry.node;
+    v.set(it.at[0] + 0.5 + f[0] * 0.5, it.at[1] + 0.5 + f[1] * 0.5, it.at[2] + 0.5 + f[2] * 0.5);
+    if (entry.beacon) {
+      if (!entry.bb) { entry.object3D.updateWorldMatrix(true, true); entry.bb = new THREE.Box3().setFromObject(entry.object3D); }
+      // beacon flame: centre of the decor's box, taken in reference space at load
+      v.set(entry.flame[0], entry.flame[1], entry.flame[2]);
+    }
+    if (node) { node.updateWorldMatrix(true, false); node.localToWorld(v); }
+    return v;
+  }
+
+  function loadLevel(def) {
+    disposeLevel();
+    var w = SpireGeom.load(def); Game.geom = w; Game.level = def;
+    var theme = def.theme || "dusk";
+    lock.input = false; lock.goalT = -1; lock.goalPhase = 0; lock.glimmers = 0; lock.used = {};
+    var hasPlates = {}; w.plates.forEach(function (p) { hasPlates[p.tile] = p; });
+    heroW.moves = []; heroW.cur = null; heroW.dest = null; heroW.riding = null; heroW.waiters.forEach(function (r) { r({ ok: false }); }); heroW.waiters = [];
+    heroW.offset = 0; heroW.crossK = 0; heroW.resume = null;
+
+    // groups
+    var gmap = {};
+    w.groups.forEach(function (gm) { gmap[gm.id] = gm; });
+    var order = (def.groups || []).map(function (gd) { return gd.id; });
+    order.forEach(function (id) {
+      var gd = def.groups.filter(function (x) { return x.id === id; })[0], gm = gmap[id] || { id: id, kind: "static" };
+      var kind = gm.kind || "static";
+      var g = { id: id, def: gd, kind: kind, axis: gm.axis || null, pivot: kind === "rotor" ? (gm.pivot || (gd.rotor && gd.rotor.pivot) || [0, 0, 0]).slice() : [0, 0, 0],
+        values: (gm.values || [0]).slice(), value: gm.value || 0, cur: gm.value || 0, vel: 0, target: 0, state: "idle", moving: false,
+        blocks: expandBlocks(gd), pivotNode: new THREE.Group(), contentNode: new THREE.Group(), handle: null, riding: false,
+        used: false, tickIdx: 0, resolvers: [], dir: 1, gears: [] };
+      g.cells = g.blocks.map(function (b) { return b.cell; });
+      g.pivotNode.name = "pivot:" + id; g.contentNode.name = "content:" + id;
+      g.contentNode.position.set(-g.pivot[0], -g.pivot[1], -g.pivot[2]);
+      if (kind === "rotor") g.pivotNode.position.set(g.pivot[0], g.pivot[1], g.pivot[2]);
+      g.pivotNode.add(g.contentNode); levelRoot.add(g.pivotNode);
+      Game.groups[id] = g;
+    });
+    // block meshes
+    order.forEach(function (id) {
+      var g = Game.groups[id], occ = new Set();
+      g.blocks.forEach(function (b) { occ.add(b.cell.join(",")); });
+      var ctx = { occupied: function (x, y, z) { return occ.has(x + "," + y + "," + z); }, theme: theme, quality: Game.quality, seed: hashStr(def.id + ":" + id) };
+      var obj = null;
+      if (mods.blocks) obj = safe(function () { return Blocks.build({ id: id, blocks: g.blocks }, ctx); }, "Blocks.build");
+      if (!obj) obj = safe(function () { return fallbackBuild({ id: id, blocks: g.blocks }, ctx); }, "fallbackBuild");
+      if (obj) {
+        obj.traverse(function (o) { if (o.isMesh && !o.userData.noShadow && !o.castShadow && !o.receiveShadow) { o.castShadow = true; o.receiveShadow = true; } });
+        g.contentNode.add(obj);
+      }
+    });
+    // decor
+    function buildDecor(item, g, extra) {
+      var ctx = { theme: theme, quality: Game.quality, seed: hashStr(def.id + ":" + item.type + ":" + item.at.join(",")) };
+      var obj = null;
+      if (mods.decor) obj = safe(function () { return Decor.build(item, ctx); }, "Decor.build " + item.type);
+      if (!obj) obj = safe(function () { return fallbackDecor(item); }, "fallbackDecor");
+      if (!obj) return null;
+      g.contentNode.add(obj);
+      var entry = Object.assign({ item: item, object3D: obj, node: g.contentNode, group: g.id }, extra || {});
+      entry.worldPos = function (target) { return decorWorldPos(entry, target); };
+      Game.decor.push(entry);
+      if (obj.userData && typeof obj.userData.update === "function") decorUpdaters.push(obj.userData);
+      return entry;
+    }
+    var glimOf = {}, plateOf = {}, beacon = null;
+    (def.decor || []).forEach(function (d) {
+      var g = Game.groups[d.group || "base"] || Game.groups.base;
+      var item = Object.assign({}, d, { face: d.face || "+y", rot: d.rot || 0 });
+      var e = buildDecor(item, g);
+      if (e && d.type === "beacon") { e.beacon = true; beacon = beacon || e; }
+      if (e && d.type === "gear") g.gears.push(e.object3D);
+    });
+    // beacon flame position (reference space): box centre of decor object
+    Game.decor.forEach(function (e) {
+      if (!e.beacon) return;
+      e.object3D.updateWorldMatrix(true, true);
+      var bb = new THREE.Box3().setFromObject(e.object3D), c = bb.getCenter(new THREE.Vector3());
+      var inv = e.node.worldToLocal(c.clone());
+      // fall back to a point above the cell if the box is empty
+      if (!isFinite(inv.x) || bb.isEmpty()) inv.set(e.item.at[0] + 0.5, e.item.at[1] + 1.2, e.item.at[2] + 0.5);
+      e.flame = [inv.x, inv.y, inv.z];
+    });
+    w.plates.forEach(function (p) {
+      var wk = w.walkable(p.tile), g = Game.groups[wk.group] || Game.groups.base;
+      var e = buildDecor({ type: "plate", at: wk.ref.slice(), face: "+y", rot: 0 }, g, { plate: p.tile });
+      if (e) plateOf[p.tile] = e;
+    });
+    w.glimmers.forEach(function (tid) {
+      var wk = w.walkable(tid), g = Game.groups[wk.group] || Game.groups.base;
+      var e = buildDecor({ type: "glimmer", at: wk.ref.slice(), face: "+y", rot: 0 }, g, { glimmer: tid });
+      if (e) glimOf[tid] = e;
+    });
+    // handles
+    order.forEach(function (id) {
+      var g = Game.groups[id], hd = g.def.handle;
+      if (!hd || g.kind === "static") return;
+      var on = hd.on === "base" ? "base" : "self", pg = on === "self" ? g : Game.groups.base;
+      var f = FACES[hd.face || "+y"] || FACES["+y"];
+      var item = { type: hd.type || (g.kind === "rotor" ? "crank" : "knob"), at: hd.at.slice(), face: hd.face || "+y", rot: hd.rot || 0, axis: g.axis, mech: g.kind };
+      var e = buildDecor(item, pg, { handleOf: id });
+      g.handle = { def: hd, on: on, obj: e ? e.object3D : null, ref: [hd.at[0] + 0.5 + f[0] * 0.6, hd.at[1] + 0.5 + f[1] * 0.6, hd.at[2] + 0.5 + f[2] * 0.6], ring: makeRing(1) };
+      // reference block for dragging: farthest from the pivot axis
+      var best = null, bd = -1;
+      g.cells.forEach(function (c) {
+        var dx = c[0] + 0.5 - g.pivot[0], dy = c[1] + 0.5 - g.pivot[1], dz = c[2] + 0.5 - g.pivot[2];
+        if (g.axis === "x") dx = 0; else if (g.axis === "y") dy = 0; else if (g.axis === "z") dz = 0;
+        var d = dx * dx + dy * dy + dz * dz; if (d > bd) { bd = d; best = c; }
+      });
+      g.blockRef = best ? [best[0] + 0.5, best[1] + 0.5, best[2] + 0.5] : [0, 0, 0];
+    });
+    Game.plateOf = plateOf; Game.glimOf = glimOf;
+    Object.keys(Game.groups).forEach(function (id) { applyGroup(Game.groups[id]); });
+    levelRoot.updateMatrixWorld(true);
+
+    // world / camera
+    if (window.World && mods.world) { safe(function () { World.setTheme(theme, true); }, "World.setTheme"); safe(function () { World.fit(w.bounds()); }, "World.fit"); }
+    fitFallbackLights(w.bounds());
+    fitBox = computeFitBox();
+    cam.zoomK = (Game.reducedMotion || TEST) ? 1 : 1.14; cam.introT = 0;
+    fitCamera();
+
+    // hero
+    var st = w.walkable(w.startId);
+    heroW.tile = w.startId; heroW.plateTile = null;
+    heroW.pos.set(st.stand[0], st.stand[1], st.stand[2]);
+    heroW.yaw = heroW.targetYaw = Math.PI / 4;
+    heroPivot.position.copy(heroW.pos); heroPivot.rotation.y = heroW.yaw;
+    setAnim("idle"); safe(function () { heroApi.setGlow && heroApi.setGlow(1); });
+    Game.hero.tile = heroW.tile; Game.hero.walking = false;
+    buildDebugEdges();
+    return w;
+  }
+
+  function fitFallbackLights(b) {
+    if (!fallbackLights) return;
+    var cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, cz = (b.min[2] + b.max[2]) / 2;
+    var R = Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]) * 0.9 + 4;
+    var k = fallbackLights.key;
+    k.position.set(cx - 12, cy + 20, cz + 8); k.target.position.set(cx, cy, cz);
+    var s = k.shadow.camera; s.left = -R; s.right = R; s.top = R; s.bottom = -R; s.near = 0.5; s.far = 100; s.updateProjectionMatrix();
+  }
+
+  function setAnim(n) { if (heroW.anim === n) return; heroW.anim = n; safe(function () { heroApi.setAnim(n); }, "setAnim"); }
+
+  // ------------------------------------------------------------------ public level control
+  Game.showTitle = function () {
+    try {
+      var def = Game.titleLevel; loadLevel(def);
+    } catch (e) { console.error(e); }
+    Game.levelIndex = -1; Game.state = "title"; Game.paused = false; lock.input = true;
+    emit("title", {});
+  };
+  Game.startLevel = function (i) {
+    i = Math.max(0, Math.min(Game.levels.length - 1, i | 0));
+    loadLevel(Game.levels[i]);
+    Game.levelIndex = i; Game.state = "play"; Game.paused = false; lock.input = false;
+    emit("levelStart", { index: i, level: Game.level });
+  };
+  Game.restart = function () {
+    if (Game.levelIndex < 0) return;
+    var i = Game.levelIndex; loadLevel(Game.levels[i]);
+    Game.state = "play"; Game.paused = false; lock.input = false;
+    emit("restart", { index: i });
+  };
+  Game.nextLevel = function () {
+    if (Game.levelIndex + 1 < Game.levels.length) Game.startLevel(Game.levelIndex + 1); else Game.showTitle();
+  };
+  Game.pause = function (b) {
+    b = !!b;
+    if (b && Game.state !== "play") return;
+    if (!b && Game.state !== "paused") return;
+    Game.paused = b; Game.state = b ? "paused" : "play";
+    emit("pause", { paused: b });
+  };
+
+  // ------------------------------------------------------------------ walking
+  function walkableOf(id) { return Game.geom.walkable(id); }
+  function v3(a) { return new THREE.Vector3(a[0], a[1], a[2]); }
+
+  function truncateToStand() {
+    // finish the move toward the next stand point, drop the rest; returns the tile that will be stood on
+    var m = heroW.moves;
+    if (!heroW.cur && !m.length) return heroW.tile;
+    if (heroW.cur && heroW.cur.stand) { heroW.moves = []; return heroW.cur.tile; }
+    var keep = [];
+    for (var i = 0; i < m.length; i++) { keep.push(m[i]); if (m[i].stand) { heroW.moves = keep; return m[i].tile; } }
+    heroW.moves = keep; return heroW.tile;
+  }
+
+  function buildMoves(path) {
+    var moves = [], prev = path[0].id, w = Game.geom;
+    for (var i = 1; i < path.length; i++) {
+      var e = path[i], wk = w.walkable(e.id), pk = w.walkable(prev);
+      moves.push({ kind: "a", to: v3(e.from3), jump: v3(e.to3), newTile: e.id, fromTile: prev, k: e.k, stairs: pk.kind === "stair" });
+      moves.push({ kind: "b", to: v3(wk.stand), stand: true, tile: e.id, stairs: wk.kind === "stair", k: e.k });
+      prev = e.id;
+      if (isActivePlate(e.id)) break;
+    }
+    return moves;
+  }
+  function plateDef(tile) { var ps = Game.geom.plates; for (var i = 0; i < ps.length; i++) if (ps[i].tile === tile) return ps[i]; return null; }
+  function isActivePlate(tile) { var p = plateDef(tile); return !!p && !(p.once && lock.used[tile]); }
+
+  function walkTo(destId) {
+    // returns Promise<{ok}> ; assumes caller checked reachability
+    var anchor = truncateToStand();
+    var path = anchor === destId ? [{ id: anchor }] : Game.geom.path(anchor, destId);
+    if (!path) return Promise.resolve({ ok: false });
+    var moves = buildMoves(path);
+    heroW.dest = destId;
+    if (!moves.length && !heroW.cur) { return Promise.resolve({ ok: true }); }
+    var pts = [[heroW.pos.x, heroW.pos.y, heroW.pos.z]];
+    for (var i = 1; i < path.length; i++) { var s = walkableOf(path[i].id).stand; pts.push([s[0], s[1], s[2]]); }
+    heroW.moves = heroW.moves.concat(moves);
+    emit("path", { points: pts });
+    Game.hero.walking = true;
+    return new Promise(function (res) { heroW.waiters.push(res); });
+  }
+
+  function stopHero() {
+    heroW.cur = null; heroW.moves = []; Game.hero.walking = false;
+    if (Game.state === "play" && !lock.goalPhase) setAnim("idle");
+    var tile = heroW.tile;
+    var ws = heroW.waiters; heroW.waiters = [];
+    if (!heroW.resume) heroW.dest = null;
+    emit("heroStop", { tile: tile });
+    ws.forEach(function (r) { r({ ok: true, tile: tile }); });
+  }
+
+  function leaveTile(oldTile) {
+    if (lock.plateOn && lock.plateOn === oldTile) {
+      var e = Game.plateOf[oldTile]; if (e && e.object3D.userData.press) safe(function () { e.object3D.userData.press(false); });
+      lock.plateOn = null;
+    }
+  }
+
+  function arrive(tile) {
+    var w = Game.geom, wk = walkableOf(tile);
+    // glimmer
+    var ge = Game.glimOf[tile];
+    if (ge && !ge.got) {
+      ge.got = true; lock.glimmers++;
+      safe(function () { ge.object3D.userData.collect && ge.object3D.userData.collect(); });
+      emit("glimmer", { tile: tile, count: lock.glimmers, total: w.glimmers.length, pos: ge.worldPos().toArray() });
+    }
+    if (tile === w.goalId && Game.state === "play") { startGoal(); return true; }
+    var p = plateDef(tile);
+    if (p) {
+      var e = Game.plateOf[tile]; if (e && e.object3D.userData.press) safe(function () { e.object3D.userData.press(true); });
+      lock.plateOn = tile;
+      if (!(p.once && lock.used[tile])) {
+        lock.used[tile] = true;
+        emit("plate", { tile: tile, group: p.group, pos: e ? e.worldPos().toArray() : wk.stand.slice() });
+        var g = Game.groups[p.group], target;
+        target = p.to !== undefined ? unwrapTo(g, p.to) : stepTarget(g);
+        heroW.moves = []; // plates truncate
+        requestMech(g, target, null, true);
+      }
+    }
+    return false;
+  }
+
+  function startGoal() {
+    lock.input = true; lock.goalPhase = 1; lock.goalT = 0; heroW.moves = []; heroW.cur = null;
+    emit("goal", { index: Game.levelIndex });
+    var b = null; Game.decor.forEach(function (e) { if (e.beacon && !b) b = e; });
+    if (b) { var bp = b.worldPos(); var dx = bp.x - heroW.pos.x, dz = bp.z - heroW.pos.z; if (Math.abs(dx) + Math.abs(dz) > 0.2) heroW.targetYaw = Math.atan2(dx, dz); }
+    else heroW.targetYaw = Math.PI / 4;
+    setAnim("celebrate"); safe(function () { heroApi.setGlow && heroApi.setGlow(1.6); });
+  }
+
+  function unwrapTo(g, v) {
+    if (g.kind !== "rotor") return v;
+    var d = ((v - g.cur) % 360 + 540) % 360 - 180; return g.cur + d;
+  }
+  function stepTarget(g) {
+    // tap on a handle: next allowed value (rotors wrap, 2-value mechanisms ping-pong)
+    var vs = g.values.slice().sort(function (a, b) { return a - b; }), n = vs.length;
+    if (g.kind === "rotor") {
+      var cur = nearestAllowed(g, g.cur), curN = ((Math.round(cur) % 360) + 360) % 360;
+      if (n >= 3) { var best = 361; vs.forEach(function (v) { var d = ((v - curN) % 360 + 360) % 360; if (d > 0 && d < best) best = d; }); return cur + best; }
+      var other = vs[0] === curN ? vs[1] : vs[0], d2 = ((other - curN) % 360 + 540) % 360 - 180;
+      return cur + d2;
+    }
+    var i = vs.indexOf(g.value); if (i < 0) i = 0;
+    if (i === n - 1) g.dir = -1; else if (i === 0) g.dir = 1;
+    return vs[Math.max(0, Math.min(n - 1, i + g.dir))];
+  }
+  // ------------------------------------------------------------------ mechanisms
+  function heroOnGroup(g) { return !!heroW.tile && walkableOf(heroW.tile) && walkableOf(heroW.tile).group === g.id; }
+  function isLocked(g) { return g.kind === "rotor" && g.axis !== "y" && heroOnGroup(g); }
+  function anyMoving() { for (var id in Game.groups) if (Game.groups[id].state !== "idle") return true; return pending.length > 0; }
+  function heroBusy() { return !!heroW.cur || heroW.moves.length > 0; }
+
+  function beginRide(g) {
+    if (g.riding || !heroOnGroup(g)) return;
+    if (!(g.kind === "slider" || (g.kind === "rotor" && g.axis === "y"))) return;
+    applyGroup(g);
+    var local = g.contentNode.worldToLocal(heroW.pos.clone());
+    heroW.refPos = local; heroW.refYaw = heroW.yaw - (g.kind === "rotor" ? g.cur * DEG : 0);
+    g.riding = true; heroW.riding = g; setAnim("ride");
+  }
+  function endRide(g) {
+    if (!g.riding) return;
+    g.riding = false; heroW.riding = null;
+    var wk = walkableOf(heroW.tile);
+    heroW.pos.set(wk.stand[0], wk.stand[1], wk.stand[2]);
+    setAnim("idle");
+  }
+
+  // request a mechanism move to an (unwrapped) target; waits for hero to settle at a stand point
+  function requestMech(g, target, resolve, fromPlate) {
+    if (isLocked(g)) { emit("mechLocked", { id: g.id }); wiggle(g); if (resolve) resolve(false); return; }
+    pending.push({ g: g, target: target, resolve: resolve });
+    if (heroBusy()) { if (!heroW.resume) heroW.resume = heroW.dest; truncateToStand(); }
+  }
+  function wiggle(g) { g.wig = 1; }
+
+  function beginSpring(g, target, resolve) {
+    g.target = target; g.state = "spring"; g.moving = true;
+    if (resolve) g.resolvers.push(resolve);
+    beginRide(g);
+  }
+
+  function snapSettle(g) {
+    var nv = normVal(g, g.target);
+    g.cur = g.kind === "rotor" ? nv : nv; g.vel = 0; g.state = "idle"; g.moving = false;
+    applyGroup(g);
+    var changed = nv !== g.value;
+    g.value = nv; Game.geom.setValue(g.id, nv); Game.geom.compute();
+    endRide(g);
+    buildDebugEdges();
+    var pos = handlePosOf(g);
+    emit("mechSnap", { id: g.id, value: nv, pos: pos });
+    var rs = g.resolvers; g.resolvers = []; rs.forEach(function (r) { r(true); });
+    // resume interrupted walk
+    if (heroW.resume && !anyMoving() && !heroBusy()) {
+      var d = heroW.resume; heroW.resume = null;
+      if (d && d !== heroW.tile && Game.state === "play") { var path = Game.geom.path(heroW.tile, d); if (path) walkTo(d); }
+    }
+  }
+
+  function handlePosOf(g) {
+    var out = [0, 0, 0];
+    if (g.handle) { handleRefWorld(g, g.cur, out); var v = new THREE.Vector3(out[0], out[1], out[2]); var node = g.handle.on === "self" ? g.contentNode : Game.groups.base.contentNode; node.updateWorldMatrix(true, false); /* ref coords are reference world coords */ return mechPointForHandle(g); }
+    return [g.pivot[0], g.pivot[1], g.pivot[2]];
+  }
+  function mechPointForHandle(g) { var o = [0, 0, 0]; handleRefWorld(g, g.cur, o); return o; }
+
+  function tickMech(g, dt) {
+    if (g.state === "spring") {
+      var w = 18, n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n, x = g.cur, v = g.vel, t = g.target;
+      for (var i = 0; i < n; i++) { var acc = w * w * (t - x) - 2 * w * v; v += acc * h; x += v * h; }
+      g.vel = v; g.cur = x;
+      var eps = g.kind === "rotor" ? 0.15 : 0.003, ve = g.kind === "rotor" ? 3 : 0.03;
+      if (Math.abs(x - t) < eps && Math.abs(v) < ve) { applyGroup(g); snapSettle(g); return; }
+    } else if (g.state === "drag" && g.wig) { g.wig = 0; }
+    if (g.state !== "idle") {
+      var prev = g.prevCur === undefined ? g.cur : g.prevCur; g.prevCur = g.cur;
+      applyGroup(g);
+      var step = g.kind === "rotor" ? 15 : 0.25, ti = Math.floor(g.cur / step + 1e-6);
+      if (ti !== g.tickIdx) { g.tickIdx = ti; emit("mechTick", { id: g.id, pos: mechPointForHandle(g) }); }
+      emit("mechMove", { id: g.id, value: g.cur, delta: g.cur - prev });
+      if (g.handle && g.handle.obj && g.handle.obj.userData.spin) safe(function () { g.handle.obj.userData.spin(g.cur); });
+      g.gears.forEach(function (o) { if (o.userData && o.userData.spin) safe(function () { o.userData.spin(g.cur); }); });
+    }
+  }
+
+  // ------------------------------------------------------------------ input
+  var tapCand = null;
+  function inputOK() { return Game.state === "play" && !lock.input && !Game.paused; }
+  function localXY(e) { var r = root.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+  function hitHandle(x, y) {
+    var best = null, bd = 36 * 36, o = [0, 0, 0];
+    for (var id in Game.groups) {
+      var g = Game.groups[id]; if (!g.handle) continue;
+      handleRefWorld(g, g.cur, o); worldToScreen(o, _sc);
+      var d = (_sc.x - x) * (_sc.x - x) + (_sc.y - y) * (_sc.y - y);
+      if (d < bd) { bd = d; best = g; }
+    }
+    return best;
+  }
+
+  function setupInput() {
+    canvas.addEventListener("pointerdown", function (e) { safe(function () { onDown(e); }, "pointerdown"); });
+    canvas.addEventListener("pointermove", function (e) { safe(function () { onMove(e); }, "pointermove"); });
+    canvas.addEventListener("pointerup", function (e) { safe(function () { onUp(e); }, "pointerup"); });
+    canvas.addEventListener("pointercancel", function (e) { safe(function () { onUp(e, true); }, "pointercancel"); });
+    canvas.addEventListener("pointerleave", function () { hoverG = null; });
+    canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  }
+
+  function onDown(e) {
+    if (!inputOK() || e.button > 0) return;
+    var p = localXY(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch (er) {}
+    var g = hitHandle(p.x, p.y);
+    if (g) { grab(g, p, e.pointerId); return; }
+    if (anyMoving()) return;
+    tapCand = { x: p.x, y: p.y, id: e.pointerId };
+  }
+
+  function grab(g, p, id) {
+    g.used = true;
+    emit("mechGrab", { id: g.id, kind: g.kind });
+    drag = { g: g, id: id, sx: p.x, sy: p.y, lx: p.x, ly: p.y, travel: 0, raw: g.cur, started: false, locked: isLocked(g), wasSpring: g.state === "spring" };
+    if (g.state === "spring") { g.state = "drag"; g.moving = true; }
+    if (heroBusy()) { if (!heroW.resume) heroW.resume = heroW.dest; truncateToStand(); }
+    if (drag.locked) { emit("mechLocked", { id: g.id }); }
+  }
+
+  var _T = { x: 0, y: 0 };
+  function dragRef(g) {
+    if (g.handle && g.handle.on === "self") {
+      tangent(g, g.handle.ref, _T);
+      var mag = Math.hypot(_T.x, _T.y);
+      if (mag > (g.kind === "rotor" ? 0.6 : 8)) return g.handle.ref;
+    }
+    return g.blockRef || (g.cells[0] ? [g.cells[0][0] + 0.5, g.cells[0][1] + 0.5, g.cells[0][2] + 0.5] : [0, 0, 0]);
+  }
+
+  function onMove(e) {
+    var p = localXY(e);
+    if (drag && e.pointerId === drag.id) {
+      var g = drag.g, dx = p.x - drag.lx, dy = p.y - drag.ly;
+      drag.lx = p.x; drag.ly = p.y; drag.travel = Math.max(drag.travel, Math.hypot(p.x - drag.sx, p.y - drag.sy));
+      if (drag.travel < 6) return;
+      if (drag.locked) { var amt = Math.min(1, drag.travel / 60); g.cur = g.value + (g.kind === "rotor" ? 4 : 0.06) * Math.tanh(amt * 2) * (g.dir || 1); g.state = "drag"; g.moving = true; applyGroup(g); return; }
+      if (heroBusy()) return; // wait for the hero to settle
+      if (!drag.started) { drag.started = true; drag.raw = g.cur; g.state = "drag"; g.moving = true; beginRide(g); }
+      tangent(g, dragRef(g), _T);
+      var den = _T.x * _T.x + _T.y * _T.y; if (den < 1e-6) return;
+      drag.raw += (dx * _T.x + dy * _T.y) / den;
+      if (g.kind === "rotor") { var rg = rotorRange(g, g.value); g.cur = rg ? soft(drag.raw, rg.lo, rg.hi, 12) : drag.raw; }
+      else { var lo = Math.min.apply(null, g.values), hi = Math.max.apply(null, g.values); g.cur = soft(drag.raw, lo, hi, 0.25); }
+      return;
+    }
+    if (e.pointerType === "mouse" && !drag) { hoverG = inputOK() ? hitHandle(p.x, p.y) : null; canvas.style.cursor = hoverG ? "grab" : ""; }
+    if (tapCand && e.pointerId === tapCand.id && Math.hypot(p.x - tapCand.x, p.y - tapCand.y) > 14) tapCand = null;
+  }
+
+  function onUp(e, cancel) {
+    var p = localXY(e);
+    if (drag && e.pointerId === drag.id) {
+      var d = drag, g = d.g; drag = null;
+      if (d.locked) { g.target = g.value; g.state = "spring"; g.moving = true; return; }
+      if (d.travel < 6 && !cancel) {
+        if (anyMoving() && g.state !== "drag") return;
+        g.state = "idle"; g.moving = false;
+        var t = stepTarget(g);
+        requestMech(g, t, null);
+      } else {
+        var tgt = d.started ? (g.kind === "rotor" ? nearestAllowed(g, g.cur) : nearestAllowed(g, g.cur)) : g.value;
+        if (g.kind === "rotor" && d.started) { var rg = rotorRange(g, g.value); if (rg) { tgt = Math.max(rg.lo, Math.min(rg.hi, tgt)); } }
+        if (!d.started) { g.state = "idle"; g.moving = false; return; }
+        beginSpring(g, tgt, null);
+      }
+      return;
+    }
+    if (tapCand && e.pointerId === tapCand.id && !cancel) {
+      var tc = tapCand; tapCand = null;
+      if (Math.hypot(p.x - tc.x, p.y - tc.y) <= 14) doTap(p.x, p.y);
+    }
+    tapCand = null;
+  }
+
+  var _pq = { p: 0, q: 0 };
+  function doTap(x, y) {
+    var w = Game.geom; screenToPQ(x, y, _pq);
+    var id = w.pick(_pq.p, _pq.q), hit = w.raycast(_pq.p, _pq.q);
+    var reach = false, path = null;
+    if (id && id !== heroW.tile) { var anchor = peekAnchor(); path = id === anchor ? [{ id: id }] : w.path(anchor, id); reach = !!path; }
+    var pos = id ? walkableOf(id).stand.slice() : null;
+    emit("tap", { x: x, y: y, tile: id, reachable: reach, pos: pos });
+    var rp = hit ? [_pq.p + hit.t, hit.t, _pq.q + hit.t] : [_pq.p + heroW.pos.y, heroW.pos.y, _pq.q + heroW.pos.y];
+    if (id && id === heroW.tile && !heroBusy()) { spawnRipple(pos, 0xffd98a, 0.8); return; }
+    if (reach) { spawnRipple(pos, 0xffd98a, 0.9); walkTo(id); }
+    else { spawnRipple(id ? pos : rp, 0xff8a7a, 1); bump(); }
+  }
+  function peekAnchor() {
+    if (heroW.cur && heroW.cur.stand) return heroW.cur.tile;
+    for (var i = 0; i < heroW.moves.length; i++) if (heroW.moves[i].stand) return heroW.moves[i].tile;
+    return heroW.tile;
+  }
+  function bump() { if (!heroBusy() && !heroW.riding) { setAnim("bump"); heroW.bumpT = 0.7; } }
+
+  function spawnRipple(pos, color, scale) {
+    if (!pos) return;
+    var m = null;
+    for (var i = 0; i < ripples.length; i++) if (!ripples[i].mesh.visible) { m = ripples[i]; break; }
+    if (!m) { m = { mesh: makeRing(1), t: 0 }; ripples.push(m); }
+    m.mesh.visible = true; m.t = 0; m.scale = scale; m.mesh.position.set(pos[0], pos[1] + 0.05, pos[2]); m.mesh.material.color.setHex(color);
+  }
+
+  // ------------------------------------------------------------------ test API
+  Game.tapTile = function (id) {
+    return waitIdle().then(function () {
+      if (Game.state !== "play" || lock.input) return { ok: false };
+      var w = Game.geom, wk = w.walkable(id); if (!wk) return { ok: false };
+      var reach = id === heroW.tile || !!w.path(heroW.tile, id);
+      emit("tap", { x: 0, y: 0, tile: wk.id, reachable: reach, pos: wk.stand.slice() });
+      if (!reach) { bump(); return { ok: false }; }
+      if (wk.id === heroW.tile) return { ok: true };
+      return walkTo(wk.id).then(function (r) { return waitIdle().then(function () { return r; }); });
+    });
+  };
+  Game.setMech = function (id, value) {
+    return waitIdle().then(function () {
+      var g = Game.groups[id]; if (!g || g.kind === "static" || g.values.indexOf(value) < 0) return false;
+      return new Promise(function (res) { requestMech(g, g.kind === "rotor" ? unwrapTo(g, value) : value, res); });
+    });
+  };
+  function waitIdle() {
+    return new Promise(function (res) {
+      (function chk() { if (!anyMoving() && !heroBusy() && !heroW.resume) res(); else setTimeout(chk, 16); })();
+    });
+  }
+  Game.runSolution = async function (i) {
+    var t0 = performance.now();
+    if (i !== undefined && i !== null) Game.startLevel(i);
+    var sol = Game.level.solution || [], ok = true, why = "";
+    var done = false, off = function () { Game.bus.off("levelComplete", f); }, f = function () { done = true; };
+    Game.bus.on("levelComplete", f);
+    for (var k = 0; k < sol.length; k++) {
+      var a = sol[k], r;
+      if (a[0] === "walk") r = await Game.tapTile(a[1]); else r = await Game.setMech(a[1], a[2]);
+      if (a[0] === "walk" ? !(r && r.ok) : !r) { ok = false; why = "step " + k + " " + JSON.stringify(a) + " failed"; break; }
+    }
+    if (ok) { var tmo = performance.now() + 20000; while (!done && performance.now() < tmo) await new Promise(function (r2) { setTimeout(r2, 30); }); if (!done) { ok = false; why = "level did not complete"; } }
+    off();
+    return { ok: ok, ms: Math.round(performance.now() - t0), why: why };
+  };
+  Game.debug = function () {
+    var gv = {}; for (var id in Game.groups) gv[id] = Game.groups[id].value;
+    var reach = []; try { if (Game.geom) reach = Array.from(Game.geom.reachable(heroW.tile)); } catch (e) {}
+    return { state: Game.state, level: Game.level && Game.level.id, heroTile: heroW.tile, reachable: reach, groups: gv, calls: sceneStats.calls, tris: sceneStats.tris, fps: Math.round(fpsAvg), quality: Game.quality, mods: mods };
+  };
+
+  // ------------------------------------------------------------------ debug overlay
+  function setupDebug() {
+    debugCv = document.createElement("canvas"); debugCv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5";
+    root.insertBefore(debugCv, Game.ui || null);
+  }
+  function refStand(wk) { return wk.kind === "stair" ? [wk.ref[0] + 0.5, wk.ref[1] + 0.5, wk.ref[2] + 0.5] : [wk.ref[0] + 0.5, wk.ref[1] + 1, wk.ref[2] + 0.5]; }
+  function buildDebugEdges() {
+    if (!DEBUG || !Game.geom) return;
+    var w = Game.geom; debugEdges = [];
+    w.walkables.forEach(function (wk) {
+      if (!wk.standable) return;
+      w.neighbors(wk.id).forEach(function (n) { if (wk.id < n.to) debugEdges.push({ a: wk.id, b: n.to, k: n.k }); });
+    });
+  }
+  function dbgPos(id, out) {
+    var wk = walkableOf(id), g = Game.groups[wk.group], r = refStand(wk);
+    mechPointArr(g, g.cur, r[0], r[1], r[2], out); return out;
+  }
+  function drawDebug() {
+    if (!debugCv || !Game.geom) return;
+    var c = debugCv.getContext("2d"), a = [0, 0, 0], b = [0, 0, 0], s1 = { x: 0, y: 0 }, s2 = { x: 0, y: 0 };
+    c.clearRect(0, 0, debugCv.width, debugCv.height);
+    c.lineWidth = 2;
+    debugEdges.forEach(function (e) {
+      dbgPos(e.a, a); dbgPos(e.b, b); worldToScreen(a, s1); worldToScreen(b, s2);
+      c.strokeStyle = e.k ? "#ff3df0" : "#3dff9a"; c.setLineDash(e.k ? [6, 5] : []);
+      c.beginPath(); c.moveTo(s1.x, s1.y); c.lineTo(s2.x, s2.y); c.stroke();
+    });
+    c.setLineDash([]); c.font = "10px monospace"; c.textAlign = "center";
+    Game.geom.walkables.forEach(function (wk) {
+      dbgPos(wk.id, a); worldToScreen(a, s1);
+      c.fillStyle = wk.standable ? (wk.id === heroW.tile ? "#ffe34a" : "#fff") : "#888";
+      c.beginPath(); c.arc(s1.x, s1.y, 3, 0, 7); c.fill();
+      var lab = wk.alias || wk.id.replace(/^[^:]*:/, ""); c.fillStyle = "#000a"; c.fillRect(s1.x - 22, s1.y + 5, 44, 11); c.fillStyle = "#fff"; c.fillText(lab, s1.x, s1.y + 14);
+    });
+    c.strokeStyle = "#ffb35a"; for (var id in Game.groups) { var g = Game.groups[id]; if (!g.handle) continue; handleRefWorld(g, g.cur, a); worldToScreen(a, s1); c.beginPath(); c.arc(s1.x, s1.y, 36, 0, 7); c.stroke(); }
+  }
+
+  // ------------------------------------------------------------------ frame loop
+  var lastT = 0;
+  function normAng(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+
+  function updateHero(dt) {
+    var pos = heroW.pos, moving = false, speedNow = 0, stairs = false;
+    if (heroW.riding) {
+      var g = heroW.riding; g.contentNode.updateWorldMatrix(true, false);
+      tmpV.copy(heroW.refPos); g.contentNode.localToWorld(tmpV); pos.copy(tmpV);
+      var ny = g.kind === "rotor" ? g.cur * DEG : 0; heroW.yaw = heroW.targetYaw = heroW.refYaw + ny;
+    } else if (!lock.goalPhase || true) {
+      var remain = dt;
+      while (remain > 1e-6) {
+        if (!heroW.cur) { if (!heroW.moves.length) break; heroW.cur = heroW.moves.shift(); if (heroW.cur.kind === "a") { leaveTile(heroW.tile); } }
+        var m = heroW.cur, sp = 2.4 * (m.stairs ? 0.75 : 1);
+        tmpV.copy(m.to).sub(pos); var dist = tmpV.length();
+        var hx = tmpV.x, hz = tmpV.z; if (hx * hx + hz * hz > 1e-6) heroW.targetYaw = Math.atan2(hx, hz);
+        moving = true; stairs = m.stairs; speedNow = sp;
+        if (dist <= sp * remain + 1e-6) {
+          remain -= dist / sp; pos.copy(m.to); heroW.cur = null;
+          if (m.jump) {
+            var from = heroW.tile; pos.copy(m.jump); heroW.crossK = m.k;
+            heroW.tile = m.newTile; Game.hero.tile = heroW.tile;
+            emit("heroStep", { from: from, to: m.newTile, k: m.k, at: [m.to.x, m.to.y, m.to.z] });
+          }
+          if (m.stand) {
+            heroW.crossK = 0;
+            if (arrive(m.tile)) { moving = false; break; }
+            if (!heroW.moves.length) { moving = false; stopHero(); break; }
+          }
+        } else { tmpV.multiplyScalar(1 / dist); pos.addScaledVector(tmpV, sp * remain); remain = 0; }
+      }
+    }
+    // facing
+    var da = normAng(heroW.targetYaw - heroW.yaw), mx = 13 * dt; // 90 deg per 0.12 s
+    if (!heroW.riding) heroW.yaw += Math.abs(da) <= mx ? da : Math.sign(da) * mx;
+    // animation state
+    if (!lock.goalPhase && !heroW.riding) {
+      if (moving || heroBusy()) setAnim(stairs ? "climb" : "walk");
+      else if (heroW.bumpT > 0) { heroW.bumpT -= dt; if (heroW.bumpT <= 0) setAnim("idle"); }
+      else if (heroW.anim === "walk" || heroW.anim === "climb") setAnim("idle");
+    }
+    Game.hero.walking = heroBusy();
+    // anti-clipping offset during impossible-join crossings
+    var want = 0;
+    if (heroW.crossK && !heroW.riding || (heroW.cur && heroW.cur.kind === "a" && heroW.cur.k)) {
+      var w = Game.geom;
+      for (var i = 0; i < 3; i++) {
+        var dy = [0.05, 0.4, 0.8][i], X = pos.x, Y = pos.y + dy, Z = pos.z, r = w.raycast(X - Y, Z - Y);
+        if (r && r.kind !== "veil" && r.t > Y + 0.02) want = Math.max(want, r.t - Y + 0.03);
+      }
+      want = Math.min(0.3, want);
+    }
+    heroW.offset += (want - heroW.offset) * Math.min(1, dt * 14);
+    heroPivot.position.copy(pos);
+    if (heroW.offset > 1e-3) heroPivot.position.addScalar(heroW.offset);
+    heroPivot.rotation.y = heroW.yaw;
+    safe(function () { heroApi.update(dt, Game.time, { speed: moving ? speedNow : 0, grounded: true }); }, "hero.update");
+  }
+
+  function updateGoal(dt) {
+    if (!lock.goalPhase) return;
+    lock.goalT += dt;
+    var t1 = TEST ? 0.9 : 0.9, t2 = TEST ? 3.6 : 3.6;
+    if (lock.goalPhase === 1 && lock.goalT >= t1) {
+      lock.goalPhase = 2;
+      var b = null; Game.decor.forEach(function (e) { if (e.beacon && !b) b = e; });
+      var pos = b ? b.worldPos().toArray() : [heroW.pos.x, heroW.pos.y + 2, heroW.pos.z];
+      if (b) safe(function () { b.object3D.userData.ignite && b.object3D.userData.ignite(); }, "ignite");
+      emit("beacon", { index: Game.levelIndex, pos: pos });
+    }
+    if (lock.goalPhase === 2 && lock.goalT >= t2) {
+      lock.goalPhase = 3;
+      var i = Game.levelIndex, id = Game.level.id, total = Game.geom.glimmers.length;
+      var prev = Game.save.done[id] && Game.save.done[id].glimmers || 0;
+      Game.save.done[id] = { glimmers: Math.max(prev, lock.glimmers) };
+      Game.save.unlocked = Math.max(Game.save.unlocked || 1, Math.min(Game.levels.length, i + 2));
+      Game.saveNow();
+      Game.state = "complete";
+      emit("levelComplete", { index: i, glimmers: lock.glimmers, total: total, next: i + 1 < Game.levels.length ? i + 1 : null });
+    }
+  }
+
+  function updateFX(dt, rdt) {
+    var t = Game.time, o = [0, 0, 0];
+    // handle hint rings
+    for (var id in Game.groups) {
+      var g = Game.groups[id]; if (!g.handle) continue;
+      var r = g.handle.ring, vis = Game.state === "play" && !lock.input;
+      if (!vis) { r.visible = false; continue; }
+      handleRefWorld(g, g.cur, o); r.position.set(o[0], o[1], o[2]); r.quaternion.copy(camera.quaternion);
+      var hov = (hoverG === g) || (drag && drag.g === g), pulse = 0.5 + 0.5 * Math.sin(t * 3.2);
+      var base = g.used ? 0 : 0.25 + 0.4 * pulse; if (hov) base = 0.85;
+      r.visible = base > 0.01; r.material.opacity = base; r.scale.setScalar(1 + (g.used ? 0 : 0.12 * pulse) + (hov ? 0.12 : 0));
+    }
+    for (var i = 0; i < ripples.length; i++) {
+      var rp = ripples[i]; if (!rp.mesh.visible) continue;
+      rp.t += rdt; var k = rp.t / 0.6; if (k >= 1) { rp.mesh.visible = false; continue; }
+      rp.mesh.quaternion.copy(camera.quaternion); rp.mesh.scale.setScalar((0.35 + k * 1.1) * rp.scale); rp.mesh.material.opacity = (1 - k) * 0.8;
+    }
+  }
+
+  var errCount = { world: 0, blocks: 0 };
+  function frame(ms) {
+    requestAnimationFrame(frame);
+    if (!Game.ready) return;
+    var rdt = lastT ? Math.min(TEST ? 0.1 : 0.05, (ms - lastT) / 1000) : 0.016; lastT = ms;
+    var dt = rdt * TS;
+    Game.dt = rdt; Game.time += rdt;
+    // fps tracking
+    if (ms && rdt > 0) { fpsAvg += (Math.min(120, 1 / rdt) - fpsAvg) * 0.05; }
+    if (Game.autoOn && !TEST && !navigator.webdriver && Game.state !== "loading") {
+      fpsT += rdt; fpsN++;
+      if (fpsT >= 3) { var f = fpsN / fpsT; fpsT = 0; fpsN = 0; if (f < 45 && Game.time - lastGood > 1) { var nx = Game.quality === "high" ? "medium" : Game.quality === "medium" ? "low" : null; if (nx) { applyTier(nx); } } }
+    }
+    var sim = Game.state === "play" || Game.state === "complete" || Game.state === "title";
+    var run = sim && !Game.paused;
+    if (run && Game.geom) {
+      if (Game.state !== "title") {
+        // pending mech requests start when the hero is idle
+        if (pending.length && !heroBusy()) { var pr = pending.shift(); beginSpring(pr.g, pr.target, pr.resolve); }
+        for (var id in Game.groups) { var g = Game.groups[id]; if (g.kind !== "static") tickMech(g, dt); }
+        if (drag && !drag.started && drag.travel >= 6 && !drag.locked && !heroBusy()) { /* started on next move */ }
+        updateHero(dt);
+        updateGoal(dt);
+      } else {
+        updateHero(dt);
+      }
+    }
+    // camera
+    if (cam.zoomK > 1) { cam.introT += rdt; var k = Math.min(1, cam.introT / 1.6); cam.zoomK = 1 + 0.14 * Math.pow(1 - k, 3); if (k >= 1) cam.zoomK = 1; }
+    if (!Game.reducedMotion) { cam.dx = Math.sin(Game.time * 0.17) * 0.05; cam.dy = Math.cos(Game.time * 0.13) * 0.04; } else { cam.dx = 0; cam.dy = 0; }
+    positionCamera();
+    // modules
+    if (mods.world && errCount.world < 3) { try { World.update(rdt, Game.time); } catch (e) { errCount.world++; console.warn("World.update", e); } }
+    if (mods.blocks && errCount.blocks < 3 && window.Blocks && Blocks.update) { try { Blocks.update(rdt, Game.time); } catch (e) { errCount.blocks++; console.warn("Blocks.update", e); } }
+    for (var i = 0; i < decorUpdaters.length; i++) { try { decorUpdaters[i].update(rdt, Game.time); } catch (e) { decorUpdaters.splice(i, 1); i--; } }
+    updateFX(dt, rdt);
+    if (gradePass) gradePass.uniforms.time.value = Game.time;
+    if (DEBUG) drawDebug();
+    renderer.info.reset();
+    composer.render(rdt);
+  }
+})();

@@ -21,60 +21,71 @@
     var seed = 1731;
     function random() { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }
     var metalCanvas = canvas(256, 256), mc = metalCanvas.getContext("2d");
-    mc.fillStyle = "#eed39b"; mc.fillRect(0, 0, 256, 256);
-    for (var i = 0; i < 11000; i++) {
+    mc.fillStyle = "#eee4cf"; mc.fillRect(0, 0, 256, 256);
+    for (var i = 0; i < 6500; i++) {
       var x = random() * 256, y = random() * 256;
-      mc.fillStyle = random() < 0.5 ? "rgba(64,40,20,.09)" : "rgba(255,244,187,.15)";
-      mc.fillRect(x, y, 0.4 + random() * 1.6, 0.4 + random());
+      mc.fillStyle = random() < 0.5 ? "rgba(54,35,21,.045)" : "rgba(255,246,213,.08)";
+      mc.fillRect(x, y, 0.5 + random(), 0.4 + random());
     }
-    for (i = 0; i < 130; i++) {
-      x = random() * 256; y = random() * 256;
-      var grad = mc.createRadialGradient(x, y, 0, x, y, 2 + random() * 6);
-      grad.addColorStop(0, "rgba(37,108,93,.55)"); grad.addColorStop(1, "rgba(48,109,88,0)");
-      mc.fillStyle = grad; mc.fillRect(x - 9, y - 9, 18, 18);
+    // Restrained oxidation in the UV seams, rather than spots across every panel.
+    for (i = 0; i < 220; i++) {
+      x = (i % 4) * 64 + random() * 5; y = random() * 256;
+      mc.fillStyle = "rgba(79,165,151,.24)";
+      mc.fillRect(x, y, 1 + random() * 3, 1 + random() * 4);
     }
     var metalMap = texture(metalCanvas, true);
     var grainMap = texture(metalCanvas, false);
-    // A small procedural reflection studio gives brass readable PBR highlights even
-    // in scenes with no environment map. It belongs to this instance, not the scene.
+    // A tiny, instance-owned reflection studio. No PMREM or scene mutation.
     var faces = [];
     for (i = 0; i < 6; i++) {
       var c = canvas(64, 64), ctx = c.getContext("2d");
       var sky = ctx.createLinearGradient(0, 0, 0, 64);
-      sky.addColorStop(0, i === 2 ? "#fff0ce" : "#9cabc3");
-      sky.addColorStop(0.48, "#716c68"); sky.addColorStop(0.55, "#302935"); sky.addColorStop(1, "#403144");
-      ctx.fillStyle = sky; ctx.fillRect(0, 0, 64, 64);
+      sky.addColorStop(0, i === 2 ? "#b6c4db" : "#879bb6");
+      sky.addColorStop(0.42, "#a49c8b"); sky.addColorStop(0.55, "#e6bb7d");
+      sky.addColorStop(0.68, "#45392f"); sky.addColorStop(1, "#191b28");
+      ctx.fillStyle = i === 3 ? "#29232b" : sky; ctx.fillRect(0, 0, 64, 64);
       var strip = ctx.createLinearGradient(0, 0, 64, 0);
-      strip.addColorStop(0, "rgba(255,235,196,0)"); strip.addColorStop(0.3, "rgba(255,235,196,.05)");
-      strip.addColorStop(0.42, "rgba(255,240,210,.95)"); strip.addColorStop(0.58, "rgba(255,240,210,.95)");
-      strip.addColorStop(0.7, "rgba(255,235,196,0)"); strip.addColorStop(1, "rgba(255,235,196,0)");
-      ctx.fillStyle = strip; ctx.fillRect(0, 3, 64, 47); faces.push(c);
+      strip.addColorStop(0, "rgba(255,239,204,0)"); strip.addColorStop(0.3, "rgba(255,239,204,0)");
+      strip.addColorStop(0.43, "rgba(255,239,204,.6)"); strip.addColorStop(0.54, "rgba(255,239,204,.6)");
+      strip.addColorStop(0.68, "rgba(255,239,204,0)"); strip.addColorStop(1, "rgba(255,239,204,0)");
+      ctx.fillStyle = strip; if (i !== 3) ctx.fillRect(0, 0, 64, 45); faces.push(c);
     }
     var env = new THREE.CubeTexture(faces); env.encoding = THREE.sRGBEncoding; env.needsUpdate = true; textures.push(env);
-    var brass = mat(new THREE.MeshStandardMaterial({ color: 0xc8963e, metalness: 0.9, roughness: 0.38,
-      map: metalMap, bumpMap: grainMap, bumpScale: 0.0011, envMap: env, envMapIntensity: 1.15 }));
-    var dark = mat(new THREE.MeshStandardMaterial({ color: 0x473b2c, metalness: 0.65, roughness: 0.47, envMap: env }));
+    function linear(hex) { return new THREE.Color(hex).convertSRGBToLinear(); }
+    var brass = mat(new THREE.MeshStandardMaterial({ color: linear(0xb9852f), metalness: 0.85, roughness: 0.44,
+      map: metalMap, bumpMap: grainMap, bumpScale: 0.00035, envMap: env, envMapIntensity: 1 }));
+    var dark = mat(new THREE.MeshStandardMaterial({ color: linear(0x5c4931), metalness: 0.85, roughness: 0.53, envMap: env }));
+    var patina = mat(new THREE.MeshStandardMaterial({ color: linear(0x4fa597), metalness: 0.65, roughness: 0.55, envMap: env }));
     var knitCanvas = canvas(128, 128), kc = knitCanvas.getContext("2d");
-    kc.fillStyle = "#747474"; kc.fillRect(0, 0, 128, 128);
-    kc.lineCap = "round";
+    kc.fillStyle = "#2f7f86"; kc.fillRect(0, 0, 128, 128); kc.lineCap = "round";
     for (y = -8; y < 136; y += 8) for (x = -8; x < 136; x += 8) {
-      kc.strokeStyle = "#343434"; kc.lineWidth = 3.8;
+      kc.strokeStyle = "#22575d"; kc.lineWidth = 4.5;
       kc.beginPath(); kc.moveTo(x - 2, y); kc.lineTo(x + 1, y + 5); kc.lineTo(x + 4, y); kc.stroke();
-      kc.strokeStyle = "#c2c2c2"; kc.lineWidth = 1.5;
+      kc.strokeStyle = (x + y) % 16 ? "#3a9a96" : "#378b8b"; kc.lineWidth = 2;
       kc.beginPath(); kc.moveTo(x - 2, y); kc.lineTo(x + 1, y + 4); kc.lineTo(x + 4, y); kc.stroke();
     }
-    var knit = texture(knitCanvas, false); knit.repeat.set(2, 1);
-    var scarfMat = mat(new THREE.MeshStandardMaterial({ color: 0x2f8f8c, roughness: 0.94,
-      bumpMap: knit, bumpScale: 0.0035, side: THREE.DoubleSide }));
-    var glassMat = mat(new THREE.MeshPhysicalMaterial({ color: 0xffe3ae, metalness: 0, roughness: 0.08,
-      transparent: true, opacity: low ? 0.045 : 0.13, depthWrite: false, envMap: env,
-      envMapIntensity: 0.8, clearcoat: 1, clearcoatRoughness: 0.06 }));
-    var eyeMat = mat(new THREE.MeshBasicMaterial({ color: 0x4a210b, toneMapped: false }));
-    var flameMat = mat(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
-    var coreMat = mat(new THREE.MeshBasicMaterial({ color: 0xfff2a1, toneMapped: false }));
-    var tipMat = mat(new THREE.MeshBasicMaterial({ color: 0xff8b20, transparent: true, opacity: 0.7,
+    var knitColor = texture(knitCanvas, true), knit = texture(knitCanvas, false);
+    knitColor.repeat.set(2, 1); knit.repeat.set(2, 1);
+    var scarfMat = mat(new THREE.MeshStandardMaterial({ color: 0xffffff, map: knitColor, roughness: 0.96,
+      bumpMap: knit, bumpScale: 0.0025, side: THREE.DoubleSide }));
+    // Thin glass: silhouette Fresnel and two soft reflected studio strips.
+    var glassMat = mat(new THREE.ShaderMaterial({ transparent: true, depthWrite: false,
+      uniforms: { strength: { value: low ? 0.5 : 1 } },
+      vertexShader: "varying vec3 n; varying vec3 v; void main(){vec4 p=modelViewMatrix*vec4(position,1.); n=normalize(normalMatrix*normal); v=-p.xyz; gl_Position=projectionMatrix*p;}",
+      fragmentShader: "uniform float strength; varying vec3 n; varying vec3 v; void main(){vec3 N=normalize(n); float rim=pow(1.-abs(dot(N,normalize(v))),3.); float streak=pow(max(0.,dot(N,normalize(vec3(-.65,.3,.7)))),65.); float a=(.015+.19*rim+.22*streak)*strength; gl_FragColor=vec4(mix(vec3(.72,.45,.18),vec3(.85,.95,1.),min(1.,rim+streak)),a);}" }));
+    var eyeMat = mat(new THREE.MeshBasicMaterial({ color: 0x241006, toneMapped: false }));
+    var flameMat = mat(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff,
+      emissiveIntensity: 2.8, roughness: 1, vertexColors: true }));
+    // In r128 vertex colour normally affects diffuse only; the flame's gradient
+    // belongs to its emitted light as well.
+    flameMat.onBeforeCompile = function (shader) {
+      shader.fragmentShader = shader.fragmentShader.replace("#include <emissivemap_fragment>",
+        "#include <emissivemap_fragment>\n totalEmissiveRadiance *= vColor;");
+    };
+    var coreMat = mat(new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffdf66, emissiveIntensity: 4 }));
+    var tipMat = mat(new THREE.MeshBasicMaterial({ color: 0xff730a, transparent: true, opacity: 0.16,
       blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-    var sphere = geo(new THREE.SphereGeometry(1, low ? 12 : 20, low ? 8 : 12));
+    var sphere = geo(new THREE.SphereGeometry(1, low ? 12 : 18, low ? 8 : 12));
     var cylinder = geo(new THREE.CylinderGeometry(1, 1, 1, radial));
     var torus = geo(new THREE.TorusGeometry(1, 0.12, low ? 5 : 8, radial));
     var transform = new THREE.Object3D();
@@ -105,19 +116,24 @@
     var torso = group(hips, "torso");
     var egg = lathe([[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],
       [0.112,0.148],[0.097,0.194],[0.071,0.22],[0,0.226]]);
+    egg.scale(1.29, 1, 1.29);
     part(torso, egg, brass);
-    ring(torso, 0, 0.057, 0, 0.105, Math.PI / 2);
+    ring(torso, 0, 0.053, 0, 0.134, Math.PI / 2, dark);
+    ring(torso, 0, 0.059, 0, 0.136, Math.PI / 2);
+    ring(torso, 0, 0.183, 0, 0.127, Math.PI / 2);
+    ring(torso, 0, 0.19, 0, 0.122, Math.PI / 2, dark);
     // Three fine longitudinal seams, expressed as curved brass wires.
     for (i = 0; i < 6; i++) {
       var angle = i * Math.PI / 3, seam = [];
       for (var j = 1; j < 8; j++) {
         var pp = [[0,0],[0.055,0.008],[0.089,0.029],[0.108,0.063],[0.116,0.105],[0.112,0.148],[0.097,0.194],[0.071,0.22]][j];
-        seam.push(new THREE.Vector3(Math.sin(angle) * (pp[0] + 0.001), pp[1], Math.cos(angle) * (pp[0] + 0.001)));
+        seam.push(new THREE.Vector3(Math.sin(angle) * (pp[0] * 1.29 + 0.001), pp[1], Math.cos(angle) * (pp[0] * 1.29 + 0.001)));
       }
       var wire = geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(seam), 12, 0.0018, 4, false)); part(torso, wire, dark);
       for (j = 0; j < 3; j++) {
         var yy = 0.055 + j * 0.065, rr = j === 1 ? 0.116 : 0.104;
-        ball(torso, Math.sin(angle + 0.2) * rr, yy, Math.cos(angle + 0.2) * rr, 0.0065);
+        ball(torso, Math.sin(angle + 0.2) * rr * 1.29, yy, Math.cos(angle + 0.2) * rr * 1.29, 0.0075);
+        ball(torso, Math.sin(angle + 0.2) * rr * 1.28, yy - 0.005, Math.cos(angle + 0.2) * rr * 1.28, 0.009, 0.008, 0.008, patina);
       }
     }
     // Cream pressure dial, including tiny printed ticks and a moving needle.
@@ -134,68 +150,69 @@
     dc.fillStyle = "#736044"; dc.font = "bold 19px Georgia"; dc.textAlign = "center";
     dc.fillText("LUMEN", 128, 167); dc.font = "14px Georgia"; dc.fillText("0       5       10", 128, 77);
     var dialMat = mat(new THREE.MeshStandardMaterial({ map: texture(dialCanvas, true), roughness: 0.63, metalness: 0.08 }));
-    var gauge = group(torso, "chest gauge", 0, 0.151, 0.106); gauge.rotation.x = -0.16;
+    var gauge = group(torso, "chest gauge", 0, 0.145, 0.148); gauge.scale.setScalar(1.28); gauge.rotation.x = -0.16;
     rod(gauge, 0, 0, 0, 0.042, 0.014, Math.PI / 2);
     ring(gauge, 0, 0, 0.011, 0.037, 0);
     part(gauge, geo(new THREE.CircleGeometry(0.033, radial)), dialMat, 0, 0, 0.013);
     var needle = group(gauge, "gauge needle", 0, 0, 0.014);
     rod(needle, 0, 0.009, 0, 0.0016, 0.031, 0, 0, dark); ball(needle, 0, 0, 0.001, 0.0033, 0.0033, 0.002, dark);
-    var key = group(torso, "key", 0, 0.13, -0.135);
-    rod(key, 0, 0, -0.014, 0.012, 0.065, Math.PI / 2);
+    var key = group(torso, "key", 0, 0.13, -0.157);
+    rod(key, 0, 0, -0.014, 0.014, 0.065, Math.PI / 2);
     ball(key, 0, 0, -0.052, 0.017, 0.019, 0.01);
     ring(key, -0.031, 0.012, -0.053, 0.025, 0, brass, 0.03);
     ring(key, 0.031, 0.012, -0.053, 0.025, 0, brass, 0.03);
     rod(key, 0, 0.005, -0.053, 0.01, 0.06, 0, Math.PI / 2);
-    // Chunky stacked knit collar and a side knot.
-    ring(torso, 0, 0.244, 0, 0.085, Math.PI / 2, scarfMat);
-    ring(torso, 0, 0.227, 0, 0.088, Math.PI / 2, scarfMat);
-    // Additional wool volume under the fine torus ridges.
-    ball(torso, 0, 0.237, 0, 0.098, 0.026, 0.083, scarfMat);
-    ball(torso, -0.09, 0.238, 0.056, 0.03, 0.028, 0.03, scarfMat);
+    // A real wool torus, with a rolled lower lip and a front-side knot.
+    part(torso, geo(new THREE.TorusGeometry(0.088, 0.038, 12, radial)), scarfMat,
+      0, 0.239, 0, 1, 1, 0.8, Math.PI / 2);
+    ring(torso, 0, 0.218, 0, 0.096, Math.PI / 2, scarfMat);
+    ball(torso, -0.094, 0.238, 0.093, 0.038, 0.035, 0.035, scarfMat);
     var head = group(torso, "head", 0, 0.272, 0);
-    var globe = lathe([[0.082,0.008],[0.109,0.035],[0.134,0.082],[0.142,0.132],
-      [0.131,0.182],[0.106,0.222],[0.092,0.24]]);
+    var globe = lathe([[0.114,0.008],[0.145,0.03],[0.173,0.067],[0.183,0.111],
+      [0.178,0.151],[0.159,0.19],[0.134,0.228],[0.127,0.241]]);
     var glass = new THREE.Mesh(globe, glassMat); glass.name = "lantern glass"; glass.renderOrder = 3; head.add(glass);
-    rod(head, 0, 0.009, 0, 0.091, 0.014);
-    ring(head, 0, 0.017, 0, 0.087, Math.PI / 2);
-    rod(head, 0, 0.242, 0, 0.112, 0.012);
-    ring(head, 0, 0.244, 0, 0.109, Math.PI / 2);
-    var dome = lathe([[0.108,0.248],[0.102,0.258],[0.087,0.272],[0.065,0.283],[0.036,0.29],[0,0.293]]);
+    rod(head, 0, 0.009, 0, 0.12, 0.014);
+    ring(head, 0, 0.017, 0, 0.115, Math.PI / 2);
+    rod(head, 0, 0.245, 0, 0.139, 0.01);
+    ring(head, 0, 0.245, 0, 0.135, Math.PI / 2);
+    var dome = lathe([[0.137,0.248],[0.127,0.259],[0.103,0.274],[0.07,0.284],[0.034,0.287],[0,0.288]]);
     part(head, dome, brass);
-    rod(head, 0, 0.298, 0, 0.023, 0.012);
-    ball(head, 0, 0.31, 0, 0.014);
-    ring(head, 0, 0.339, 0, 0.032, 0);
+    rod(head, 0, 0.292, 0, 0.023, 0.009);
+    ball(head, 0, 0.302, 0, 0.014);
+    ring(head, 0, 0.327, 0, 0.03, 0);
     for (i = 0; i < 4; i++) {
       angle = Math.PI / 4 + i * Math.PI / 2;
-      var ribs = [];
-      for (j = 0; j < 7; j++) {
-        var h = 0.016 + j * 0.037, radius = 0.087 + Math.sin(j / 6 * Math.PI) * 0.055;
-        ribs.push(new THREE.Vector3(Math.sin(angle) * radius, h, Math.cos(angle) * radius));
+      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.176,.078],[.185,.117],[.175,.16],[.15,.204],[.13,.24]];
+      for (j = 0; j < ribProfile.length; j++) {
+        ribs.push(new THREE.Vector3(Math.sin(angle) * ribProfile[j][0], ribProfile[j][1], Math.cos(angle) * ribProfile[j][0]));
       }
-      part(head, geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ribs), low ? 8 : 16, 0.006, 6, false)), brass);
+      part(head, geo(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ribs), low ? 10 : 24, 0.0055, 6, false)), brass);
     }
-    for (i = 0; i < 12; i++) {
-      angle = i * Math.PI / 6;
-      ball(head, Math.sin(angle) * 0.102, 0.255, Math.cos(angle) * 0.102, 0.0045);
-      ball(head, Math.sin(angle) * 0.088, 0.012, Math.cos(angle) * 0.088, 0.0045);
+    for (i = 0; i < 16; i++) {
+      angle = i * Math.PI / 8;
+      ball(head, Math.sin(angle) * 0.128, 0.259, Math.cos(angle) * 0.128, 0.0045);
+      ball(head, Math.sin(angle) * 0.117, 0.013, Math.cos(angle) * 0.117, 0.005);
+      if (i % 2 === 0) ball(head, Math.sin(angle) * 0.129, 0.256, Math.cos(angle) * 0.129, 0.006, 0.002, 0.006, patina);
     }
-    var flame = group(head, "living flame", 0, 0.022, 0);
-    var flameShape = lathe([[0,0],[0.039,0.008],[0.063,0.03],[0.07,0.063],[0.061,0.094],
-      [0.042,0.125],[0.025,0.153],[0.018,0.177],[0.009,0.198],[0,0.218]]);
+    var flame = group(head, "living flame", 0, 0.025, 0.038);
+    var flameShape = lathe([[0,0],[0.045,0.008],[0.074,0.03],[0.079,0.057],[0.066,0.083],
+      [0.044,0.111],[0.027,0.137],[0.019,0.158],[0.009,0.178],[0,0.197]]);
     var fp = flameShape.attributes.position, colors = new Float32Array(fp.count * 3), color = new THREE.Color();
     for (i = 0; i < fp.count; i++) {
       var fy = fp.getY(i), bend = Math.max(0, (fy - 0.1) / 0.118);
-      fp.setX(i, fp.getX(i) + Math.sin(bend * 5.8) * 0.019 * bend);
-      color.setRGB(1, 0.88 - fy * 2.8, 0.22 - fy * 0.85);
+      fp.setX(i, fp.getX(i) + Math.sin(bend * 6.8) * 0.038 * bend);
+      fp.setZ(i, fp.getZ(i) + bend * 0.035);
+      var heat = fy / 0.197;
+      color.setRGB(1, Math.max(0.015, 0.45 * Math.pow(1 - heat, 2)), 0.002);
       colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
     }
     flameShape.setAttribute("color", new THREE.BufferAttribute(colors, 3)); flameShape.computeVertexNormals();
     var outer = new THREE.Mesh(flameShape, flameMat); flame.add(outer);
-    var core = new THREE.Mesh(flameShape, coreMat); core.scale.set(0.63, 0.63, 0.52); core.position.set(0, 0.004, 0.038); flame.add(core);
-    var tongue = new THREE.Mesh(flameShape, tipMat); tongue.scale.set(0.48, 0.76, 0.5); tongue.position.set(-0.025, 0.01, -0.013); flame.add(tongue);
-    var eyes = group(flame, "eyes", 0, 0.067, 0.071);
-    ball(eyes, -0.023, 0, 0, 0.0063, 0.014, 0.0048, eyeMat);
-    ball(eyes, 0.023, 0, 0, 0.0063, 0.014, 0.0048, eyeMat);
+    var core = new THREE.Mesh(flameShape, coreMat); core.scale.set(0.59, 0.57, 0.52); core.position.set(0, 0.003, 0.043); flame.add(core);
+    var tongue = new THREE.Mesh(flameShape, tipMat); tongue.scale.set(1.09, 1.03, 1.09); tongue.position.set(0, 0, -0.003); flame.add(tongue);
+    var eyes = group(flame, "eyes", 0, 0.057, 0.084);
+    ball(eyes, -0.023, 0, 0, 0.0065, 0.015, 0.005, eyeMat);
+    ball(eyes, 0.023, 0, 0, 0.0065, 0.015, 0.005, eyeMat);
     var light = new THREE.PointLight(0xffb35a, 1.2, 4, 2); light.name = "Wick flame light";
     light.castShadow = false; root.add(light);
     var halo = null;
@@ -211,7 +228,7 @@
     var shoulders = [], elbows = [], legHips = [], knees = [], ankles = [];
     for (i = 0; i < 2; i++) {
       var sign = i === 0 ? 1 : -1, side = i === 0 ? "L" : "R";
-      var sh = group(torso, "shoulder." + side, sign * 0.12, 0.193, 0); shoulders.push(sh);
+      var sh = group(torso, "shoulder." + side, sign * 0.153, 0.18, 0); shoulders.push(sh);
       ball(sh, 0, 0, 0, 0.025, 0.028, 0.025);
       rod(sh, 0, -0.044, 0, 0.011, 0.072);
       ring(sh, 0, -0.025, 0, 0.013, Math.PI / 2);
@@ -223,15 +240,15 @@
       ball(el, 0, -0.088, 0.003, 0.018, 0.022, 0.014);
       for (j = 0; j < 3; j++) ball(el, (j - 1) * 0.011, -0.108, 0.008, 0.0065, 0.014, 0.008);
       ball(el, -sign * 0.022, -0.088, 0.01, 0.008, 0.015, 0.009);
-      var hip = group(hips, "hip." + side, sign * 0.054, 0, 0); legHips.push(hip);
-      ball(hip, 0, 0, 0, 0.023); rod(hip, 0, -0.043, 0, 0.0115, 0.069);
+      var hip = group(hips, "hip." + side, sign * 0.065, 0, 0); legHips.push(hip);
+      ball(hip, 0, 0, 0, 0.023); rod(hip, 0, -0.043, 0, 0.014, 0.069);
       var knee = group(hip, "knee." + side, 0, -0.085, 0); knees.push(knee);
-      ball(knee, 0, 0, 0, 0.019); rod(knee, 0, -0.036, 0, 0.012, 0.06);
+      ball(knee, 0, 0, 0, 0.019); rod(knee, 0, -0.036, 0, 0.014, 0.06);
       var ankle = group(knee, "ankle." + side, 0, -0.071, 0); ankles.push(ankle);
       ball(ankle, 0, 0, 0, 0.019);
       rod(ankle, 0, -0.004, 0, 0.026, 0.012);
-      ball(ankle, 0, -0.034, 0.017, 0.038, 0.028, 0.057);
-      ball(ankle, 0, -0.058, 0.018, 0.04, 0.008, 0.058, dark);
+      ball(ankle, 0, -0.034, 0.017, 0.046, 0.03, 0.065);
+      ball(ankle, 0, -0.058, 0.018, 0.048, 0.008, 0.066, dark);
       ring(ankle, 0, -0.014, 0, 0.023, Math.PI / 2);
     }
     batches.forEach(function (b) {
@@ -250,18 +267,26 @@
     // Two world-space Verlet ribbons. Every buffer/vector used below is persistent.
     var tails = [], nodes = low ? 4 : 7, segment = low ? 0.066 : 0.035;
     for (i = 0; i < 2; i++) {
-      var ribbon = geo(new THREE.BufferGeometry()), positions = new Float32Array(nodes * 6), uv = new Float32Array(nodes * 4), indices = [];
+      var ribbon = geo(new THREE.BufferGeometry()), positions = new Float32Array(nodes * 6 + 72), uv = new Float32Array(nodes * 4 + 48), indices = [];
       for (j = 0; j < nodes; j++) {
         uv[j * 4] = 0; uv[j * 4 + 1] = j / (nodes - 1); uv[j * 4 + 2] = 1; uv[j * 4 + 3] = j / (nodes - 1);
         if (j < nodes - 1) { var n = j * 2; indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2); }
       }
+      for (j = 0; j < 6; j++) {
+        var fringeBase = nodes * 2 + j * 4;
+        indices.push(fringeBase, fringeBase + 1, fringeBase + 2, fringeBase + 1, fringeBase + 3, fringeBase + 2);
+        for (var fv = 0; fv < 4; fv++) {
+          uv[fringeBase * 2 + fv * 2] = (j + (fv % 2)) / 6;
+          uv[fringeBase * 2 + fv * 2 + 1] = 1 + (fv > 1 ? 0.08 : 0);
+        }
+      }
       ribbon.setAttribute("position", new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-      ribbon.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(nodes * 6), 3).setUsage(THREE.DynamicDrawUsage));
+      ribbon.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(nodes * 6 + 72), 3).setUsage(THREE.DynamicDrawUsage));
       ribbon.setAttribute("uv", new THREE.BufferAttribute(uv, 2)); ribbon.setIndex(indices);
       var tailMesh = new THREE.Mesh(ribbon, scarfMat); tailMesh.name = "scarf tail " + i; tailMesh.castShadow = true; tailMesh.frustumCulled = false; root.add(tailMesh);
       var current = [], previous = [];
       for (j = 0; j < nodes; j++) { current.push(new THREE.Vector3()); previous.push(new THREE.Vector3()); }
-      tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.105 - i * 0.013, 0.235, 0.065 - i * 0.026),
+      tails.push({ geometry: ribbon, current: current, previous: previous, anchor: new THREE.Vector3(-0.09 - i * 0.045, 0.235, 0.124 - i * 0.008),
         pin: new THREE.Vector3(), width: new THREE.Vector3(), lastDt: 1 / 120, length: segment * (i ? 0.87 : 1) });
     }
     var rootWorld = new THREE.Vector3(), lastWorld = new THREE.Vector3(), movement = new THREE.Vector3();
@@ -300,7 +325,7 @@
               else { correction.multiplyScalar(0.5); cur[ni].sub(correction); cur[ni - 1].add(correction); }
               // Expanded torso ellipsoid; test in torso space so turns/parenting work.
               local.copy(cur[ni]).applyMatrix4(torsoInverse); local.y -= 0.112;
-              var d = Math.sqrt(local.x * local.x / 0.021025 + local.y * local.y / 0.021025 + local.z * local.z / 0.018225);
+              var d = Math.sqrt(local.x * local.x / 0.0396 + local.y * local.y / 0.024 + local.z * local.z / 0.0342);
               if (d < 1) { local.multiplyScalar(1 / Math.max(d, 0.0001)); local.y += 0.112; cur[ni].copy(local).applyMatrix4(torso.matrixWorld); }
             }
           }
@@ -309,7 +334,9 @@
         }
         var array = tail.geometry.attributes.position.array;
         for (ni = 0; ni < nodes; ni++) {
-          var half = 0.038 * (1 - 0.13 * ni / (nodes - 1));
+          var along = ni / (nodes - 1), twist = 0.25 + along * (ti ? -0.85 : 0.65);
+          tail.width.set(Math.cos(twist), 0.12 * Math.sin(along * 3), Math.sin(twist)).transformDirection(torso.matrixWorld);
+          var half = 0.041 * (1 - 0.19 * along);
           local.copy(cur[ni]).addScaledVector(tail.width, -half).applyMatrix4(rootInverse);
           local2.copy(cur[ni]).addScaledVector(tail.width, half).applyMatrix4(rootInverse);
           var at = ni * 6; array[at] = local.x; array[at + 1] = local.y; array[at + 2] = local.z;
@@ -329,11 +356,24 @@
           normal[base + 1] = normal[base + 4] = ny * inv;
           normal[base + 2] = normal[base + 5] = nz * inv;
         }
+        // Fringe follows the final tangent and inherits the ribbon's tip normal.
+        var end = (nodes - 1) * 6, prior = end - 6;
+        var dx = array[end] - array[prior], dy = array[end + 1] - array[prior + 1], dz = array[end + 2] - array[prior + 2];
+        var norm = 1 / Math.max(0.0001, Math.sqrt(dx * dx + dy * dy + dz * dz));
+        for (var fringe = 0; fringe < 6; fringe++) for (var corner = 0; corner < 4; corner++) {
+          var fraction = (fringe + (corner % 2 ? 0.86 : 0.08)) / 6;
+          var tassel = corner > 1 ? 0.013 + (fringe % 3) * 0.0025 : 0;
+          var fa = nodes * 6 + fringe * 12 + corner * 3;
+          array[fa] = array[end] + (array[end + 3] - array[end]) * fraction + dx * norm * tassel;
+          array[fa + 1] = array[end + 1] + (array[end + 4] - array[end + 1]) * fraction + dy * norm * tassel;
+          array[fa + 2] = array[end + 2] + (array[end + 5] - array[end + 2]) * fraction + dz * norm * tassel;
+          normal[fa] = normal[end]; normal[fa + 1] = normal[end + 1]; normal[fa + 2] = normal[end + 2];
+        }
         tail.geometry.attributes.normal.needsUpdate = true;
       }
       lastWorld.copy(rootWorld); scarfInitialized = true;
     }
-    var currentAnim = "idle", animTime = 0, phase = 0, glow = 1, requestedGlow = 1, keyAngle = 0;
+    var currentAnim = "idle", animTime = 0, phase = Math.PI * 2 - 0.6, glow = 1, requestedGlow = 1, keyAngle = 0;
     var weights = new Float64Array(7), animTimes = new Float64Array(7), elapsed = 0; weights[0] = 1;
     var blinkClock = 0, nextBlink = 2.8, blinkAge = -1, air = 0;
     var stepEvents = [{ foot: "L" }, { foot: "R" }];
@@ -366,13 +406,13 @@
         var newContact = Math.floor(phase / Math.PI);
         if ((currentAnim === "walk" || currentAnim === "climb") && grounded && speed > 0.01) {
           for (var contact = oldContact + 1; contact <= newContact; contact++) {
-            if (typeof hero.onStep === "function") { try { hero.onStep(stepEvents[contact % 2]); } catch (_) { /* Engine callbacks cannot break animation. */ } }
+            if (typeof hero.onStep === "function") { try { hero.onStep(stepEvents[(contact + 1) % 2]); } catch (_) { /* Engine callbacks cannot break animation. */ } }
           }
         }
         air += ((grounded ? 0 : 1) - air) * ease;
         var s = Math.sin(phase), hop = Math.pow(Math.max(0, Math.sin(animTimes[3] * 5)), 2);
-        hips.position.y = 0.222 - gait * 0.156 * (1 - Math.cos(s * (0.48 + climb * 0.2)))
-          + celebrate * 0.048 * hop + wave * (0.005 + 0.004 * Math.sin(t * 5)) - ride * 0.017;
+        hips.position.y = 0.222
+          + celebrate * 0.048 * hop + wave * (0.005 + 0.004 * Math.sin(t * 5));
         torso.rotation.x = 0.09 * walk + 0.19 * climb;
         torso.rotation.z = gait * 0.025 * s + ride * Math.sin(t * 3) * 0.045 + bump * Math.sin(animTimes[4] * 22) * Math.exp(-animTimes[4] * 4) * 0.11;
         torso.scale.y = 1 + 0.008 * Math.sin(t * 2.6);
@@ -383,16 +423,25 @@
         head.rotation.x = bump * 0.12 - torso.rotation.x * 0.65;
         for (var li = 0; li < 2; li++) {
           var sideSign = li === 0 ? 1 : -1, swing = s * sideSign;
-          legHips[li].rotation.x = -gait * swing * (0.48 + climb * 0.2) - air * 0.55 - ride * 0.21;
+          legHips[li].rotation.x = -gait * swing * (0.66 + climb * 0.32) - air * 0.55 - ride * 0.38;
           legHips[li].rotation.z = sideSign * (ride * 0.13 + celebrate * 0.05);
-          knees[li].rotation.x = gait * Math.max(0, swing) * (0.96 + climb * 0.65) + air * 1.1 + ride * 0.42;
+          knees[li].rotation.x = gait * Math.max(0, swing) * (1.8 + climb * 0.6) + air * 1.1 + ride * 0.76;
           ankles[li].rotation.x = -legHips[li].rotation.x - knees[li].rotation.x;
           ankles[li].rotation.z = -legHips[li].rotation.z;
-          shoulders[li].rotation.x = gait * swing * 0.55 + Math.sin(t * 2 + li) * 0.035 - bump * (li ? 0.8 : 0.05);
-          shoulders[li].rotation.z = sideSign * (0.12 + celebrate * 2.35 + ride * 0.55 + wave * (li ? 2.2 : 0));
+          shoulders[li].rotation.x = gait * swing * (0.65 + climb * 0.2) + Math.sin(t * 2 + li) * 0.035 - bump * (li ? 0.8 : 0.05);
+          shoulders[li].rotation.z = sideSign * (0.18 + celebrate * 2.65 + ride * 0.85 + wave * (li ? 2.45 : 0) + bump * (li ? 0.9 : 0));
           elbows[li].rotation.x = -0.13 - gait * (0.2 + Math.max(0, -swing) * 0.25) - celebrate * 0.35 - bump * (li ? 0.8 : 0);
           elbows[li].rotation.z = wave * (li ? Math.sin(t * 9) * 0.5 - 0.3 : 0) + sideSign * celebrate * 0.25;
         }
+        // Plant the lower sole analytically; the opposite knee supplies foot lift.
+        // This also produces the 0.03-unit walking bob without floor penetration.
+        var plantHeight = 0;
+        for (li = 0; li < 2; li++) {
+          var hipX = legHips[li].rotation.x, kneeX = knees[li].rotation.x;
+          var reach = (0.085 * Math.cos(hipX) + 0.071 * Math.cos(hipX + kneeX)) * Math.cos(legHips[li].rotation.z) + 0.066;
+          plantHeight = Math.max(plantHeight, reach);
+        }
+        hips.position.y += (plantHeight - 0.222) * Math.min(1, gait + ride) * (1 - air);
         keyAngle += dt * (0.32 + gait * speed * 2.8); key.rotation.z = keyAngle;
         needle.rotation.z = -0.65 + Math.sin(t * 0.8) * 0.23 + Math.sin(t * 3.1) * 0.045;
         blinkClock += dt;
@@ -403,12 +452,13 @@
         var glowTarget = requestedGlow + (2 - requestedGlow) * celebrate;
         glow += (glowTarget - glow) * (1 - Math.exp(-dt * 7));
         var flicker = 1 + 0.035 * Math.sin(t * 17) + 0.021 * Math.sin(t * 29 + 1) + bump * 0.045 * Math.sin(t * 51);
-        var flameSize = (0.82 + glow * 0.18) * (1 + celebrate * 0.5);
-        // Flare sideways; compress the curled tip as it approaches the cap.
-        flame.scale.set(flameSize * (2 - flicker), Math.min(1.025, flameSize * flicker), flameSize);
+        var flameSize = (0.82 + glow * 0.18) * (1 + celebrate * 0.28);
+        // A broad flare stays inside the glass, with breathing room below the cap.
+        flame.scale.set(flameSize * (2 - flicker), Math.min(1.07, flameSize * flicker), flameSize);
         flame.rotation.z = Math.sin(t * 11) * 0.025 + gait * s * 0.03;
         outer.scale.x = 1 + Math.sin(t * 13) * 0.025;
-        tongue.scale.y = 0.76 + Math.sin(t * 19) * 0.06;
+        tongue.scale.y = 1.03 + Math.sin(t * 19) * 0.025;
+        flameMat.emissiveIntensity = 2.8 * (0.65 + glow * 0.35) * flicker;
         if (halo) { halo.scale.setScalar(0.47 * (0.85 + glow * 0.15)); halo.material.opacity = 0.65 * glow; }
         updateScarf(dt, t);
         temp.set(0, 0.105, 0).applyMatrix4(head.matrixWorld).applyMatrix4(rootInverse); light.position.copy(temp);

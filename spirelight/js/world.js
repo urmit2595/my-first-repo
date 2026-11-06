@@ -513,26 +513,26 @@
   // Makes brass/copper gleam; kept low so matte stone stays matte.
   function buildEnv(name) {
     try {
-      if (!renderer || !T.PMREMGenerator) return;
+      if (!renderer || !T.PMREMGenerator || World.noEnv) return;
       const d = DATA[name];
-      const lin = (h) => new T.Color(h).convertSRGBToLinear();
-      const kd = new T.Vector3(d.keyDir[0], d.keyDir[1], d.keyDir[2]).normalize();
-      const mat = new T.ShaderMaterial({
-        side: T.BackSide, depthWrite: false, toneMapped: false,
-        uniforms: { uTop: { value: lin(d.skyTop).lerp(lin(d.hemiSky), 0.5) }, uMid: { value: lin(d.skyMid) }, uLow: { value: lin(d.skyLow) },
-          uGround: { value: lin(d.hemiGround) }, uSun: { value: kd }, uSunCol: { value: lin(d.keyCol) } },
-        vertexShader: "varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-        fragmentShader: "precision highp float; varying vec3 vD; uniform vec3 uTop, uMid, uLow, uGround, uSun, uSunCol;" +
-          "void main(){ vec3 n = normalize(vD); float y = n.y;" +
-          " vec3 c = mix(uLow, uMid, smoothstep(0.0, 0.35, y)); c = mix(c, uTop, smoothstep(0.3, 0.9, y));" +
-          " c = mix(c, uGround, smoothstep(0.0, -0.4, y));" +
-          " float s = max(dot(n, uSun), 0.0); c += uSunCol * (pow(s, 24.0) * 2.2 + pow(s, 4.0) * 0.35);" +
-          " gl_FragColor = vec4(c * 0.8, 1.0); }",
-      });
-      const es = new T.Scene(); es.add(new T.Mesh(new T.SphereGeometry(50, 32, 16), mat));
+      const hex = (h) => "#" + ("000000" + h.toString(16)).slice(-6);
+      const W = 256, H = 128, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const g = cv.getContext("2d");
+      const gr = g.createLinearGradient(0, 0, 0, H);
+      gr.addColorStop(0, hex(d.skyTop)); gr.addColorStop(0.3, hex(d.skyMid)); gr.addColorStop(0.5, hex(d.skyLow));
+      gr.addColorStop(0.62, hex(d.hemiGround)); gr.addColorStop(1, hex(d.hemiGround));
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      // bright patch on the key-light side (equirect: u = atan2(z,x)/2pi + .5, v from the top = 0.5 - asin(y)/pi)
+      const kx = d.keyDir[0], ky = d.keyDir[1], kz = d.keyDir[2], kl = Math.sqrt(kx * kx + ky * ky + kz * kz);
+      const su = (Math.atan2(kz, kx) / (2 * Math.PI) + 0.5) * W, sv = (0.5 - Math.asin(ky / kl) / Math.PI) * H;
+      for (const ox of [-W, 0, W]) {
+        const rg = g.createRadialGradient(su + ox, sv, 0, su + ox, sv, 34);
+        rg.addColorStop(0, hex(d.keyCol)); rg.addColorStop(0.25, hex(d.keyCol) + "aa"); rg.addColorStop(1, hex(d.keyCol) + "00");
+        g.fillStyle = rg; g.fillRect(0, 0, W, H);
+      }
+      const tex = new T.CanvasTexture(cv); tex.encoding = T.sRGBEncoding; tex.mapping = T.EquirectangularReflectionMapping;
       if (!S.pmrem) S.pmrem = new T.PMREMGenerator(renderer);
-      const rt = S.pmrem.fromScene(es, 0.02);
-      es.children[0].geometry.dispose(); mat.dispose();
+      const rt = S.pmrem.fromEquirectangular(tex); tex.dispose();
       const old = S.envRT; S.envRT = rt;
       scene.environment = rt.texture; World.envMap = rt.texture;
       if (old) old.dispose();

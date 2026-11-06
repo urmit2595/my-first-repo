@@ -2481,3 +2481,534 @@ Emitted 'error' event on Server instance at:
 
 Node.js v22.23.4
 
+exec
+/bin/bash -lc "node <<'NODE'
+const { chromium } = require('playwright');
+(async () => {
+ let browser;
+ try {
+  browser = await chromium.launch({args:['--use-gl=swiftshader','--enable-webgl','--ignore-gpu-blocklist','--autoplay-policy=no-user-gesture-required']});
+  const page = await browser.newPage();
+  await page.goto('file://' + process.cwd() + '/tests/fx.html?script=0');
+  console.log(await page.title());
+ } finally { if(browser) await browser.close(); }
+})().catch(e => {console.error(e.message); process.exitCode=1;});
+NODE" in /home/user/my-first-repo/spirelight
+ exited 1 in 364ms:
+browserType.launch: Target page, context or browser has been closed
+Browser logs:
+
+<launching> /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --use-gl=swiftshader --enable-webgl --ignore-gpu-blocklist --autoplay-policy=no-user-gesture-required --user-data-dir=/tmp/playwright_chromiumdev_profile-gXLlhI --remote-debugging-pipe --no-startup-window
+<launched> pid=14
+[pid=14][err] [1106/203550.395839:FATAL:content/browser/sandbox_host_linux.cc:41] Check failed: . shutdown: Operation not permitted (1)
+Call log:
+[2m  - <launching> /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --use-gl=swiftshader --enable-webgl --ignore-gpu-blocklist --autoplay-policy=no-user-gesture-required --user-data-dir=/tmp/playwright_chromiumdev_profile-gXLlhI --remote-debugging-pipe --no-startup-window[22m
+[2m  - <launched> pid=14[22m
+[2m  - [pid=14][err] [1106/203550.395839:FATAL:content/browser/sandbox_host_linux.cc:41] Check failed: . shutdown: Operation not permitted (1)[22m
+[2m  - [pid=14] <gracefully close start>[22m
+[2m  - [pid=14] <kill>[22m
+[2m  - [pid=14] <will force kill>[22m
+[2m  - [pid=14] exception while trying to kill process: Error: kill ESRCH[22m
+[2m  - [pid=14] <process did exit: exitCode=null, signal=SIGTRAP>[22m
+[2m  - [pid=14] starting temporary directories cleanup[22m
+[2m  - [pid=14] finished temporary directories cleanup[22m
+[2m  - [pid=14] <gracefully close end>[22m
+
+
+exec
+/bin/bash -lc "ls /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build; git diff --stat -- js/fx.js tests/fx.html; rg -n 'new |\\.ignite|worldPos|function frame' js/fx.js" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+three.js
+three.min.js
+three.module.js
+7:  var pool = new Float32Array(MAX * STRIDE), kind = new Uint8Array(MAX);
+8:  var serial = new Float64Array(MAX), sequence = 0, carry = 0;
+10:  var glow, dust, ringMesh, texture, ringData = new Float32Array(24 * 10);
+63:      if (d && typeof d.worldPos === "function") {
+64:        out.copy(d.worldPos(out)); return true;
+140:    var geo = new T.BufferGeometry();
+141:    var data = { position: new Float32Array(MAX * 3), color: new Float32Array(MAX * 3),
+142:      size: new Float32Array(MAX), alpha: new Float32Array(MAX) };
+144:      geo.setAttribute(key, new T.BufferAttribute(data[key], key === "position" || key === "color" ? 3 : 1)
+148:    var mat = new T.ShaderMaterial({
+155:    var obj = new T.Points(geo, mat); obj.frustumCulled = false; obj.name = "FX particles"; root.add(obj);
+470:    ctx = new Audio();
+618:  function frame(now) {
+674:      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); scale = new T.Vector3();
+675:      matrix = new T.Matrix4(); rotation = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -Math.PI / 2);
+676:      colour = new T.Color(); ray = new T.Raycaster(); ndc = new T.Vector2(); plane = new T.Plane(new T.Vector3(0, 1, 0), -1);
+677:      root = new T.Group(); root.name = "Spirelight FX"; G.scene.add(root);
+682:      draw.fillStyle = gradient; draw.fillRect(0, 0, 64, 64); texture = new T.CanvasTexture(canvas);
+684:      ringMesh = new T.InstancedMesh(new T.RingGeometry(0.91, 1, 48), new T.MeshBasicMaterial({
+
+codex
+The fixes are in place and syntax checking passes. Browser verification is blocked here: `tools/shot.js` cannot bind its local server (`EPERM`), and a direct Chromium launch is also denied. I’ll test the event handlers, particle limits, cascade timing, and harness in Node with real Three.js objects; audio tests will use a mock context.
+
+exec
+/bin/bash -lc "node <<'NODE'
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const THREE = require('./tools/harness').VENDOR + '/three/build/three.js';
+const T = require(THREE);
+const source = fs.readFileSync('js/fx.js', 'utf8');
+const html = fs.readFileSync('tests/fx.html', 'utf8');
+const scripts = [...html.matchAll(/<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)<\\/script>/g)].map(m => m[1]).filter(Boolean);
+for (const script of scripts) new vm.Script(script);
+function environment(query = '?script=0') {
+  let queue = [], frames = [], time = 0, sources = 0, contexts = 0;
+  const errors = [], nodes = [];
+  function element() {
+    return { style: {}, children: [], clientWidth: 1280, clientHeight: 720, listeners: {},
+      appendChild(c) { this.children.push(c); c.parentNode = this; },
+      insertBefore(c, before) { const i = this.children.indexOf(before); this.children.splice(i < 0 ? this.children.length : i, 0, c); c.parentNode = this; },
+      setAttribute() {}, remove() {}, addEventListener(n, fn) { this.listeners[n] = fn; },
+      getBoundingClientRect() { return {width:1280,height:720,left:0,top:0}; },
+      animate() { return {playbackRate:1,cancel(){}}; },
+      getContext() { return {createRadialGradient(){return {addColorStop(){}};},fillRect(){}}; }
+    };
+  }
+  function param() { return {value:0,setValueAtTime(v){this.value=v;},linearRampToValueAtTime(v){this.value=v;},exponentialRampToValueAtTime(v){this.value=v;},cancelAndHoldAtTime(){},cancelScheduledValues(){}}; }
+  function node() {
+    const n = {gain:param(),frequency:param(),detune:param(),Q:param(),threshold:param(),knee:param(),ratio:param(),attack:param(),release:param(),connect(){},disconnect(){},start(){sources++;},stop(){}};
+    nodes.push(n); return n;
+  }
+  class AudioContext {
+    constructor(){contexts++;this.state='suspended';this.currentTime=0;this.sampleRate=2000;this.destination=node();}
+    resume(){this.state='running';return Promise.resolve();}
+    createGain(){return node();} createDynamicsCompressor(){return node();} createConvolver(){return node();}
+    createOscillator(){return node();} createBiquadFilter(){return node();} createBufferSource(){return node();}
+    createBuffer(channels,length){const data=Array.from({length:channels},()=>new Float32Array(length));return {getChannelData(i){return data[i];}};}
+  }
+  const scene = new T.Scene(), camera = new T.OrthographicCamera(-10,10,6,-6,-200,400);
+  camera.position.set(53,51,53);camera.lookAt(3,1,3);camera.updateMatrixWorld();
+  const document = {body:element(),createElement(){return element();}};
+  const tb = {THREE:T,scene,camera,renderer:{domElement:{height:720}},onFrame(fn){frames.push(fn);}};
+  const sandbox = {THREE:T,document,AudioContext,URLSearchParams,location:{search:query},matchMedia(){return {matches:false};},
+    console:{error(e){errors.push(String(e && e.stack || e));}},addEventListener(){},removeEventListener(){},devicePixelRatio:1,
+    requestAnimationFrame(fn){queue.push(fn);return queue.length;},cancelAnimationFrame(){},
+    Testbed:{start(opts,setup){setup(tb);}}};
+  sandbox.window=sandbox;vm.createContext(sandbox);
+  vm.runInContext(scripts[0],sandbox);vm.runInContext(source,sandbox);vm.runInContext(scripts[1],sandbox);
+  function render(dt=0) { time+=dt;sandbox.Game.time=time;frames.forEach(fn=>fn(dt,time));const run=queue;queue=[];run.forEach(fn=>fn(time*1000)); }
+  function advance(seconds){for(let i=0;i<Math.ceil(seconds/.05);i++)render(.05);}
+  render();
+  return {s:sandbox,errors,render,advance,root:scene.getObjectByName('Spirelight FX'),stats(){return {sources,contexts};},nodes};
+}
+function positions(h,blend){const obj=h.root.children.find(o=>o.isPoints && o.material.blending===blend);return Array.from(obj.geometry.attributes.position.array.slice(0,obj.geometry.drawRange.count*3));}
+function ringPosition(h){h.render();const mat=new T.Matrix4();h.root.children.find(o=>o.isInstancedMesh).getMatrixAt(0,mat);return [mat.elements[12],mat.elements[13],mat.elements[14]];}
+function near(actual,expected){assert.equal(actual.length,expected.length);actual.forEach((v,i)=>assert(Math.abs(v-expected[i])<1e-5,"'`${actual} != ${expected}`));}
+(async()=>{
+ const h=environment(),s=h.s,FX=s.FX,G=s.Game;
+ assert.equal(s.__fxBeforeSetup.audio,'"'locked');assert.equal(h.stats().contexts,0);assert.equal(FX.debug().ambient,78);
+ assert.equal(h.root.children.length,3);assert.equal(G.scene.children.filter(o=>o.name==='Spirelight FX').length,1);
+ const clear=()=>s.__fxFire('restart');
+ function fire(name,data){clear();s.__fxFire(name,data);h.render();return FX.debug();}
+ let d=fire('plate',{tile:'absent',pos:[9,2,8]});assert.equal(d.live,94);assert.equal(d.rings,1);near(ringPosition(h),[9,2.02,8]);
+ d=fire('glimmer',{tile:'absent',pos:[9,2,8]});assert.equal(d.live,98);near(positions(h,T.AdditiveBlending).slice(-60,-57),[9,2,8]);
+ fire('tap',{tile:'start',pos:[9,2,8]});near(ringPosition(h),[9,2.02,8]);
+ fire('tapUnreachable',{tile:null,pos:null,x:640,y:360});assert.equal(FX.debug().rings,1);near([ringPosition(h)[1]],[1.02]);
+ for(const name of ['plate','glimmer','tap']) { d=fire(name,{pos:null,tile:name==='glimmer'?'g1':'p1'});assert(d.live>78||d.rings===1); }
+ fire('tap',{pos:null,tile:'bridge_1'});near(ringPosition(h),[5,.60,3]);
+ const originalTransform=G.geom.transform;G.geom.transform=()=>({R:[0,0,1,0,1,0,-1,0,0],pivot:[1,0,1],offset:[2,1,3]});
+ fire('tap',{pos:null,tile:'start'});near(ringPosition(h),[5.5,1.60,3.5]);G.geom.transform=originalTransform;
+ for(const name of ['mechTick','mechSnap']) {d=fire(name,{id:'absent',pos:[9,2,8]});assert(d.live>78);near(positions(h,T.AdditiveBlending).slice(-3),[9,2,8]);if(name==='mechSnap')near(ringPosition(h),[9,2.02,8]);}
+ fire('mechSnap',{pos:null});near(ringPosition(h),[5,.60,3]);
+ const savedHandle=G.groups.bridge.handle;delete G.groups.bridge.handle;d=fire('mechTick',{pos:null});assert.equal(d.live,82);G.groups.bridge.handle=savedHandle;
+ const parent=new T.Object3D();parent.position.set(7,2,-1);G.scene.add(parent);parent.add(G.hero.object3D);
+ clear();for(let i=0;i<3;i++)s.__fxFire('heroStep');h.render();assert.equal(FX.debug().live,83);near(positions(h,T.NormalBlending).slice(-15,-12),[8.5,2.58,2.5]);
+ d=fire('junction',{at:[9,2,8]});assert.equal(d.live,86);near(ringPosition(h),[9,2.02,8]);
+ d=fire('path');assert(d.live>78);
+ // The engine owns ignite; the cascade must omit beacon decor even if it offers setLit.
+ G.decor[6].object3D.userData.setLit=()=>{throw Error('FX tried to light the beacon again');};
+ const target=new T.Vector3();for(const decor of G.decor)assert.strictEqual(decor.worldPos(target),target);
+ fire('beacon');h.advance(.1);assert.equal(s.__fxIgnitions,1);assert.equal(s.__fxLit.length,1);
+ s.__fxFire('pause',{paused:true});const frozen=FX.debug().live;h.advance(1);assert.equal(s.__fxLit.length,1);assert.equal(FX.debug().live,frozen);
+ s.__fxFire('pause',{paused:false});h.advance(2.1);assert.equal(s.__fxLit.length,6);assert(s.__fxLit.every(x=>"'!x.instant));
+ const origin=new T.Vector3(4.5,3.95,1.5);const order=G.decor.slice(0,6).map((d,i)=>({i,dist:d.worldPos(target).distanceToSquared(origin)})).sort((a,b)=>a.dist-b.dist).map(x=>x.i);
+ assert.equal(JSON.stringify(s.__fxLit.map(x=>x.index)),JSON.stringify(order));
+ assert.equal(s.__fxIgnitions,1);
+ d=fire('"'levelComplete');assert.equal(d.live,138);
+ clear();for(let i=0;i<200;i++){s.__fxFire('glimmer');s.__fxFire('plate');}h.render();d=FX.debug();assert.equal(d.live,1500);assert.equal(d.rings,24);assert(d.drawCalls<=8);
+ clear();assert.equal(FX.debug().live,78);assert.equal(FX.debug().rings,0);h.advance(3);assert.equal(FX.debug().live,78);
+ assert.equal(FX.debug().audio,'locked');assert.equal(h.stats().contexts,0);
+ const before=FX.debug().played.click;FX.sound('click');assert.equal(FX.debug().played.click,before+1);
+ await FX.unlock();assert.equal(FX.debug().audio,'running');assert.equal(FX.debug().music.running,true);
+ for(const name of Object.keys(FX.debug().played)){const before=FX.debug().played[name];FX.sound(name);assert.equal(FX.debug().played[name],before+1);}
+ const n=h.stats().sources;FX.sound('tick');FX.sound('tick');assert.equal(h.stats().sources,n);
+ G.save.sound=false;const muted=h.stats().sources;FX.sound('click');assert.equal(h.stats().sources,muted);
+ G.state='loading';h.advance(.3);assert.equal(FX.debug().music.running,false);
+ G.state='title';h.advance(.3);assert.equal(FX.debug().music.running,true);
+ G.save.music=false;h.advance(1);assert.equal(FX.debug().music.running,false);
+ const reduced=environment('?script=0&reduced');assert.equal(reduced.s.FX.debug().ambient,39);assert.equal(reduced.s.FX.debug().poolSize,750);
+ reduced.s.__fxFire('quality',{level:'low'});assert.equal(reduced.s.FX.debug().poolSize,375);assert.equal(reduced.s.FX.debug().ambient,19);
+ const mutedPage=environment('?script=0&sound=0&music=0');await mutedPage.s.FX.unlock();assert.equal(mutedPage.s.FX.debug().audio,'running');assert.equal(mutedPage.s.FX.debug().music.running,false);assert.equal(mutedPage.stats().sources,0);
+ const full=environment('');full.advance(20);assert.equal(full.s.__fxIgnitions,1);assert.equal(full.s.__fxLit.length,6);assert.equal(full.s.Game.state,'complete');
+ const only=environment('?only=heroStep');only.advance(.65);assert(only.s.FX.debug().live>78);
+ for(const test of [h,reduced,mutedPage,full,only])assert.deepEqual(test.errors,[]);
+ console.log(JSON.stringify({result:'PASS',checks:'payload precedence, tile transform/raycast fallbacks, world-space hero dust, junction, handle/pivot, vector decor, cascade order/pause/ignition, all scripted events, request counts, mocked audio resume/music/settings, idempotence, particle/ring ceilings',normalAmbient:78,reducedAmbient:39,poolMax:1500,ringsMax:24,fxRenderObjects:h.root.children.length,errors:h.errors},null,2));
+})().catch(e=>{console.error(e);process.exitCode=1;});
+NODE" in /home/user/my-first-repo/spirelight
+ succeeded in 391ms:
+{
+  "result": "PASS",
+  "checks": "payload precedence, tile transform/raycast fallbacks, world-space hero dust, junction, handle/pivot, vector decor, cascade order/pause/ignition, all scripted events, request counts, mocked audio resume/music/settings, idempotence, particle/ring ceilings",
+  "normalAmbient": 78,
+  "reducedAmbient": 39,
+  "poolMax": 1500,
+  "ringsMax": 24,
+  "fxRenderObjects": 3,
+  "errors": []
+}
+
+exec
+/bin/bash -lc "node --check js/fx.js; git status --short -- js/fx.js tests/fx.html; git ls-files -v -- js/fx.js tests/fx.html; sed -n '40,100p' js/fx.js; sed -n '285,355p' js/fx.js; sed -n '420,525p' js/fx.js; sed -n '95,195p' tests/fx.html" in /home/user/my-first-repo/spirelight
+ succeeded in 0ms:
+H js/fx.js
+H tests/fx.html
+    var y = p.y !== undefined ? p.y : p[1];
+    var z = p.z !== undefined ? p.z : p[2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return false;
+    out.set(x, y, z); return true;
+  }
+  function point(value, out) {
+    if (typeof value !== "string") return false;
+    if (!G.geom || typeof G.geom.walkable !== "function") return false;
+    var w = G.geom.walkable(value);
+    if (!w || !readPoint(w.stand, out)) return false;
+    if (typeof G.geom.transform !== "function" || w.group == null) return true;
+    try {
+      var tr = G.geom.transform(w.group), r = tr && tr.R;
+      if (!r || r.length !== 9 || !readPoint(tr.pivot, b) || !readPoint(tr.offset, c)) return true;
+      var x = out.x - b.x, y = out.y - b.y, z = out.z - b.z;
+      out.set(r[0] * x + r[1] * y + r[2] * z + b.x + c.x,
+        r[3] * x + r[4] * y + r[5] * z + b.y + c.y,
+        r[6] * x + r[7] * y + r[8] * z + b.z + c.z);
+    } catch (e) { report(e); }
+    return true;
+  }
+  function decorPoint(d, out) {
+    try {
+      if (d && typeof d.worldPos === "function") {
+        out.copy(d.worldPos(out)); return true;
+      }
+      if (d && d.object3D && d.object3D.getWorldPosition) {
+        d.object3D.getWorldPosition(out); return true;
+      }
+    } catch (e) { report(e); }
+    return false;
+  }
+  function handlePoint(id, out) {
+    var g = G.groups && G.groups[id];
+    var obj = g && ((g.handle && g.handle.object3D) || g.pivotNode);
+    if (!obj || !obj.getWorldPosition) return false;
+    obj.getWorldPosition(out); return true;
+  }
+  function heroPoint(out) {
+    var obj = G.hero && G.hero.object3D;
+    if (!obj || !obj.getWorldPosition) return false;
+    obj.getWorldPosition(out); return true;
+  }
+  function tapPoint(d, out) {
+    if (readPoint(d.pos, out)) return true;
+    if (d.tile != null && point(d.tile, out)) return true;
+    if (!G.camera || !G.root || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return false;
+    // Event coordinates are CSS pixels within root, per the Game contract.
+    var rect = G.root.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    ndc.set(d.x / rect.width * 2 - 1, 1 - d.y / rect.height * 2);
+    ray.setFromCamera(ndc, G.camera);
+    return !!ray.ray.intersectPlane(plane, out);
+  }
+  function scaled(n) {
+    carry += n * factor;
+    var count = Math.floor(carry + 1e-6); carry -= count; return count;
+  }
+  function slot() {
+    var oldest = Infinity, found = -1;
+    for (var i = 0; i < budget; i++) {
+    }
+  }
+  function heroStep(d) {
+    sound("footstep"); step++;
+    if (step % 3 === 0 && heroPoint(a)) burst(a, 5, SAND, 0.5, 0.3, 1, 0.03);
+    if (Number.isFinite(d.k) && d.k !== 0) {
+      if (!readPoint(d.at, a) && !point(d.from, a) && !heroPoint(a)) return;
+      burst(a, 8, TEAL, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
+    }
+  }
+  function mechanism(name, d) {
+    if (name === "mechTick") sound("tick");
+    if (name === "mechSnap") sound("snap");
+    if (name === "mechLocked") sound("locked");
+    var positioned = readPoint(d.pos, a);
+    if (!positioned && !handlePoint(d.id, a)) return;
+    if (name === "mechGrab") burst(a, 3, BRASS, 0.45, 0.45, 0);
+    if (name === "mechMove") {
+      if (moveFrame === frameId) return; moveFrame = frameId;
+      burst(a, 1, BRASS, 0.28, 0.3, 0, 0.012); burst(a, 1, SAND, 0.35, 0.2, 1, 0.018);
+    }
+    if (name === "mechTick") { burst(a, 3, SAND, 0.35, 0.25, 1); burst(a, 1, BRASS, 0.3, 0.6, 0); }
+    if (name === "mechSnap") {
+      burst(a, 10, BRASS, 0.65, 0.8, 0); burst(a, 7, SAND, 0.6, 0.4, 1);
+      var g = G.groups && G.groups[d.id];
+      if (!positioned && g && g.pivotNode && g.pivotNode.getWorldPosition) g.pivotNode.getWorldPosition(a);
+      ring(a, GOLD, 1, 0.65, 0.5);
+    }
+    if (name === "mechLocked") burst(a, 4, 0xa38e7b, 0.4, 0.2, 1);
+  }
+  function plate(d) {
+    sound("plate"); if (!readPoint(d.pos, a) && !point(d.tile, a)) return;
+    ring(a, 0xffbd68, 1.5, 0.8, 0.6);
+    var count = scaled(16);
+    for (var i = 0; i < count; i++) {
+      var angle = i / count * Math.PI * 2;
+      c.set(a.x + Math.cos(angle) * 0.25, a.y + 0.025, a.z + Math.sin(angle) * 0.25);
+      particle(c, SAND, 0.025, 0.35, 0.65, Math.cos(angle) * 0.5, 0.12, Math.sin(angle) * 0.5, 1);
+    }
+  }
+  function complete() {
+    sound("complete");
+    for (var i = 0, n = scaled(60); i < n; i++) {
+      randomPoint(a); particle(a, i % 3 ? BRASS : GOLD, 0.016, 0.8, 4,
+        (Math.random() - 0.5) * 0.15, 0.3 + Math.random() * 0.2, (Math.random() - 0.5) * 0.15);
+    }
+  }
+  function bind(name, fn) {
+    if (!G.bus || typeof G.bus.on !== "function") return;
+    var handler = guarded(fn); bindings.push({ name: name, handler: handler }); G.bus.on(name, handler);
+  }
+  function events() {
+    bind("tap", function (d) {
+      if (d.reachable === false) sound("tk");
+      if (tapPoint(d, a)) ring(a, d.reachable === false ? 0xff6b6b : GOLD,
+        d.reachable === false ? 0.8 : 1.1, d.reachable === false ? 0.42 : 0.6, d.reachable === false ? 0.35 : 0.65);
+    });
+    bind("path", path); bind("heroStep", heroStep);
+    ["mechGrab", "mechMove", "mechTick", "mechSnap", "mechLocked"].forEach(function (name) {
+      bind(name, function (d) { mechanism(name, d); });
+    });
+    bind("plate", plate);
+    bind("glimmer", function (d) {
+      sound("glimmer");
+      if (readPoint(d.pos, a) || point(d.tile, a)) burst(a, 20, TEAL, 1.6, 1.4, 0, 0.023);
+    });
+    bind("beacon", beacon); bind("levelComplete", complete);
+    bind("restart", function () { clearTransient(false); });
+    bind("levelStart", function (d) {
+      paused = false; changeTheme(d.level && d.level.theme || G.level && G.level.theme); rebuild(false); resetBed();
+    });
+  }
+  function boxNote(hz, at, gain, music) {
+    tone(hz, at, 2.5, gain, "sine", music, true);
+    tone(hz * 4, at, 1.7, gain * 0.075, "sine", music, true);
+  }
+  function bell(hz, at) {
+    var carrier = ctx.createOscillator(), mod = ctx.createOscillator(), index = ctx.createGain(), env = ctx.createGain();
+    carrier.frequency.value = hz * 3.5; mod.frequency.value = hz;
+    index.gain.setValueAtTime(hz * 4, at); index.gain.linearRampToValueAtTime(0, at + 0.9);
+    env.gain.setValueAtTime(0.00001, at); env.gain.linearRampToValueAtTime(0.09, at + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.00001, at + 1.3);
+    mod.connect(index); index.connect(carrier.frequency); carrier.connect(env); route(env, false, true);
+    mod.start(at); carrier.start(at); mod.stop(at + 0.92); carrier.stop(at + 1.32);
+    track(mod, [index], at + 0.94, false); track(carrier, [env], at + 1.34, false);
+  }
+  function sound(name) {
+    try {
+      if (!Object.prototype.hasOwnProperty.call(played, name)) return;
+      // Count requests, including locked, muted and rate-limited calls; playback still needs a gesture.
+      played[name]++;
+      if (!G || !unlocked || !ctx || ctx.state !== "running" || G.save && G.save.sound === false) return;
+      var now = ctx.currentTime;
+      if (name === "footstep" && now - lastStep < 0.08 || name === "tick" && now - lastTick < 0.03) return;
+      if (name === "footstep") lastStep = now;
+      if (name === "tick") lastTick = now;
+      var at = now + 0.005;
+      if (name === "click") tone(1600, at, 0.025, 0.08);
+      else if (name === "footstep") {
+        tone(1800 * (0.94 + Math.random() * 0.12), at, 0.025, 0.065); noise(at, 0.012, 0.022, 3500);
+      } else if (name === "tick") { tone(2500, at, 0.015, 0.07); noise(at, 0.012, 0.025, 5000); }
+      else if (name === "snap") { tone(90, at, 0.2, 0.2, "sine", false, false, 48); noise(at, 0.16, 0.1, 600); }
+      else if (name === "locked") noise(at, 0.12, 0.22, 200);
+      else if (name === "plate") { noise(at, 0.13, 0.12, 280); tone(180, at, 0.24, 0.13); tone(270, at + 0.025, 0.5, 0.075, "sine", false, true); }
+      else if (name === "tk") tone(900, at, 0.04, 0.065, "sine", false, false, 380);
+      else if (name === "glimmer") { bell(scaleNote(0), at); bell(scaleNote(2), at + 0.18); }
+      else if (name === "beacon") {
+        for (var i = 0; i < 4; i++) {
+          var hz = scaleNote(i);
+          tone(hz / 2, at + i * 0.16, 3.5, 0.065, "triangle", false, true, hz * 0.505, 1.2, 1000);
+          boxNote(hz * 4, at + 0.9 + i * 0.19, 0.018, false);
+        }
+        noise(at, 2, 0.06, 250, 4000); boxNote(scaleNote(0), at + 1.9, 0.12, false);
+      } else if (name === "complete") {
+        dipUntil = now + 4.5; poll = 0;
+        for (var k = 0; k < melody.length; k++) boxNote(scaleNote(melody[k]), at + k * 0.65, 0.12, false);
+      }
+    } catch (e) { report(e); }
+  }
+  function makeAudio() {
+    var Audio = window.AudioContext || window.webkitAudioContext; if (!Audio) return;
+    ctx = new Audio();
+    sfxBus = ctx.createGain(); musicBus = ctx.createGain(); master = ctx.createGain(); compressor = ctx.createDynamicsCompressor();
+    master.gain.value = 0.2; sfxBus.gain.value = G.save && G.save.sound === false ? 0 : 1;
+    musicBus.gain.value = 0;
+    compressor.threshold.value = -20; compressor.knee.value = 18; compressor.ratio.value = 3;
+    compressor.attack.value = 0.008; compressor.release.value = 0.25;
+    sfxBus.connect(compressor); musicBus.connect(compressor); compressor.connect(master); master.connect(ctx.destination);
+    var impulse = ctx.createBuffer(2, Math.floor(ctx.sampleRate * 2.5), ctx.sampleRate);
+    for (var channel = 0; channel < 2; channel++) {
+      var data = impulse.getChannelData(channel), tail = 0;
+      for (var i = 0; i < data.length; i++) {
+        var t = i / data.length;
+        tail += ((Math.random() * 2 - 1) - tail) * (0.32 * (1 - t) + 0.015);
+        data[i] = tail * Math.pow(1 - t, 3) * 0.7;
+      }
+    }
+    var sfxVerb = ctx.createConvolver(), musicVerb = ctx.createConvolver();
+    sfxVerb.buffer = musicVerb.buffer = impulse;
+    sfxSend = ctx.createGain(); musicSend = ctx.createGain(); sfxSend.gain.value = 0.2; musicSend.gain.value = 0.35;
+    sfxSend.connect(sfxVerb); sfxVerb.connect(sfxBus); musicSend.connect(musicVerb); musicVerb.connect(musicBus);
+    noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
+    var noiseData = noiseBuffer.getChannelData(0);
+    for (var n = 0; n < noiseData.length; n++) noiseData[n] = Math.random() * 2 - 1;
+    for (var v = 0; v < 256; v++) voices.push({ source: null, nodes: null, end: 0, music: false });
+  }
+  function unlock() {
+    try {
+      if (!G) return;
+      unlocked = true; if (!ctx) makeAudio();
+      poll = 0;
+      if (ctx && ctx.state === "suspended") {
+        return ctx.resume().then(function () { audioFrame(); }, report);
+      }
+      audioFrame();
+    } catch (e) { report(e); }
+  }
+  function wind() {
+    var source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), env = ctx.createGain();
+    var lfo = ctx.createOscillator(), depth = ctx.createGain();
+    source.buffer = noiseBuffer; source.loop = true; filter.type = "bandpass"; filter.frequency.value = 400; filter.Q.value = 0.7;
+    env.gain.value = 0.035; lfo.frequency.value = 0.055; depth.gain.value = 0.015;
+    lfo.connect(depth); depth.connect(env.gain); source.connect(filter); filter.connect(env); route(env, true, false);
+    source.start(); lfo.start(); track(source, [filter, env], Infinity, true); track(lfo, [depth], Infinity, true);
+  }
+  function fade(param, value, duration) {
+    var now = ctx.currentTime;
+    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(now);
+    else { var current = param.value; param.cancelScheduledValues(now); param.setValueAtTime(current, now); }
+    param.linearRampToValueAtTime(value, now + duration);
+  }
+  function resetBed() {
+    try { cleanVoices(true, false); bed = false; audioTheme = ""; poll = 0; } catch (e) { report(e); }
+  }
+  function audioFrame() {
+    try {
+      if (!ctx || ctx.state !== "running") return;
+        return { x: (screenVector.x + 1) * root.clientWidth / 2, y: (1 - screenVector.y) * root.clientHeight / 2 };
+      },
+      geom: { walkable: function (id) { return tiles[id] || null; }, transform: function () { return identity; },
+        bounds: function () { return levelBounds; } },
+      groups: { bridge: { id: "bridge", pivotNode: pivot, handle: { object3D: handle } } },
+      hero: { object3D: hero }, decor: [], level: { theme: "dusk" }
+    };
+    window.__fxLit = [];
+    var lanterns = [[4.9, 2.6, 2.3], [3.4, 1.5, 2.2], [5.5, 0.85, 3.9],
+      [3.7, 0.85, 4.5], [2.3, 0.85, 4.4], [0.6, 0.85, 4.3]];
+    lanterns.forEach(function (pos, i) {
+      var mat = new T.MeshStandardMaterial({ color: 0x9c783d, emissive: 0xffb35a, emissiveIntensity: 0.02, roughness: 0.5 });
+      var obj = box(pos[0], pos[1], pos[2], 0.19, 0.32, 0.19, mat), world = new T.Vector3();
+      obj.userData.target = 0.02;
+      obj.userData.setLit = function (on, instant) {
+        obj.userData.target = on ? 3 : 0.02;
+        if (instant) mat.emissiveIntensity = obj.userData.target;
+        if (on) window.__fxLit.push({ index: i, time: Game.time, instant: !!instant });
+      };
+      Game.decor.push({ item: { type: "lantern" }, object3D: obj, worldPos: function (target) {
+        return obj.getWorldPosition(target || world);
+      } });
+    });
+    var beaconWorld = new T.Vector3();
+    Game.decor.push({ item: { type: "beacon" }, object3D: beacon,
+      worldPos: function (target) { return beacon.getWorldPosition(target || beaconWorld); } });
+    FX.setup(Game); FX.setup(Game); // Repeated boot must not duplicate roots, listeners, or ambient particles.
+    var defaults = {
+      tap: { x: 0, y: 0, tile: "middle", reachable: true, pos: tiles.middle.stand },
+      tapUnreachable: { x: 0, y: 0, tile: "p1", reachable: false, pos: tiles.p1.stand },
+      path: { points: [tiles.start.stand, tiles.middle.stand, tiles.plate.stand] },
+      heroStep: { from: "start", to: "middle", k: 0, at: tiles.start.stand },
+      junction: { from: "middle", to: "bridge_1", k: 1, at: tiles.middle.stand },
+      mechGrab: { id: "bridge" }, mechMove: { id: "bridge", value: 15, delta: 1 },
+      mechTick: { id: "bridge", pos: [5, 1.08, 3] }, mechSnap: { id: "bridge", value: 90, pos: [5, 1.08, 3] },
+      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "base", pos: tiles.p1.stand },
+      glimmer: { tile: "g1", count: 1, total: 3, pos: tiles.g1.stand }, beacon: { index: 0, pos: [4.5, 3.95, 1.5] },
+      levelComplete: { index: 0 }, levelStart: { index: 0, level: Game.level }, pause: { paused: true },
+      quality: { level: "low" }
+    };
+    var beaconOn = false;
+    window.__fxIgnitions = 0;
+    beacon.userData.ignite = function () { beaconOn = true; window.__fxIgnitions++; };
+    window.__fxFire = function (name, data) {
+      try {
+        var payload = Object.assign({}, defaults[name] || {}, data || {}), event = name;
+        if (name === "tapUnreachable") event = "tap";
+        if (name === "junction") event = "heroStep";
+        if (event === "levelStart" || event === "restart") {
+          Game.state = "play"; Game.level = payload.level || Game.level; beaconOn = false; window.__fxLit.length = 0;
+          for (var i = 0; i < 6; i++) Game.decor[i].object3D.userData.setLit(false, true);
+        }
+        if (event === "title") Game.state = "title";
+        if (event === "pause") Game.state = payload.paused ? "paused" : "play";
+        if (event === "quality") Game.quality = payload.level;
+        if (event === "levelComplete") Game.state = "complete";
+        if (event === "beacon") beacon.userData.ignite(); // Fake engine owns the beacon's ignition.
+        status.textContent = "FX test · " + name + "\n__fxFire(name, data) · FX.debug()";
+        bus.emit(event, payload); return FX.debug();
+      } catch (e) { window.__fxReportError(e); throw e; }
+    };
+    var schedule = [[0.4, "tap"], [1.2, "tapUnreachable"], [2, "path"], [2.4, "heroStep"],
+      [2.6, "heroStep"], [2.8, "heroStep"], [3.5, "junction"], [4.2, "mechGrab"],
+      [5, "mechTick"], [5.5, "mechSnap"], [6.3, "mechLocked"], [7, "plate"], [8.3, "glimmer"],
+      [10, "beacon"], [14, "levelComplete"]];
+    var only = query.get("only"), scripted = query.get("script") !== "0", cursor = 0;
+    if (only) schedule = [[0.4, only]];
+    if (only === "heroStep") schedule = [[0.4, only], [0.5, only], [0.6, only]];
+    if (scripted && only !== "title") window.__fxFire("levelStart");
+    status.textContent = "FX test · " + (only || (scripted ? "sequence" : "manual")) + "\nClick or press a key to unlock audio";
+    tb.onFrame(function (dt, t) {
+      try {
+        Game.time = t; Game.dt = dt;
+        for (var i = 0; i < 6; i++) {
+          var obj = Game.decor[i].object3D;
+          obj.material.emissiveIntensity += (obj.userData.target - obj.material.emissiveIntensity) * (1 - Math.exp(-dt * 5));
+        }
+        beaconMat.emissiveIntensity += ((beaconOn ? 3 : 0.12) - beaconMat.emissiveIntensity) * (1 - Math.exp(-dt * 3));
+        if (scripted) {
+          while (cursor < schedule.length && t >= schedule[cursor][0]) window.__fxFire(schedule[cursor++][1]);
+          if (!only && t > 4.4 && t < 5.4 || only === "mechMove" && t > 0.4 && t < 1.4) {
+            bus.emit("mechMove", defaults.mechMove);
+          }
+        }
+      } catch (e) { window.__fxReportError(e); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
+
+codex
+Updated only [js/fx.js](/home/user/my-first-repo/spirelight/js/fx.js) and [tests/fx.html](/home/user/my-first-repo/spirelight/tests/fx.html), preserving the existing effects.
+
+Fixed world-position payloads, hero dust/junction placement, decor handling, cascade ownership, sound-request counters, and awaitable audio unlocking. Updated harness payloads and tiles, and added an Unlock button.
+
+Checks passed: syntax, simulated event sequence without errors, position fallbacks, cascade ordering/pause, 1,500-particle and 24-ring limits, three FX batches, and ambient reduction from 78 to 39. No vector/colour/matrix construction occurs in the update loop. Mocked audio tests passed.
+
+Screenshots, browser console checks, and real audio remain unverified: sandbox restrictions blocked both the screenshot server and Chromium launch.
+tokens used
+49,984
+Updated only [js/fx.js](/home/user/my-first-repo/spirelight/js/fx.js) and [tests/fx.html](/home/user/my-first-repo/spirelight/tests/fx.html), preserving the existing effects.
+
+Fixed world-position payloads, hero dust/junction placement, decor handling, cascade ownership, sound-request counters, and awaitable audio unlocking. Updated harness payloads and tiles, and added an Unlock button.
+
+Checks passed: syntax, simulated event sequence without errors, position fallbacks, cascade ordering/pause, 1,500-particle and 24-ring limits, three FX batches, and ambient reduction from 78 to 39. No vector/colour/matrix construction occurs in the update loop. Mocked audio tests passed.
+
+Screenshots, browser console checks, and real audio remain unverified: sandbox restrictions blocked both the screenshot server and Chromium launch.
+codex exit 0

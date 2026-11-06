@@ -35,7 +35,7 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
   var heroes = [], labels = [], labelPoint = new THREE.Vector3(), states = { speed: 1.4, grounded: true };
   document.getElementById("caption").textContent = lineup ? "Seven small ways to be alive" : names[0] + (frozen ? " · " + time.toFixed(2) + " s" : " · live");
   if (small) document.getElementById("note").textContent = "IN-GAME SCALE / 70 PX WORLD HEIGHT";
-  Testbed.start({ height: height, center: [0, 0.45, 0], bg: 0x201e30, shadows: true, exposure: 1.2 }, function (tb) {
+  Testbed.start({ height: height, center: [0, 0.45, 0], bg: 0x201e30, shadows: true, exposure: 0.95 }, function (tb) {
     var scene = tb.scene;
     var bg = document.createElement("canvas"); bg.width = 16; bg.height = 512;
     var bc = bg.getContext("2d"), gradient = bc.createLinearGradient(0, 0, 0, 512);
@@ -47,7 +47,17 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
     tb.key.shadow.normalBias = 0.008;
     tb.key.shadow.camera.left = tb.key.shadow.camera.bottom = -4;
     tb.key.shadow.camera.right = tb.key.shadow.camera.top = 4; tb.key.shadow.camera.updateProjectionMatrix();
-    var paver = new THREE.MeshStandardMaterial({ color: 0xefe2c6, roughness: 0.84 });
+    var stone = document.createElement("canvas"); stone.width = stone.height = 128;
+    var sc = stone.getContext("2d"); sc.fillStyle = "#e8d8b8"; sc.fillRect(0, 0, 128, 128);
+    var seed = 410;
+    for (var speck = 0; speck < 3200; speck++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      var sx = seed % 128, sy = (seed >>> 8) % 128;
+      sc.fillStyle = speck % 2 ? "rgba(97,72,44,.07)" : "rgba(255,245,220,.12)";
+      sc.fillRect(sx, sy, 1, 1);
+    }
+    var stoneMap = new THREE.CanvasTexture(stone); stoneMap.encoding = THREE.sRGBEncoding;
+    var paver = new THREE.MeshStandardMaterial({ map: stoneMap, roughness: 0.9 });
     var edge = new THREE.MeshStandardMaterial({ color: 0x997653, roughness: 0.72 });
     var inlay = new THREE.MeshStandardMaterial({ color: 0xc8963e, roughness: 0.4, metalness: 0.65 });
     function tile(x, z, width) {
@@ -75,7 +85,7 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
     if (small) { tile(-0.66, 0.66, 0.9); tile(0.66, -0.66, 0.9); }
     function placeLabels() {
       for (var j = 0; j < labels.length; j++) {
-        labelPoint.copy(heroes[j].object3D.position); labelPoint.y = -0.24; labelPoint.project(tb.camera);
+        labelPoint.copy(heroes[j].object3D.position); labelPoint.y = -0.48; labelPoint.project(tb.camera);
         labels[j].style.left = (labelPoint.x * 0.5 + 0.5) * window.innerWidth + "px";
         labels[j].style.top = (-labelPoint.y * 0.5 + 0.5) * window.innerHeight + "px";
       }
@@ -110,7 +120,7 @@ footer{position:fixed;left:30px;bottom:22px;z-index:2;font:10px system-ui,sans-s
     // Exposed for console inspection and the screenshot harness.
     window.hero = heroes[0]; window.heroes = heroes;
     window.addEventListener("pagehide", function () {
-      try { heroes.forEach(function (h) { h.dispose(); }); background.dispose(); } catch (error) { console.error(error); }
+      try { heroes.forEach(function (h) { h.dispose(); }); background.dispose(); stoneMap.dispose(); paver.dispose(); edge.dispose(); inlay.dispose(); } catch (error) { console.error(error); }
     });
   });
 })();
