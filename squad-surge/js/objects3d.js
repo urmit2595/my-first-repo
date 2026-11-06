@@ -1,6 +1,7 @@
 "use strict";
 // Obj3D: real 3D gates and shootable solids (blocks, crates, tyres, weapon cases, ammo boxes).
 // See design/overhaul.md section 6. API: setup, clear, gate, gateHalf, gateUsed, solid, solidLabel, solidHit, solidBreak, update.
+// Surge Update: solid kinds airdrop (supply crate + beacon) and barrel (explosive), and golden jackpot gate halves (h.jackpot).
 //
 // Resource rules: geometries, textures and materials of the object kinds are built once and shared for the whole
 // page life; only label canvases / label materials / gate-half materials are per object and disposed in clear().
@@ -146,6 +147,7 @@ window.Obj3D = (() => {
 
   // ---------------------------------------------------------------- specs
   const GOOD = { panel: new THREE.Color(0x1a78ff), edge: new THREE.Color(0x9ff0ff), glow: new THREE.Color(0x2f9bff) };
+  const GOLD = { panel: new THREE.Color(0xffa800), edge: new THREE.Color(0xfff1a8), glow: new THREE.Color(0xffc424) };
   const BAD = { panel: new THREE.Color(0xff2b2b), edge: new THREE.Color(0xffb4a0), glow: new THREE.Color(0xff4a3a) };
   const PW = 5.2, PH = 2.7, PD = 0.36, PY = 1.65;       // gate panel size and centre height
 
@@ -175,6 +177,31 @@ window.Obj3D = (() => {
       g.fillStyle = "#e0a210"; g.fillRect(-74, -26, 50, 52); g.fillStyle = "rgba(255,255,255,.55)"; g.fillRect(-16, -18, 90, 8);
       X.ammo = tex(c, true);
     }
+    { // jackpot glass: twinkling four-point stars (additive) and a soft diagonal shine band
+      const c = cvs(256, 128), g = c.getContext("2d"), r = lcg(21);
+      for (let i = 0; i < 16; i++) {
+        const x = 10 + r() * 236, y = 8 + r() * 112, s = 5 + r() * 13, gr = g.createRadialGradient(x, y, 0, x, y, s);
+        gr.addColorStop(0, "rgba(255,250,215,1)"); gr.addColorStop(0.35, "rgba(255,225,120,.45)"); gr.addColorStop(1, "rgba(255,200,60,0)");
+        g.fillStyle = gr; g.beginPath(); g.arc(x, y, s, 0, 7); g.fill();
+        g.strokeStyle = "rgba(255,248,210,.95)"; g.lineWidth = 1.6; g.beginPath(); g.moveTo(x - s * 1.9, y); g.lineTo(x + s * 1.9, y); g.moveTo(x, y - s * 1.9); g.lineTo(x, y + s * 1.9); g.stroke();
+      }
+      X.sparkle = tex(c, false);
+      const d = cvs(64, 128), h = d.getContext("2d"), gr = h.createLinearGradient(0, 0, 64, 0);
+      gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(0.5, "rgba(255,247,200,.9)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+      h.fillStyle = gr; h.transform(1, 0, -0.45, 1, 28, 0); h.fillRect(-20, 0, 64, 128);
+      X.shine = tex(d, false);
+    }
+    { // barrel hazard band: yellow / black diagonal stripes around the circumference
+      const c = cvs(512, 64), g = c.getContext("2d"); g.fillStyle = "#ffcf1f"; g.fillRect(0, 0, 512, 64);
+      g.fillStyle = "#23232b"; for (let x = -64; x < 540; x += 64) { g.beginPath(); g.moveTo(x, 64); g.lineTo(x + 32, 64); g.lineTo(x + 64, 0); g.lineTo(x + 32, 0); g.closePath(); g.fill(); }
+      g.fillStyle = "rgba(255,255,255,.22)"; g.fillRect(0, 0, 512, 5); g.fillStyle = "rgba(0,0,0,.3)"; g.fillRect(0, 59, 512, 5);
+      X.hazard = tex(c, true);
+    }
+    { // supply crate stencil: white star in a ring
+      const c = cvs(128, 128), g = c.getContext("2d"); g.translate(64, 64); g.strokeStyle = g.fillStyle = "rgba(245,240,215,.92)"; g.lineWidth = 7; g.beginPath(); g.arc(0, 0, 54, 0, 7); g.stroke();
+      g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 20 : 46; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.fill();
+      X.star = tex(c, true);
+    }
     { const c = cvs(128, 64), g = c.getContext("2d"), gr = g.createRadialGradient(64, 28, 4, 64, 32, 80); gr.addColorStop(0, "#f4f9ff"); gr.addColorStop(1, "#8fa9c9"); g.fillStyle = gr; g.fillRect(0, 0, 128, 64); X.back = tex(c, true); }
 
     // ---- geometries
@@ -199,6 +226,21 @@ window.Obj3D = (() => {
     G.caseBase = roundedBox(2.55, 0.5, 1.3, 0.12, 3); G.glass = roundedBox(2.4, 1.45, 1.16, 0.1, 3);
     G.gold = (() => { const parts = [{ g: roundedBox(2.55, 0.16, 1.3, 0.07, 2), y: 2.03 }]; for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push({ g: roundedBox(0.14, 1.5, 0.14, 0.05, 2), x: sx * 1.2, y: 1.25, z: sz * 0.56 }); return merge(parts); })();
 
+    G.supply = merge((() => {
+      const P = [{ g: roundedBox(2.2, 1.5, 1.4, 0.16, 3), y: 0.75, c: 0x5f7a3a }, { g: roundedBox(2.32, 0.2, 1.52, 0.09, 2), y: 1.6, c: 0x4f6730 }];
+      for (const sx of [-1, 1]) { P.push({ g: roundedBox(0.3, 1.58, 1.47, 0.07, 2), x: sx * 0.66, y: 0.75, c: 0xe3cf8d }); P.push({ g: roundedBox(0.3, 0.26, 1.58, 0.07, 2), x: sx * 0.66, y: 1.6, c: 0xe3cf8d }); }
+      for (const sx of [-1, 1]) for (const sy of [0.12, 1.38]) for (const sz of [-1, 1]) P.push({ g: roundedBox(0.34, 0.34, 0.34, 0.08, 2), x: sx * 1.04, y: sy, z: sz * 0.54, c: 0x6e7480 });
+      P.push({ g: new THREE.CylinderBufferGeometry(0.2, 0.26, 0.18, 14), y: 1.78, c: 0x6e7480 });
+      return P;
+    })());
+    G.dome = new THREE.SphereBufferGeometry(0.19, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    G.barrel = (() => {
+      const p = [[0.001, 0.02], [0.52, 0.02], [0.6, 0.05], [0.6, 0.13], [0.56, 0.17], [0.62, 0.22], [0.69, 0.27], [0.7, 0.31], [0.65, 0.35], [0.66, 0.45], [0.68, 0.8], [0.68, 1.05], [0.66, 1.15], [0.65, 1.2], [0.7, 1.26], [0.7, 1.3], [0.65, 1.35], [0.6, 1.4], [0.6, 1.47], [0.52, 1.5], [0.46, 1.46], [0.001, 1.46]].map(([x, y]) => new THREE.Vector2(x, y));
+      return new THREE.LatheBufferGeometry(p, 28);
+    })();
+    G.band = new THREE.CylinderBufferGeometry(0.695, 0.695, 0.42, 36, 1, true);
+    G.bung = merge([{ g: new THREE.CylinderBufferGeometry(0.13, 0.13, 0.08, 12), x: 0.26, y: 1.5, z: -0.12 }, { g: new THREE.CylinderBufferGeometry(0.075, 0.075, 0.1, 10), x: -0.24, y: 1.5, z: 0.14 }]);
+
     // ---- materials
     if (!fbEnv) fbEnv = buildEnv();
     M.post = mat("MeshStandardMaterial", { color: 0xd9e2ee, metalness: 1, roughness: 0.05, envMapIntensity: 2.5 }); M.post.envMap = fbEnv; M.post.userData.keepEnv = true;
@@ -212,8 +254,20 @@ window.Obj3D = (() => {
     M.caseBase = mat("MeshStandardMaterial", { color: 0x56637a, metalness: 0.6, roughness: 0.32 });
     M.gold = mat("MeshStandardMaterial", { color: 0xf6bd2a, metalness: 1, roughness: 0.22, envMapIntensity: 1.2 });
     M.glass = mat("MeshStandardMaterial", { color: 0xcdeeff, transparent: true, opacity: 0.2, roughness: 0.04, metalness: 0, depthWrite: false, envMapIntensity: 1.6 });
+    M.supply = mat("MeshStandardMaterial", { color: 0xffffff, vertexColors: true, roughness: 0.55, metalness: 0.2, envMapIntensity: 0.9 });
+    M.star = mat("MeshStandardMaterial", { color: 0xffffff, map: X.star, transparent: true, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    M.beacon = mat("MeshBasicMaterial", { color: 0xff4a3a, toneMapped: false });
+    M.beaconGlow = mat("MeshBasicMaterial", { color: 0xff5a40, map: X.glow, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+    M.barrel = mat("MeshPhysicalMaterial", { color: 0xd8261b, roughness: 0.3, metalness: 0.25, clearcoat: 1, clearcoatRoughness: 0.12, emissive: 0x2a0402, emissiveIntensity: 0.4, envMapIntensity: 1.1 });
+    M.hazard = mat("MeshStandardMaterial", { color: 0xffffff, map: X.hazard, roughness: 0.45, metalness: 0.1, envMapIntensity: 0.8 });
+    M.flame = mat("MeshBasicMaterial", { color: 0xffffff, map: flameTex(), transparent: true, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
     M.back = mat("MeshBasicMaterial", { color: 0xffffff, map: X.back, toneMapped: false });
     syncEnv();
+  }
+  let FLAME = null;
+  function flameTex() { // small flame emblem for the barrel (the UI flame icon)
+    if (FLAME) return FLAME; FLAME = new THREE.TextureLoader().load("assets/ui/icons/flame.webp");
+    FLAME.encoding = LIN ? THREE.sRGBEncoding : THREE.LinearEncoding; FLAME.anisotropy = 4; TEXS.push(FLAME); return FLAME;
   }
   function ensure() {
     if (ready) return; ready = true; build();
@@ -258,16 +312,24 @@ window.Obj3D = (() => {
       const gm = new THREE.Mesh(G.floor, glow); gm.scale.set(PW * 0.95, 1, 2.6); gm.position.set(h.x, 0.03, 1.1); gm.renderOrder = 1; grp.add(gm);
       const L = newLabel(384, 192, 3.7, 5); L.mesh.position.set(0, 0.02, PD / 2 + 0.05); body.add(L.mesh);
       const hs = { grp, body, panel, frame, glow, halo, L, cur: { panel: new THREE.Color(), edge: new THREE.Color(), glow: new THREE.Color() }, src: null, dst: null, bt: 1, good: undefined, text: undefined, pulse: 0, flash: 0, ph: Math.random() * 6, used: false, ut: 0, chosen: false, done: false, gm };
+      if (h.jackpot) { // golden half: twinkling stars, a travelling shine and a bigger warm halo
+        const tm = (map, op) => mat("MeshBasicMaterial", { color: 0xfff2b0, map, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }, true);
+        hs.spk1 = new THREE.Mesh(G.plane, tm(X.sparkle, 0.8)); hs.spk2 = new THREE.Mesh(G.plane, tm(X.sparkle, 0.8)); hs.shine = new THREE.Mesh(G.plane, tm(X.shine, 0));
+        hs.spk1.scale.set(PW * 0.92, PH * 0.82, 1); hs.spk2.scale.set(PW * 0.92, PH * 0.82, 1); hs.shine.scale.set(PW * 0.5, PH * 0.9, 1);
+        hs.spk2.rotation.z = Math.PI; hs.spk1.position.z = hs.spk2.position.z = hs.shine.position.z = PD / 2 + 0.03; hs.spk2.position.z += 0.005; hs.shine.position.z += 0.01;
+        for (const m of [hs.spk1, hs.spk2, hs.shine]) { m.renderOrder = 4; body.add(m); }
+        hm.scale.set(PW * 1.4, PH * 1.45, 1); hs.haloK = 1.5;
+      }
       h.vis = hs; HALVES.push(hs);
     }
   }
   function gateHalf(g, h, good, text) {
     const hs = h.vis; if (!hs) return;
-    const pal = good ? GOOD : BAD;
+    const pal = h.jackpot ? GOLD : good ? GOOD : BAD; good = h.jackpot ? "gold" : good;
     if (hs.good === undefined) { for (const k in pal) hs.cur[k].copy(pal[k]); hs.dst = pal; hs.bt = 1; paintHalf(hs); }
     else if (hs.good !== good) { hs.src = { panel: hs.cur.panel.clone(), edge: hs.cur.edge.clone(), glow: hs.cur.glow.clone() }; hs.dst = pal; hs.bt = 0; hs.flash = 1; }
     hs.good = good;
-    if (hs.text !== text) { if (hs.text !== undefined) hs.pulse = 1; hs.text = text; C.drawLabel(hs.L.lab, text, "#ffffff", 0.74); }
+    if (hs.text !== text) { if (hs.text !== undefined) hs.pulse = 1; hs.text = text; C.drawLabel(hs.L.lab, text, h.jackpot ? "#fff3b8" : "#ffffff", 0.74); }
   }
   function gateUsed(g, half) {
     for (const h of g.halves) { const hs = h.vis; if (!hs || hs.used) continue; hs.used = true; hs.ut = 0; hs.chosen = h === half; }
@@ -296,8 +358,12 @@ window.Obj3D = (() => {
     hs.body.scale.setScalar(gs);
     hs.L.mesh.scale.set(hs.L.w * s, hs.L.w * s, 1);
     hs.panel.emissiveIntensity = em;
-    hs.panel.opacity = 0.8 * (1 - f); hs.halo.opacity = 0.6 * (1 + 0.12 * br) * (1 - f); hs.frame.opacity = (1 - f); hs.glow.opacity = 0.85 * (1 + 0.1 * br) * (1 - f);
+    hs.panel.opacity = 0.8 * (1 - f); hs.halo.opacity = 0.6 * (hs.haloK || 1) * (1 + 0.12 * br) * (1 - f); hs.frame.opacity = (1 - f); hs.glow.opacity = 0.85 * (1 + 0.1 * br) * (1 - f);
     hs.L.mesh.material.opacity = 1 - f;
+    if (hs.spk1) {
+      hs.spk1.material.opacity = (0.5 + 0.5 * Math.sin(T * 4.1 + hs.ph)) * (1 - f); hs.spk2.material.opacity = (0.5 + 0.5 * Math.cos(T * 3.3 + hs.ph * 2)) * (1 - f);
+      const p = (T * 0.5 + hs.ph * 0.3) % 1.7; hs.shine.visible = p < 1; if (p < 1) { hs.shine.position.x = -PW * 0.4 + p * PW * 0.8; hs.shine.material.opacity = 0.75 * Math.sin(p * Math.PI) * (1 - f); }
+    }
   }
 
   // ---------------------------------------------------------------- solids
@@ -331,6 +397,21 @@ window.Obj3D = (() => {
       part(v, r, G.latches, M.steel, 0, 0, 0, false, false);
       return { y: 2.35, w: 2.8, pill: true };
     },
+    airdrop(v, r) {
+      part(v, r, G.supply, M.supply, 0, 0, -0.7);
+      const st = new THREE.Mesh(G.plane, M.star); st.scale.set(0.74, 0.74, 1); st.position.set(0, 0.76, 0.012); r.add(st);
+      const dm = new THREE.Mesh(G.dome, M.beacon); dm.position.set(0, 1.87, -0.7); r.add(dm);
+      const gl = new THREE.Mesh(G.plane, M.beaconGlow); gl.scale.set(1.9, 1.9, 1); gl.position.set(0, 2.05, -0.3); gl.renderOrder = 4; r.add(gl);
+      return { y: 3.15, w: 2.8, pill: true };
+    },
+    barrel(v, r) {
+      const z = -0.45;
+      part(v, r, G.barrel, M.barrel, 0, 0, z);
+      const b = new THREE.Mesh(G.band, M.hazard); b.position.set(0, 0.54, z); b.castShadow = true; b.receiveShadow = true; r.add(b); v.body.push({ mesh: b, base: M.hazard, fl: flashOf(M.hazard) });
+      part(v, r, G.bung, M.steel, 0, 0, z, false, false);
+      const f = new THREE.Mesh(G.plane, M.flame); f.scale.set(0.6, 0.66, 1); f.position.set(0, 1.04, z + 0.69); r.add(f);
+      return { y: 2.25, w: 2.3, pill: true };
+    },
     weaponCase(v, r, o) {
       part(v, r, G.caseBase, M.caseBase, 0, 0.25, -0.65);
       part(v, r, G.gold, M.gold, 0, 0, -0.65);
@@ -362,7 +443,9 @@ window.Obj3D = (() => {
     blockBlue: [[0x2f7bff, 0x7fb4ff, 0x1f5fd6], 0.3, 0.6], blockYellow: [[0xffc41c, 0xffe27a, 0xe09a00], 0.32, 0.65],
     crate: [[0xc98f4e, 0x8a5527, 0x9aa3b0], 0.28, 0.58], tyres: [[0x2b2c32, 0x2b2c32, 0xe9eef7], 0.3, 0.62],
     ammo: [[0x62802c, 0x729238, 0xffd21f], 0.26, 0.55], weaponCase: [[0x56637a, 0xf6bd2a, 0xcdeeff], 0.24, 0.55],
+    airdrop: [[0x5f7a3a, 0xe3cf8d, 0x6e7480], 0.28, 0.6], barrel: [[0xd8261b, 0xffcf1f, 0x2e2f36], 0.26, 0.56],
   };
+  let blinkOn = null;
   const POOL = []; let dgroup = null, dnext = 0; const rnd = lcg(12345);
   function ensureDebris() {
     if (dgroup) return; dgroup = new THREE.Group(); C.track.add(dgroup);
@@ -408,7 +491,7 @@ window.Obj3D = (() => {
     C = ctx;
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
       for (const v of SOLIDS) if (v.text !== undefined) drawNum(v.L.lab, v.text, v.color, v.pill, true);
-      for (const hs of HALVES) if (hs.text !== undefined) { hs.L.lab.last = null; C.drawLabel(hs.L.lab, hs.text, "#ffffff", 0.74); }
+      for (const hs of HALVES) if (hs.text !== undefined) { hs.L.lab.last = null; C.drawLabel(hs.L.lab, hs.text, hs.spk1 ? "#fff3b8" : "#ffffff", 0.74); }
     }).catch(() => {});
   }
   function clear() {
@@ -433,6 +516,10 @@ window.Obj3D = (() => {
       if (v.icon) { v.icon.position.y = v.iconY + 0.04 * Math.sin(T * 1.8 + v.ph); v.icon.rotation.y = 0.15 * Math.sin(T * 1.3 + v.ph); }
     }
     updateDebris(dt);
+    if (M.beacon) { // supply-crate beacon blinks in sync (shared materials)
+      const on = Math.sin(T * 7) > 0.1; if (on !== blinkOn) { blinkOn = on; setHex(M.beacon.color, on ? 0xff5a44 : 0x4a100c); }
+      M.beaconGlow.opacity = on ? 0.9 : 0.12;
+    }
   }
 
   return { setup, clear, gate, gateHalf, gateUsed, solid, solidLabel, solidHit, solidBreak, update };

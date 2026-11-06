@@ -1007,7 +1007,7 @@ function render(dt) {
     if (e.state !== "dying") shadow.push(e.x + SHADOW_DX, e.z + SHADOW_DZ, e.r * 2.5);
   }
   const b = L.boss;
-  if (b.hp > 0 || b.state === "down") {
+  if (state !== "bonus" && (b.hp > 0 || b.state === "down")) { // the fallen boss leaves the stage for the finale
     let f = b.state === "down" ? 5 : b.slamT > 2.2 ? 4 : b.slamT > 1.8 ? 3 : Math.floor(b.t * 4) % 3;
     if (b.state === "wait") f = 3;
     // boss flickers when hit instead of washing out white under heavy fire

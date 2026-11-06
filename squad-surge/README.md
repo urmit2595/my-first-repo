@@ -16,6 +16,13 @@ Run locally: `python3 -m http.server` in this folder, then open `index.html`.
 - **Boss slam:** a red ring marks where the boss will strike, and it stops aiming once the ring appears, so steer out of it.
 - Beat the boss to unlock the next level. The **level map** (grid button, top-left) replays any unlocked level and shows your best stars.
 
+## Surge Update (engagement)
+Plan and contracts: `design/engagement.md` (research by two agents, reviewed by an Opus design pass).
+- **In a run:** live score with BEST, kill combo with NICE / GREAT / SURGE! / UNSTOPPABLE tiers (x1.5 to x4), SURGE fever (double damage and pierce, twice per level), hit-stop and slow-mo on big moments, supply drops from a cargo plane (SHIELD, AIRSTRIKE, GIANT, rare JACKPOT), explosive barrels with chain reactions, golden jackpot gates, an enraged boss at half health.
+- **Climax:** the SURGE FINALE, where the squad smashes walls x1.5 to x10 after the boss and the last wall broken multiplies the score.
+- **Between runs (after level 2):** three rotating missions that earn medals, a daily challenge with a twist and a streak (with freezes), the Armory (squad colours and tracers unlocked by medals, stars and streaks; nothing is bought), 25 trophies, personal bests on the level map, a results tally with "next goal" hints, and sharing.
+- Modules: `js/powerups.js` (supply drops, power-ups, barrels), `js/finale.js` (finale walls), `js/meta.js` (missions, daily, Armory, trophies, results).
+
 ## How it is built
 - `index.html` holds the game: rules, level generation, squad, enemies, boss, HUD and menus. It emits events on a small bus (`bus.emit("gatePass", …)` and so on).
 - The look lives in three modules that only listen and draw (see `design/overhaul.md` for the contracts):

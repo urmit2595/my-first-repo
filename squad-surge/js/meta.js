@@ -92,7 +92,7 @@ function dailyInfo() {
   const d = dayIndex(), keys = Object.keys((ctx && ctx.MODIFIERS) || {});
   const modifier = keys.length ? keys[d % keys.length] : null;
   const mod = modifier && ctx.MODIFIERS[modifier];
-  return { day: d, num: d + 1, level: 2 + (d * 7) % 11, modifier, modName: (mod && mod.name) || (modifier ? String(modifier).toUpperCase() : "Surprise"), seed: d };
+  return { day: d, num: d + 1, level: 2 + (d * 5) % 7, /* levels 2-8: fair for newer players */ modifier, modName: (mod && mod.name) || (modifier ? String(modifier).toUpperCase() : "Surprise"), seed: d };
 }
 function effStreak() {
   const D = M.daily, d = dayIndex();

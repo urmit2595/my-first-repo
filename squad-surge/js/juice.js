@@ -16,7 +16,13 @@ window.Juice = (() => {
     let clock = 0, intro = 1.1, bossActive = false, bossBlend = 0;
     let kick = 0, kickAge = 1, kickDuration = .35;
     let shake = 0, shakeAge = 1, shakeDuration = .4;
-    let confetti = null, confettiTimer = null;
+    let confetti = null, confettiLeft = 0;
+    let trauma = 0, pullback = 0, surgeKick = 0;
+    let surgeOn = false, shieldOn = false, giantOn = false, meterHot = false;
+    let current = null, calloutAge = 0;
+    const callouts = [], flights = [];
+    const inRun = () => ["play", "boss", "bonus"].includes(ctx.state);
+    const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
     const animations = new Map();
     const on = (name, fn) => ctx.bus.on(name, safe(fn));
     const smooth = x => x * x * (3 - 2 * x);
@@ -46,7 +52,24 @@ window.Juice = (() => {
 @keyframes juice-confetti{0%{opacity:0;transform:translate(0,0) rotate(0)}8%{opacity:1}28%{transform:translate(var(--x),var(--y)) rotate(180deg)}75%{opacity:1}100%{opacity:0;transform:translate(var(--end),80vh) rotate(var(--spin))}}
 #game .btn,#game .round,#game .lvtile{transform-origin:center;transition:filter .15s}
 #game .juice-pressed:not(:disabled){transform:translateY(3px) scale(.95,.9);filter:brightness(1.12)}
+#game .juice-banner{top:19%;padding:10px 8px;border-color:#543418;background:linear-gradient(165deg,#302e49ee,#151a32ee);box-shadow:0 4px 0 #111b35,0 0 24px var(--heat,#ffc84955);color:var(--color,#fff)}
+#game .juice-banner strong{font-size:clamp(24px,var(--size,7vw),48px);text-shadow:0 3px #261b30}
+#game .juice-banner img{width:42px;height:42px;object-fit:contain;vertical-align:middle;margin-bottom:3px}
+#game .juice-banner.juice-stamp{top:43%;border:0;background:none;box-shadow:none}
+#game .juice-stamp strong{font-size:clamp(40px,var(--size,12vw),90px)}
+#game .juice-layer{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0}
+#game .juice-gold{box-shadow:inset 0 0 65px 15px #ffc52b99;background:radial-gradient(ellipse,transparent 55%,#ffbd3026)}
+#game .juice-lines{background:repeating-conic-gradient(from 4deg at 50% 48%,transparent 0deg 13deg,#fff5b326 13.2deg 13.5deg,transparent 13.8deg 24deg);mask-image:radial-gradient(ellipse,transparent 40%,#000 100%);-webkit-mask-image:radial-gradient(ellipse,transparent 40%,#000 100%)}
+#game .juice-blue{background:#329bff;mix-blend-mode:screen}
+#game .juice-orange{background:#ff8a24;mix-blend-mode:screen}
+#game .juice-flash{background:radial-gradient(ellipse,transparent 25%,#ffd650aa)}
+#game .juice-points{position:absolute;z-index:5;pointer-events:none;font:24px 'Lilita One',sans-serif;color:#ffe68a;text-shadow:0 2px 2px #34251d}
+#surgeBar.juice-hot{box-shadow:0 0 12px 3px #ffd54a;animation:juice-meter .65s ease-in-out infinite alternate}
+@keyframes juice-meter{from{opacity:.55}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){
+ #count.surging .surge i{animation:none}
+ #game .juice-lines{display:none}
+
  #home .logo,#progress i::after{animation:none}
  #game .float{animation:juice-fade .8s ease-out forwards}
  #game .juice-pressed:not(:disabled){transform:none}
@@ -88,19 +111,72 @@ window.Juice = (() => {
     banner.append(title, subtitle);
     game.appendChild(banner);
 
+    const icon = document.createElement("img");
+    icon.alt = ""; icon.hidden = true; banner.prepend(icon);
+    const layers = ["gold", "lines", "blue", "orange", "flash"].map(kind => {
+      const el = document.createElement("div");
+      el.className = "juice-layer juice-" + kind;
+      el.setAttribute("aria-hidden", "true"); game.appendChild(el);
+      return { el, value: 0 };
+    });
+    let flash = 0;
+    function enqueue(text, options = {}) {
+      if (!inRun()) return;
+      callouts.push(Object.assign({ text, color: "#fff", size: 7, sub: "", icon: "", stamp: false }, options));
+    }
+    function nextCallout() {
+      current = callouts.shift() || null; calloutAge = 0;
+      if (!current) { banner.hidden = true; return; }
+      title.textContent = current.text; subtitle.textContent = current.sub;
+      subtitle.hidden = !current.sub;
+      icon.hidden = !current.icon;
+      if (current.icon) icon.src = "assets/ui/icons/" + current.icon + ".webp";
+      banner.className = "juice-banner" + (current.stamp ? " juice-stamp" : "");
+      banner.style.setProperty("--color", current.color);
+      banner.style.setProperty("--heat", current.color + "55");
+      banner.style.setProperty("--size", current.size + "vw");
+      banner.style.opacity = "0"; banner.hidden = false;
+    }
     function showBanner(isBoss) {
-      title.textContent = isBoss ? "BOSS!" : `LEVEL ${level ? level.level : (ctx.L ? ctx.L.level : 1)}`;
-      subtitle.textContent = isBoss ? "" : (level ? level.name : "");
-      subtitle.hidden = isBoss;
-      banner.classList.toggle("juice-boss", isBoss);
-      banner.hidden = false;
-      animate(banner, [
-        { opacity: 0, transform: isBoss ? "scale(1.7)" : "translateX(-120%) scale(.9)", offset: 0 },
-        { opacity: 1, transform: "scale(1.04)", offset: .16 },
-        { opacity: 1, transform: "scale(1)", offset: .24 },
-        { opacity: 1, transform: "scale(1)", offset: .82 },
-        { opacity: 0, transform: "translateX(120%) scale(.95)", offset: 1 }
-      ], 1700, {}, () => { banner.hidden = true; });
+      enqueue(isBoss ? "BOSS!" : `LEVEL ${level ? level.level : (ctx.L ? ctx.L.level : 1)}`, {
+        sub: isBoss ? "" : (level ? level.name : ""), color: isBoss ? "#ff6957" : "#8bd9ff"
+      });
+    }
+    function clearMoments() {
+      callouts.length = 0; current = null; banner.hidden = true;
+      trauma = pullback = surgeKick = flash = 0;
+      surgeOn = shieldOn = giantOn = false;
+      layers.forEach(layer => { layer.value = 0; layer.el.style.opacity = "0"; });
+      flights.forEach(f => f.el.remove()); flights.length = 0;
+      meterHot = false; if ($("surgeBar")) $("surgeBar").classList.remove("juice-hot");
+    }
+    function updateMoments(delta, active, L) {
+      if (active) {
+        if (!current && callouts.length) nextCallout();
+        if (current) {
+          calloutAge += delta;
+          const t = clamp(calloutAge / .8, 0, 1);
+          banner.style.opacity = String(Math.min(1, t / .12, (1 - t) / .18));
+          banner.style.transform = reduced ? "none" : `scale(${1 + .18 * Math.pow(1 - clamp(t / .3, 0, 1), 2)})`;
+          if (t >= 1) nextCallout();
+        }
+      }
+      flash = Math.max(0, flash - delta * 2);
+      const targets = [surgeOn ? 1 : 0, surgeOn && !reduced ? .65 : 0, shieldOn ? .065 : 0, giantOn ? .065 : 0, flash];
+      layers.forEach((layer, i) => {
+        const value = layer.value + (targets[i] - layer.value) * Math.min(1, delta * 8);
+        const rounded = Math.abs(value - targets[i]) < .001 ? targets[i] : value;
+        if (layer.value !== rounded) { layer.value = rounded; layer.el.style.opacity = rounded.toFixed(3); }
+      });
+      const hot = active && !surgeOn && L && L.surge > .8;
+      if (!!hot !== meterHot) { meterHot = !!hot; if ($("surgeBar")) $("surgeBar").classList.toggle("juice-hot", meterHot); }
+      for (let i = flights.length - 1; i >= 0; i--) {
+        const f = flights[i]; f.age += delta;
+        const t = clamp(f.age / .7, 0, 1), k = t * t;
+        f.el.style.opacity = String(Math.min(1, (1 - t) / .2));
+        if (!reduced) f.el.style.transform = `translate(${f.dx * k}px,${f.dy * k - Math.sin(t * Math.PI) * 30}px) scale(${1 - k * .55})`;
+        if (t >= 1) { f.el.remove(); flights.splice(i, 1); pop($("scoreBox")); }
+      }
     }
     function pulse() {
       animate(vignette, [{ opacity: 0 }, { opacity: reduced ? .35 : .85, offset: .18 }, { opacity: 0 }], 650);
@@ -115,11 +191,10 @@ window.Juice = (() => {
       kick = amount; kickAge = 0; kickDuration = duration;
     }
     function pop(el) {
-      animate(el, [{ transform: "scale(.88)" }, { transform: "scale(1.14)", offset: .45 }, { transform: "scale(1)" }], 320);
+      animate(el, [{ opacity: .55, transform: "scale(.88)" }, { opacity: 1, transform: "scale(1.14)", offset: .45 }, { opacity: 1, transform: "scale(1)" }], 320);
     }
     function clearConfetti() {
-      if (confettiTimer !== null) clearTimeout(confettiTimer);
-      confettiTimer = null;
+      confettiLeft = 0;
       if (confetti) confetti.remove();
       confetti = null;
     }
@@ -137,7 +212,7 @@ window.Juice = (() => {
         confetti.appendChild(bit);
       }
       modal.prepend(confetti);
-      confettiTimer = setTimeout(safe(clearConfetti), 2500);
+      confettiLeft = 2.5;
     }
 
     const visibility = new WeakMap();
@@ -178,6 +253,7 @@ window.Juice = (() => {
     window.addEventListener("blur", safe(release));
 
     on("levelStart", data => {
+      clearMoments();
       level = data; levelRef = ctx.L; weapon = 0;
       intro = 1.1; bossActive = false; bossBlend = 0; shake = 0; kick = 0;
       stop(banner); banner.hidden = true; clearConfetti();
@@ -186,7 +262,9 @@ window.Juice = (() => {
     on("state", ({ from, to }) => {
       if (from === "home" && to === "play") { intro = reduced ? 1.1 : 0; showBanner(false); }
       if (to === "home" || to === "win" || to === "lose") bossActive = false;
-      if (to !== "play" && to !== "boss") { stop(banner); banner.hidden = true; }
+      if (!["play", "boss", "bonus", "paused"].includes(to)) { clearMoments(); shake = kick = bossBlend = 0; }
+      if (to === "paused") banner.hidden = true;
+      else if (current) banner.hidden = false;
       syncModals();
     });
     on("soldiersAdded", () => animate($("count"), [
@@ -212,12 +290,64 @@ window.Juice = (() => {
       { boxShadow: "0 0 22px 5px #8dff82bb", offset: .35 },
       { boxShadow: "0 0 0 0 #8dff8200" }
     ], 550));
-    on("gatePass", ({ before, after }) => { if (after > before) fov(5, .35); else if (after < before) jolt(.2, .2); });
+    on("gatePass", ({ before, after, half }) => { if (half && half.jackpot) { flash = 1; enqueue("JACKPOT!", { icon: "pu-jackpot", color: "#ffd84a" }); } if (after > before) fov(5, .35); else if (after < before) jolt(.2, .2); });
     on("solidBreak", ({ o, earned }) => { if (earned && o && ["blockYellow", "crate", "weaponCase"].includes(o.kind)) jolt(.13, .18); });
     on("bossStart", () => { bossActive = true; showBanner(true); pulse(); });
     on("bossWarn", () => { jolt(.065, .8); pulse(); });
     on("bossSlam", () => { jolt(.48, .4); pulse(); });
     on("bossDown", () => { bossActive = false; fov(-5, .3); });
+    on("combo", ({ count, tier }) => {
+      const rank = Number.isFinite(tier) ? clamp(Math.round(tier), 1, 4) : count >= 100 ? 4 : count >= 50 ? 3 : count >= 25 ? 2 : 1;
+      enqueue(["NICE", "GREAT", "SURGE!", "UNSTOPPABLE"][rank - 1], {
+        sub: "x" + [1.5, 2, 3, 4][rank - 1], size: 6 + rank,
+        color: ["#ffe48a", "#ffb33f", "#ff793e", "#ff493e"][rank - 1], icon: rank >= 3 ? "flame" : ""
+      });
+      animate($("combo"), [{ transform: "translateY(-50%) scale(.85)" }, { transform: "translateY(-50%) scale(1.3)", offset: .4 }, { transform: "translateY(-50%) scale(1)" }], 320);
+    });
+    on("surge", ({ on }) => {
+      surgeOn = !!on;
+      if (on) { if (!reduced) surgeKick = .8; enqueue("SURGE!", { icon: "surge", color: "#ffd84a", size: 10 }); }
+    });
+    on("shield", ({ on }) => { shieldOn = !!on; });
+    on("giant", ({ on }) => { giantOn = !!on; });
+    on("airdrop", () => enqueue("SUPPLY DROP!", { icon: "airdrop", color: "#8bd9ff" }));
+    on("powerup", ({ type }) => {
+      if (["shield", "airstrike", "giant", "jackpot"].includes(type)) enqueue(type.toUpperCase(), {
+        icon: "pu-" + type, color: type === "shield" ? "#8bd9ff" : type === "giant" ? "#ffae60" : "#ffd84a"
+      });
+    });
+    on("explosion", ({ x, z, radius }) => {
+      const L = ctx.L;
+      if (reduced || !inRun() || !L || ![x, z, radius, L.sx, L.sz].every(Number.isFinite)) return;
+      const distance = Math.hypot(x - L.sx, z - L.sz);
+      trauma = clamp(trauma + clamp(radius / 10, 0, .7) / (1 + distance / Math.max(1, radius)), 0, 1);
+    });
+    on("bossEnrage", () => { enqueue("BOSS IS ANGRY!", { color: "#ff5549", icon: "boss" }); pulse(); });
+    on("bonusStart", () => { bossActive = false; enqueue("SURGE FINALE!", { icon: "surge", color: "#ffd84a" }); });
+    function bonusStamp(mult, final) {
+      if (!Number.isFinite(mult)) return;
+      const k = clamp((mult - 1) / 9, 0, 1);
+      enqueue(`x${mult}${final ? " BONUS!" : ""}`, { stamp: true, size: 11 + k * 9,
+        color: `#ff${Math.round(255 - k * 39).toString(16)}${Math.round(255 - k * 181).toString(16)}` });
+    }
+    on("bonusWall", ({ mult }) => bonusStamp(mult, false));
+    on("bonusEnd", ({ mult }) => bonusStamp(mult, true));
+    on("squadMilestone", ({ n }) => {
+      const text = { 100: "BIG SQUAD!", 250: "MEGA SQUAD!", 500: "ULTRA SQUAD!" }[n];
+      if (!text) return;
+      enqueue(text, { icon: "squad", color: "#ffd84a", size: n === 500 ? 9 : 8 });
+      if (!reduced) pullback = 1;
+    });
+    on("score", ({ delta }) => {
+      const box = $("scoreBox");
+      if (!inRun() || !Number.isFinite(delta) || delta < 150 || !box || box.hidden || flights.length >= 6) return;
+      const g = game.getBoundingClientRect(), b = box.getBoundingClientRect();
+      const x = g.width * .56, y = g.height * .34;
+      const el = document.createElement("div"); el.className = "juice-points";
+      el.setAttribute("aria-hidden", "true"); el.textContent = "+" + Math.round(delta);
+      el.style.left = x + "px"; el.style.top = y + "px"; game.appendChild(el);
+      flights.push({ el, age: 0, dx: b.left - g.left + b.width / 2 - x, dy: b.top - g.top - y });
+    });
     on("win", ({ stars }) => {
       const container = $("stars");
       if (container) container.querySelectorAll("svg").forEach((star, i) => {
@@ -231,11 +361,17 @@ window.Juice = (() => {
       celebrate();
     });
     on("lose", syncModals);
-    on("frame", ({ dt, camera, look, state }) => {
-      const delta = Number.isFinite(dt) ? Math.max(0, Math.min(dt, .1)) : 0;
+    on("frame", ({ dt, realDt, camera, look, state, L }) => {
+      const elapsed = Number.isFinite(realDt) ? realDt : dt;
+      const delta = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+      const active = state === "play" || state === "boss" || state === "bonus";
+      if (confettiLeft > 0) { confettiLeft -= delta; if (confettiLeft <= 0) clearConfetti(); }
+      updateMoments(delta, active, L || ctx.L);
+      trauma = Math.max(0, trauma - delta * 1.7);
+      pullback = Math.max(0, pullback - delta);
+      surgeKick = Math.max(0, surgeKick - delta);
       clock += delta;
       if (reduced || !camera || !look) return;
-      const active = state === "play" || state === "boss";
       if (active) intro = Math.min(1.1, intro + delta);
       if (state === "home") {
         camera.position.x += Math.sin(clock * .45) * .22;
@@ -257,15 +393,24 @@ window.Juice = (() => {
         camera.position.x += Math.sin(clock * 113) * amount;
         camera.position.y += Math.cos(clock * 97) * amount * .55;
       }
+      if (active) {
+        camera.fov += 6 * Math.pow(surgeKick / .8, 3);
+        camera.position.y += 2 * Math.sin(pullback * Math.PI);
+        camera.position.z += 4 * Math.sin(pullback * Math.PI);
+        const amount = trauma * trauma * .8;
+        camera.position.x += Math.sin(clock * 127) * amount;
+        camera.position.y += Math.cos(clock * 103) * amount * .6;
+      }
       camera.lookAt(look);
     });
     const motionChanged = safe(() => {
       reduced = media.matches;
       if (!reduced) return;
-      intro = 1.1; shake = 0; kick = 0; bossBlend = 0;
+      intro = 1.1; shake = 0; kick = 0; bossBlend = 0; trauma = pullback = surgeKick = 0;
       clearConfetti();
       animations.forEach(animation => animation.cancel()); animations.clear();
-      banner.hidden = true;
+      banner.style.transform = "none";
+      flights.forEach(f => { f.el.style.transform = "none"; });
     });
     if (media.addEventListener) media.addEventListener("change", motionChanged);
     else if (media.addListener) media.addListener(motionChanged);
