@@ -1646,6 +1646,28 @@
     b.finish(env.root);
   }, { world: true });
 
+  // rubble: heap of fallen sandstone treads and chips with a cracked half-step and a little moss. Static, < 0.4 tall.
+  def("rubble", "floor", { s: "scale (1)" }, (env) => {
+    const rng = env.rng, b = new Builder({ ao: 0.2 });
+    const chunk = (x, z, w, h, d, ry, tilt, c) => b.add("matte", new THREE.BoxGeometry(w, h, d), { p: [x, h / 2 + Math.max(0, Math.sin(tilt) * w * 0.35), z], r: [tilt * 0.6, ry, tilt], c });
+    // cracked half-step: two broken slabs of a tread
+    chunk(-0.12, -0.1, 0.52, 0.16, 0.34, 0.15, 0.0, C.sand);
+    chunk(0.22, -0.02, 0.3, 0.14, 0.32, -0.35, 0.18, C.sandDk);
+    b.box("matte", 0.5, 0.02, 0.3, { p: [-0.12, 0.165, -0.1], r: [0, 0.15, 0], c: C.sandHi });              // worn top edge
+    // fallen treads
+    chunk(0.05, 0.28, 0.4, 0.1, 0.24, 0.5, -0.25, C.sandHi);
+    chunk(-0.3, 0.22, 0.28, 0.09, 0.2, -0.4, 0.3, C.sand);
+    // chips
+    for (let i = 0; i < 9; i++) {
+      const a = rng() * TAU, r = 0.15 + rng() * 0.3, w = 0.05 + rng() * 0.09;
+      b.add("matte", new THREE.BoxGeometry(w, w * 0.7, w * 0.9), { p: [Math.cos(a) * r, w * 0.35, Math.sin(a) * r], r: [rng(), rng() * TAU, rng()], c: rng() < 0.5 ? C.sand : C.sandDk });
+    }
+    // moss patches
+    for (const [x, z, r] of [[-0.3, -0.12, 0.1], [0.3, 0.1, 0.07], [0.0, 0.3, 0.06]]) b.cyl("matte", r, r * 1.1, 0.025, 8, { p: [x, 0.012 + (z < 0 ? 0.16 : 0.1), z], c: C.moss });
+    b.finish(env.root);
+    if (P(env.item, "s", 1) !== 1) env.root.scale.setScalar(P(env.item, "s", 1));
+  }, { stat: true });
+
   // hinge: barrel on an x/z rotor's pivot face. axis "x" | "z" (world axis the barrel runs along)
   def("hinge", "floor", { axis: "'x' | 'z'" }, (env) => {
     const g = new THREE.Group(); g.rotation.y = env.yawOf(P(env.item, "axis", "x") === "z" ? "+z" : "+x"); env.root.add(g);

@@ -109,6 +109,7 @@ html,body{margin:0;overflow:hidden;background:#1b1830}
       add("corbel", { type: "corbel", at: [4, 3, -1], face: "+z" }); add("corbel", { type: "corbel", at: [6, 3, -1], face: "+z" });
       add("hinge", { type: "hinge", at: [13, 0, 2], axis: "x" });
       var dialObj = add("dial", { type: "dial", at: [11, 0, 3], r: 1.2 });
+      add("rubble", { type: "rubble", at: [16, 0, 2] }); add("rubble", { type: "rubble", at: [15, 0, 3], rot: 90 });
       items = A;
       var crank = A[0].obj, wheel = A[1].obj, lever = A[2].obj, knob = A.filter(function (a) { return a.item.type === "knob"; })[0].obj;
       var collected = false;
