@@ -345,6 +345,88 @@
     const mesh = new THREE.Mesh(g, m); if (!vertical) mesh.rotation.x = -Math.PI / 2; mesh.renderOrder = 2; return mesh;
   }
 
+
+  // ------------------------------------------------------------------------------------------------ billboard batches
+  // One mesh of camera-facing quads (glows, glints, flames, smoke, foam) with per-quad position, size, colour, alpha, kind
+  // and rotation. A whole prop's sprites cost ONE draw call. Kinds index a 3x2 atlas: 0 glow, 1 hot, 2 star, 3 smoke, 4 flame.
+  // `add` 1 = additive, 0 = normal alpha blending (premultiplied blend state). Each batch owns a material so the engine's
+  // static baker never merges it.
+  let BOARD_TEX = null;
+  function boardTexture() {
+    if (BOARD_TEX) return BOARD_TEX;
+    const c = canvas(384, 256), g = c.getContext("2d"), src = [T.glow, T.hot, T.star, T.smoke, T.flame];
+    src.forEach((t, i) => { try { g.drawImage(t.image, (i % 3) * 128, Math.floor(i / 3) * 128, 128, 128); } catch (e) { /* ignore */ } });
+    BOARD_TEX = new THREE.CanvasTexture(c); BOARD_TEX.generateMipmaps = false; BOARD_TEX.minFilter = THREE.LinearFilter; BOARD_TEX.magFilter = THREE.LinearFilter;
+    own.push(BOARD_TEX); return BOARD_TEX;
+  }
+  const BOARD_VS = [
+    "attribute vec2 corner; attribute vec2 size; attribute vec4 color; attribute vec3 misc;",
+    "varying vec2 vUv; varying vec4 vCol; varying float vAdd;",
+    "void main(){",
+    "  vec4 mv = modelViewMatrix * vec4(position, 1.0);",
+    "  float sc = length(modelViewMatrix[0].xyz);",
+    "  float cr = cos(misc.z), sr = sin(misc.z);",
+    "  vec2 o = vec2(corner.x*cr - corner.y*sr, corner.x*sr + corner.y*cr) * size * 0.5 * sc;",
+    "  mv.xy += o; gl_Position = projectionMatrix * mv;",
+    "  float k = floor(misc.x + 0.5); float col = mod(k, 3.0), row = floor(k / 3.0);",
+    "  vec2 q = corner * 0.5 + 0.5;",
+    "  vUv = vec2((col + q.x) / 3.0, 1.0 - (row + 1.0 - q.y) / 2.0);",
+    "  vCol = color; vAdd = misc.y; }",
+  ].join("\n");
+  const BOARD_FS = [
+    "uniform sampler2D map; varying vec2 vUv; varying vec4 vCol; varying float vAdd;",
+    "void main(){",
+    "  vec4 t = texture2D(map, vUv); float a = t.a * vCol.a; if (a < 0.002) discard;",
+    "  gl_FragColor = vec4(pow(t.rgb, vec3(2.2)) * vCol.rgb, 1.0);",
+    "  #include <tonemapping_fragment>",
+    "  #include <encodings_fragment>",
+    "  gl_FragColor = vec4(gl_FragColor.rgb * a, a * (1.0 - vAdd)); }",
+  ].join("\n");
+
+  function makeBoard(env, n) {
+    const geo = new THREE.BufferGeometry(), A = (k) => new Float32Array(n * 4 * k);
+    const pos = A(3), cor = A(2), siz = A(2), col = A(4), mis = A(3), idx = [];
+    const cx = [-1, 1, 1, -1], cy = [-1, -1, 1, 1];
+    for (let i = 0; i < n; i++) {
+      for (let v = 0; v < 4; v++) { cor[(i * 4 + v) * 2] = cx[v]; cor[(i * 4 + v) * 2 + 1] = cy[v]; }
+      idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+    }
+    const attrs = {
+      position: new THREE.BufferAttribute(pos, 3), corner: new THREE.BufferAttribute(cor, 2), size: new THREE.BufferAttribute(siz, 2),
+      color: new THREE.BufferAttribute(col, 4), misc: new THREE.BufferAttribute(mis, 3),
+    };
+    for (const k of Object.keys(attrs)) { if (k !== "corner") attrs[k].setUsage(THREE.DynamicDrawUsage); geo.setAttribute(k, attrs[k]); }
+    geo.setIndex(idx);
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: boardTexture() } }, vertexShader: BOARD_VS, fragmentShader: BOARD_FS,
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    });
+    env.own.push(mat); env.ownG.push(geo);
+    const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 3; mesh.name = "board";
+    const B = {
+      mesh, n, dirty: true,
+      // quad i: position, size (w,h), colour hex, alpha, kind, additive (1/0), rotation
+      set(i, x, y, z, w, h, color, a, kind, add, rot) {
+        B.pos(i, x, y, z); B.size(i, w, h); B.tint(i, color); B.alpha(i, a);
+        for (let v = 0; v < 4; v++) { const o = (i * 4 + v) * 3; mis[o] = kind || 0; mis[o + 1] = add === undefined ? 1 : add; mis[o + 2] = rot || 0; }
+      },
+      pos(i, x, y, z) { for (let v = 0; v < 4; v++) { const o = (i * 4 + v) * 3; pos[o] = x; pos[o + 1] = y; pos[o + 2] = z; } B.dirty = true; },
+      size(i, w, h) { for (let v = 0; v < 4; v++) { const o = (i * 4 + v) * 2; siz[o] = w; siz[o + 1] = h; } B.dirty = true; },
+      tint(i, hex) { const c = lin(hex); for (let v = 0; v < 4; v++) { const o = (i * 4 + v) * 4; col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b; } B.dirty = true; },
+      alpha(i, a) { for (let v = 0; v < 4; v++) col[(i * 4 + v) * 4 + 3] = a; B.dirty = true; },
+      rot(i, r) { for (let v = 0; v < 4; v++) mis[(i * 4 + v) * 3 + 2] = r; B.dirty = true; },
+      // upload changes; hides the whole batch when nothing is visible
+      flush() {
+        if (!B.dirty) return; B.dirty = false;
+        for (const k of ["position", "size", "color", "misc"]) attrs[k].needsUpdate = true;
+        let any = false; for (let i = 0; i < n; i++) if (col[i * 16 + 3] > 0.003) { any = true; break; }
+        mesh.visible = any;
+      },
+    };
+    return B;
+  }
+
   // pulsing handle ring: lies flat in the local XZ plane (the handle axis is local y)
   function addHint(env, radius, y) {
     const m = new THREE.MeshBasicMaterial({ map: T.ring, color: lin(0xffc24a), depthWrite: false, depthTest: false, transparent: true, opacity: 0.8 });
@@ -592,7 +674,7 @@
     // wooden grip standing on the end of the long spoke
     wb.cyl("metal", 0.017, 0.017, 0.07, 8, { p: [0.44, 0.03, 0], c: C.ironHi });
     wb.cyl("metal", 0.045, 0.045, 0.02, 12, { p: [0.44, 0.0, 0], c: C.brassDk });
-    wb.lat("matte", [[0, 0.02], [0.034, 0.02], [0.044, 0.05], [0.047, 0.11], [0.04, 0.17], [0.03, 0.2], [0, 0.205]], { p: [0.44, 0.0, 0], c: C.wood }, 14);
+    wb.lat("metal", [[0, 0.02], [0.034, 0.02], [0.044, 0.05], [0.047, 0.11], [0.04, 0.17], [0.03, 0.2], [0, 0.205]], { p: [0.44, 0.0, 0], c: 0xb06e3c }, 14);
     wb.sph("metal", 0.032, { p: [0.44, 0.215, 0], c: C.brassHi }, 10, 8);
     wb.finish(wheel);
     env.ud.spin = (v) => { wheel.rotation.y = -v * Math.PI / 180; };
@@ -723,59 +805,63 @@
   });
 
   def("glimmer", "floor", {}, (env) => {
+    // 3 draw calls: crystal core, orbiting shards, and one billboard batch (halo, hot core, glints, burst sparks)
     const W = env.root, g = new THREE.Group(); W.add(g);
-    const ph = env.rng() * TAU;
+    const ph = env.rng() * TAU, low = env.quality === "low";
     const coreM = new THREE.MeshStandardMaterial({ color: lin(0xdffcff), emissive: lin(0x7fe6ff), emissiveIntensity: 1.6, metalness: 0.15, roughness: 0.08, transparent: true, opacity: 0.92, flatShading: true, envMap: M._envTex, envMapIntensity: 1.6 });
     env.own.push(coreM);
     const og = new THREE.OctahedronGeometry(0.1, 0); env.ownG.push(og);
     const core = new THREE.Mesh(og, coreM); core.scale.set(0.8, 1.45, 0.8); g.add(core);
-    const shards = [];
+    // the three shards merged into one mesh that orbits as a whole
+    const sb = new Builder({ ao: 0 });
     for (let i = 0; i < 3; i++) {
-      const s = new THREE.Mesh(og, coreM); s.scale.set(0.28, 0.5, 0.28); g.add(s); shards.push(s);
+      const a = i * 2.09, r = 0.2 + i * 0.03;
+      sb.add("shard", new THREE.OctahedronGeometry(0.1, 0), { p: [Math.cos(a) * r, (i - 1) * 0.07, Math.sin(a) * r], r: [i, i * 1.7, 0], s: [0.28, 0.5, 0.28] });
     }
-    const halo = glowSprite(env, 0x7fe6ff, 0.95, 0.55); g.add(halo);
-    const hot = glowSprite(env, 0xffffff, 0.34, 0.9); g.add(hot);
-    const stars = [];
-    for (let i = 0; i < 3; i++) { const s = glowSprite(env, i ? 0xffe9a8 : 0xffffff, 0.3, 0.8, T.star); g.add(s); stars.push(s); }
-    // burst pool
+    const shardGroup = new THREE.Group(); g.add(shardGroup);
+    sb.finish(shardGroup, { shard: coreM }, { shard: { cast: false } });
+    // billboards: 0 halo, 1 hot core, 2..4 glints, 5..18 burst sparks
+    const N = 5 + (low ? 0 : 0) + 14, B = makeBoard(env, N); g.add(B.mesh);
+    B.set(0, 0, 0, 0, 0.95, 0.95, 0x7fe6ff, 0.55, 0, 1); B.set(1, 0, 0, 0, 0.34, 0.34, 0xffffff, 0.9, 0, 1);
+    for (let i = 0; i < 3; i++) B.set(2 + i, 0, 0, 0, 0.3, 0.3, i ? 0xffe9a8 : 0xffffff, 0.8, 2, 1);
     const sparks = [];
     for (let i = 0; i < 14; i++) {
-      const s = glowSprite(env, i % 3 ? 0xbff4ff : 0xffe9a8, 0.2, 0, T.star); s.visible = false; g.add(s);
       const a = env.rng() * TAU, e = 0.3 + env.rng() * 0.9;
-      sparks.push({ s, vx: Math.cos(a) * e * 1.1, vz: Math.sin(a) * e * 1.1, vy: 0.5 + env.rng() * 1.1, sz: 0.14 + env.rng() * 0.18 });
+      B.set(5 + i, 0, 0, 0, 0.2, 0.2, i % 3 ? 0xbff4ff : 0xffe9a8, 0, 2, 1);
+      sparks.push({ vx: Math.cos(a) * e * 1.1, vz: Math.sin(a) * e * 1.1, vy: 0.5 + env.rng() * 1.1, sz: 0.14 + env.rng() * 0.18 });
     }
-    let bt = -1;
+    B.flush();
+    let bt = -1; const tmp = new THREE.Vector3();
     env.ud.collected = false;
-    env.ud.collect = () => {
-      if (env.ud.collected) return; env.ud.collected = true; bt = 0;
-      for (const p of sparks) { p.s.visible = true; p.s.position.set(0, 0, 0); }
+    env.ud.collect = () => { if (env.ud.collected) return; env.ud.collected = true; bt = 0; };
+    env.ud.respawn = () => {
+      env.ud.collected = false; bt = -1; g.visible = true; core.scale.set(0.8, 1.45, 0.8); B.size(0, 0.95, 0.95);
+      for (let i = 5; i < N; i++) B.alpha(i, 0);
     };
-    env.ud.respawn = () => { env.ud.collected = false; bt = -1; g.visible = true; core.visible = true; core.scale.set(0.8, 1.45, 0.8); halo.visible = hot.visible = true; for (const s of stars) s.visible = true; for (const p of sparks) p.s.visible = false; };
     env.upd((dt, t) => {
       g.position.y = 0.55 + Math.sin(t * 1.7 + ph) * 0.07;
       core.rotation.y = t * 1.1 + ph;
+      shardGroup.rotation.y = t * 1.5 + ph; shardGroup.rotation.x = Math.sin(t * 1.9) * 0.25;
       for (let i = 0; i < 3; i++) {
-        const a = t * (1.3 + i * 0.35) + ph + i * 2.09, r = 0.2 + i * 0.03;
-        shards[i].position.set(Math.cos(a) * r, Math.sin(t * 1.9 + i * 2) * 0.08 + (i - 1) * 0.06, Math.sin(a) * r);
-        shards[i].rotation.set(t * 2 + i, t * 1.5, 0);
+        const a = t * 1.5 + ph + i * 2.09, r = (0.2 + i * 0.03) * 1.5;
         const tw = 0.5 + 0.5 * Math.sin(t * 5 + i * 1.7 + ph);
-        stars[i].position.copy(shards[i].position).multiplyScalar(1.5); stars[i].position.y += 0.05;
-        stars[i].material.opacity = tw * tw * 0.9; stars[i].material.rotation = t * 0.8 + i;
+        B.pos(2 + i, Math.cos(a) * r, (i - 1) * 0.1 + Math.sin(t * 1.9 + i * 2) * 0.1 + 0.05, Math.sin(a) * r);
+        B.alpha(2 + i, bt >= 0 ? 0 : tw * tw * 0.9); B.rot(2 + i, t * 0.8 + i);
       }
       if (bt >= 0) {
         bt += dt;
         const k = bt / 0.7;
         const s = bt < 0.14 ? 1 + bt / 0.14 * 0.6 : Math.max(0, 1.6 * (1 - (bt - 0.14) / 0.2));
-        core.scale.set(0.8 * s, 1.45 * s, 0.8 * s);
-        halo.material.opacity = Math.max(0, 0.55 + (bt < 0.14 ? bt * 4 : 0) - bt * 1.2); hot.material.opacity = Math.max(0, 1 - bt * 3);
-        halo.scale.setScalar(0.95 + bt * 2.6);
-        for (const s2 of stars) s2.visible = false;
-        for (const p of sparks) {
-          p.s.position.set(p.vx * bt, p.vy * bt - 1.1 * bt * bt, p.vz * bt);
-          p.s.material.opacity = Math.max(0, 1 - k) * 0.95; p.s.scale.setScalar(p.sz * (1 - k * 0.5)); p.s.material.rotation = bt * 3;
+        core.scale.set(0.8 * s, 1.45 * s, 0.8 * s); shardGroup.scale.setScalar(Math.max(0.001, s));
+        B.alpha(0, Math.max(0, 0.55 + (bt < 0.14 ? bt * 4 : 0) - bt * 1.2)); B.alpha(1, Math.max(0, 1 - bt * 3));
+        const hs = 0.95 + bt * 2.6; B.size(0, hs, hs);
+        for (let i = 0; i < 14; i++) {
+          const p = sparks[i], q = 5 + i, z = p.sz * (1 - k * 0.5);
+          B.pos(q, p.vx * bt, p.vy * bt - 1.1 * bt * bt, p.vz * bt); B.size(q, z, z); B.alpha(q, Math.max(0, 1 - k) * 0.95); B.rot(q, bt * 3);
         }
         if (k >= 1) { bt = -1; g.visible = false; }
-      } else if (!env.ud.collected) { halo.material.opacity = 0.45 + 0.15 * Math.sin(t * 3 + ph); }
+      } else if (!env.ud.collected) { B.alpha(0, 0.45 + 0.15 * Math.sin(t * 3 + ph)); shardGroup.scale.setScalar(1); }
+      void tmp; B.flush();
     });
   });
 
@@ -795,7 +881,9 @@
 
   // lit/unlit controller shared by lantern and streetlamp
   function lampRig(env, flamePos, size, lampMat, light) {
-    const halo = glowSprite(env, C.lamp, size * 1.15, 0, T.hot); halo.position.copy(flamePos); env.root.add(halo);
+    let halo;
+    if (env.quality === "low") halo = { material: { opacity: 0 }, visible: false };
+    else { halo = glowSprite(env, C.lamp, size * 1.15, 0, T.hot); halo.position.copy(flamePos); env.root.add(halo); }
     const core = { material: { opacity: 0 }, visible: true };
     const wash = flatGlow(env, C.lamp, size * 3.4, size * 3.4, 0, true); wash.visible = false; // soft light bleed (kept off; sprites suffice)
     void wash;
@@ -843,8 +931,6 @@
       bl.finish(lg, { lamp: lm }, { lamp: { cast: false } });
       b.finish(W);
       lampRig(env, flame, 0.9, lm, !!env.item.light);
-      env.ud.sway = lg;
-      env.upd((dt, t) => { lg.rotation.x = Math.sin(t * 1.1 + env.root.position.x) * 0.018; });
       return;
     }
     const lm = lampMaterial(env);
@@ -958,16 +1044,15 @@
     const flameM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 0.06, 0.03) }); env.own.push(flameM);
     const fg = new THREE.SphereGeometry(0.1, 14, 10); env.ownG.push(fg);
     const core = new THREE.Mesh(fg, flameM); core.scale.set(1, 1.7, 1); core.position.y = 0.78; W.add(core);
-    const flame = glowSprite(env, 0xffc070, 1, 0, T.flame); flame.scale.set(0.34, 0.56, 1); flame.position.y = 0.82; W.add(flame);
-    const halo = glowSprite(env, C.lamp, 1.2, 0, T.hot); halo.position.y = 0.8; W.add(halo);
-    const big = glowSprite(env, 0xff9a4a, 3, 0); big.position.y = 0.8; big.renderOrder = 2; W.add(big);
-    // rotating glints and sweeping beam
-    const glints = [];
-    for (let i = 0; i < 5; i++) { const s = glowSprite(env, i % 2 ? 0xffe9b0 : 0xffffff, 0.4, 0, T.star); W.add(s); glints.push(s); }
-    const beamG = new THREE.PlaneGeometry(4.2, 0.55); env.ownG.push(beamG);
+    // all glows, the flame and the rotating glints are one billboard batch; both beams are one mesh
+    const low = env.quality === "low", NG = 5, B = makeBoard(env, 3 + NG); W.add(B.mesh);
+    B.set(0, 0, 0.8, 0, 3, 3, 0xff9a4a, 0, 0, 1); B.set(1, 0, 0.8, 0, 1.2, 1.2, C.lamp, 0, 1, 1); B.set(2, 0, 0.82, 0, 0.34, 0.56, 0xffc070, 0, 4, 1);
+    for (let i = 0; i < NG; i++) B.set(3 + i, 0, 0.8, 0, 0.4, 0.4, i % 2 ? 0xffe9b0 : 0xffffff, 0, 2, 1);
+    const bgA = new THREE.PlaneGeometry(4.2, 0.55).rotateX(-Math.PI / 2), bgB = new THREE.PlaneGeometry(2.52, 0.55).rotateX(-Math.PI / 2).rotateY(Math.PI / 2);
+    const bgM = THREE.BufferGeometryUtils && THREE.BufferGeometryUtils.mergeBufferGeometries ? THREE.BufferGeometryUtils.mergeBufferGeometries([bgA, bgB], false) : bgA;
+    env.ownG.push(bgM);
     const beamM = new THREE.MeshBasicMaterial({ map: T.beam, color: lin(0xffc070), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0, side: THREE.DoubleSide }); env.own.push(beamM);
-    const beam = new THREE.Mesh(beamG, beamM); beam.rotation.x = -Math.PI / 2; beam.position.y = 0.8; beam.renderOrder = 2; W.add(beam);
-    const beam2 = new THREE.Mesh(beamG, beamM); beam2.rotation.x = -Math.PI / 2; beam2.position.y = 0.8; beam2.renderOrder = 2; W.add(beam2);
+    const beam = new THREE.Mesh(bgM, beamM); beam.position.y = 0.8; beam.renderOrder = 2; W.add(beam);
     const pl = new THREE.PointLight(C.lamp, 0, 9, 2); pl.position.set(0, 0.9, 0.2); W.add(pl);
     const st = ramp(env.item.lit === true, 1.0), ph = env.rng() * TAU;
     const hot = new THREE.Color(1.7, 0.62, 0.12), ember = new THREE.Color(0.2, 0.06, 0.03);
@@ -976,19 +1061,17 @@
       const em = 0.1 + 0.05 * Math.sin(t * 1.5 + ph);   // unlit: faint ember hint
       flameM.color.copy(ember).lerp(hot, v).multiplyScalar(v > 0.5 ? f : 1);
       lensM.emissiveIntensity = v * 0.5 * f; lensM.opacity = lerp(0.3, 0.16, v); lensM.envMapIntensity = lerp(1.8, 0.7, v);
-      flame.material.opacity = v; flame.scale.set(0.46 * (0.9 + 0.1 * f) * (0.6 + 0.4 * v), 0.74 * f * (0.6 + 0.5 * v), 1);
-      halo.material.opacity = v * 0.5 * f + (1 - v) * em * 0.5; halo.scale.setScalar(lerp(0.6, 1.25, v));
-      big.material.opacity = v * 0.42; big.scale.setScalar(lerp(1.2, 4.2, v) * (0.97 + 0.03 * f));
-      beamM.opacity = v * 0.6; beam.visible = beam2.visible = v > 0.02;
+      B.alpha(2, v); B.size(2, 0.46 * (0.9 + 0.1 * f) * (0.6 + 0.4 * v), 0.74 * f * (0.6 + 0.5 * v));
+      const hs = lerp(0.6, 1.25, v); B.alpha(1, v * 0.5 * f + (1 - v) * em * 0.5); B.size(1, hs, hs);
+      const bs = lerp(1.2, 4.2, v) * (0.97 + 0.03 * f); B.alpha(0, low ? 0 : v * 0.42); B.size(0, bs, bs);
+      beamM.opacity = v * 0.6; beam.visible = v > 0.02;
       pl.intensity = v * 3.4 * f;
-      for (let i = 0; i < glints.length; i++) {
-        const a = t * 0.5 + i * TAU / glints.length, r = 0.36;
-        glints[i].position.set(Math.cos(a) * r, 0.8 + Math.sin(t * 0.9 + i * 1.7) * 0.2, Math.sin(a) * r);
-        const tw = 0.5 + 0.5 * Math.sin(t * 3 + i * 2.1);
-        glints[i].material.opacity = v * (0.35 + 0.65 * tw); glints[i].material.rotation = t * 0.6 + i;
-        glints[i].scale.setScalar(0.28 + 0.24 * tw);
+      for (let i = 0; i < NG; i++) {
+        const a = t * 0.5 + i * TAU / NG, r = 0.36, tw = 0.5 + 0.5 * Math.sin(t * 3 + i * 2.1), q = 3 + i, sz = 0.28 + 0.24 * tw;
+        B.pos(q, Math.cos(a) * r, 0.8 + Math.sin(t * 0.9 + i * 1.7) * 0.2, Math.sin(a) * r);
+        B.alpha(q, low ? 0 : v * (0.35 + 0.65 * tw)); B.rot(q, t * 0.6 + i); B.size(q, sz, sz);
       }
-      beam.rotation.z = t * 0.7; beam2.rotation.z = t * 0.7 + Math.PI / 2; beam2.scale.set(0.6, 1, 1);
+      beam.rotation.y = t * 0.7; B.flush();
     };
     env.ud.ignite = (instant) => { st.set(true, instant === true); env.ud.ignited = true; if (instant === true) apply(0); };
     env.ud.extinguish = () => { st.set(false, true); env.ud.ignited = false; apply(0); };
@@ -1169,15 +1252,16 @@
     b.tor("metal", 0.21, 0.014, { p: [0, 0.2, 0], r: [Math.PI / 2, 0, 0], c: C.iron }, 4, 5);
     b.finish(W);
     if (P(env.item, "smoke", true) && env.quality !== "low") {
-      const puffs = [];
-      for (let i = 0; i < 5; i++) { const s = glowSprite(env, 0xffffff, 0.3, 0, T.smoke); s.material.blending = THREE.NormalBlending; s.renderOrder = 3; W.add(s); puffs.push({ s, o: i / 5 }); }
+      const SB = makeBoard(env, 5); W.add(SB.mesh);
+      for (let i = 0; i < 5; i++) SB.set(i, 0, 0, 0, 0.3, 0.3, 0xffffff, 0, 3, 0);
       const top = 0.07 + h + 0.15;
       env.upd((dt, t) => {
-        for (const p of puffs) {
-          const k = (t * 0.16 + p.o) % 1;
-          p.s.position.set(Math.sin(k * 5 + p.o * 9) * 0.06 + k * 0.18, top + k * 1.2, Math.cos(k * 4 + p.o * 7) * 0.05 + k * 0.1);
-          p.s.scale.setScalar(0.16 + k * 0.55); p.s.material.opacity = Math.sin(Math.min(1, k * 1.1) * Math.PI) * 0.35;
+        for (let i = 0; i < 5; i++) {
+          const o = i / 5, k = (t * 0.16 + o) % 1, z = 0.16 + k * 0.55;
+          SB.pos(i, Math.sin(k * 5 + o * 9) * 0.06 + k * 0.18, top + k * 1.2, Math.cos(k * 4 + o * 7) * 0.05 + k * 0.1);
+          SB.size(i, z, z); SB.alpha(i, Math.sin(Math.min(1, k * 1.1) * Math.PI) * 0.35);
         }
+        SB.flush();
       });
     }
   });
@@ -1286,18 +1370,19 @@
     const a = mk(w, 3.2, 0.0, 1.0), c = mk(w * 0.8, 4.4, 7.3, 0.7); c.position.z = 0.03;
     W.add(a, c);
     // foam and spray at the base (also at the lip)
-    const base = lipY - len, foam = [];
-    for (let i = 0; i < 3; i++) { const s = glowSprite(env, 0xe8f2ff, 0.6, 0, T.smoke); s.material.blending = THREE.NormalBlending; s.renderOrder = 6; W.add(s); foam.push({ s, o: i / 3 }); }
-    const sp = glowSprite(env, 0xbfe0ff, 1.4, 0.35, T.glow); sp.position.set(0, base + 0.1, 0.25); W.add(sp);
-    const lipFoam = glowSprite(env, 0xffffff, 0.45, 0.5, T.glow); lipFoam.position.set(0, lipY - 0.02, 0.12); W.add(lipFoam);
+    const base = lipY - len, low = env.quality === "low";
+    // foam puffs 0-2, spray glow 3, lip glow 4: one billboard batch
+    const FB = makeBoard(env, 5); W.add(FB.mesh); FB.mesh.renderOrder = 6;
+    for (let i = 0; i < 3; i++) FB.set(i, 0, base, 0.27, 0.6, 0.6, 0xe8f2ff, 0, 3, 0);
+    FB.set(3, 0, base + 0.1, 0.25, 1.4, 1.4, 0xbfe0ff, 0.35, 0, 1); FB.set(4, 0, lipY - 0.02, 0.12, 0.45, 0.45, 0xffffff, 0.5, 0, 1);
     env.upd((dt, t) => {
       a.material.uniforms.uTime.value = t; c.material.uniforms.uTime.value = t;
-      for (const f of foam) {
-        const k = (t * 0.45 + f.o) % 1;
-        f.s.position.set((f.o - 0.4) * w * 1.4 + Math.sin(t + f.o * 7) * 0.06, base + 0.05 + k * 0.5, 0.27 + k * 0.1);
-        f.s.scale.setScalar(0.5 + k * 0.9); f.s.material.opacity = Math.sin(k * Math.PI) * 0.55;
+      for (let i = 0; i < 3; i++) {
+        const o = i / 3, k = (t * 0.45 + o) % 1, z = 0.5 + k * 0.9;
+        FB.pos(i, (o - 0.4) * w * 1.4 + Math.sin(t + o * 7) * 0.06, base + 0.05 + k * 0.5, 0.27 + k * 0.1);
+        FB.size(i, z, z); FB.alpha(i, low ? 0 : Math.sin(k * Math.PI) * 0.55);
       }
-      sp.material.opacity = 0.3 + 0.08 * Math.sin(t * 2.1);
+      FB.alpha(3, low ? 0 : 0.3 + 0.08 * Math.sin(t * 2.1)); FB.flush();
     });
   });
 
@@ -1351,10 +1436,13 @@
       halos.push([x, 0.18 + rng() * 0.12, z]);
     }
     b.finish(env.root, null, { c_flowers: { cast: false } });
-    if (P(env.item, "glow", true) && env.quality !== "low") {
-      const s = glowSprite(env, 0x6ff3ff, sp * 3.2 + 0.4, 0.32, T.glow); s.position.set(0, 0.2, 0); env.root.add(s);
-      const s2 = glowSprite(env, 0x9cf8ff, 0.5, 0.5, T.star); s2.position.set(halos[0][0], halos[0][1] + 0.12, halos[0][2]); env.root.add(s2);
-      env.upd((dt, t) => { s.material.opacity = 0.26 + 0.1 * Math.sin(t * 1.3 + env.root.position.x); s2.material.opacity = 0.4 + 0.4 * Math.sin(t * 2.3 + env.root.position.z * 2); s2.material.rotation = t * 0.4; });
+    if (P(env.item, "glow", true) && env.quality !== "low" && env.quality !== "medium") {
+      const FB = makeBoard(env, 2); env.root.add(FB.mesh);
+      FB.set(0, 0, 0.2, 0, sp * 3.2 + 0.4, sp * 3.2 + 0.4, 0x6ff3ff, 0.32, 0, 1);
+      FB.set(1, halos[0][0], halos[0][1] + 0.12, halos[0][2], 0.5, 0.5, 0x9cf8ff, 0.5, 2, 1);
+      env.upd((dt, t) => {
+        FB.alpha(0, 0.26 + 0.1 * Math.sin(t * 1.3 + env.root.position.x)); FB.alpha(1, 0.4 + 0.4 * Math.sin(t * 2.3 + env.root.position.z * 2)); FB.rot(1, t * 0.4); FB.flush();
+      });
     }
   });
 
