@@ -1,0 +1,4 @@
+Wide 16:9 painted sky backdrop for a puzzle game, matching the attached key art's rich painterly-3D, warm and detailed look (not flat, not pastel, no text, no logo, no UI, no characters). The CENTRE of the image must be calm open sky (a soft glow or gradient) with NO objects, because a game diorama is placed there. Include a few small, distant, hazy silhouettes of floating clockwork spires and rocky islands with tiny lit windows only near the far left and far right edges, and keep them small. The bottom 30% fades into soft distant cloud tops.  AURORA: dark blue-black sky with soft green and violet aurora ribbons sweeping across the upper part, scattered stars, faint teal glow near the horizon.
+
+
+refs: /home/user/my-first-repo/spirelight/art-src/style/style-1.png

@@ -1,0 +1,4 @@
+Painterly wide-landscape illustration card art, rich warm-lit and highly detailed, matching the reference style: a lone ancient clockwork brass-and-sandstone spire floating above a sea of clouds, glowing amber windows, ivy, brass gears and lanterns. Sky: dusk, deep indigo to violet to orange sun glow on the horizon, orange-lit clouds. No text, no characters, no frame. Spire is centered, composition leaves calm sky at the top. Aspect 3:2.
+
+
+refs: /home/user/my-first-repo/spirelight/art-src/style/style-1.png

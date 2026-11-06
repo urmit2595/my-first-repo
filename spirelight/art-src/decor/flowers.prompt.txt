@@ -1,0 +1,2 @@
+A 4 by 2 grid (8 items) of small magical glowing flowers on short stems with green leaves, seen from the front: luminous cyan and pale-blue bell flowers and star-shaped blossoms (#6ff3ff) that emit a soft bioluminescent glow, in clusters of various sizes (single stem, cluster of three, a bushy patch, a drooping bell cluster). Soft painterly rendering, rich dark green foliage. Background is pure flat black (#000000), no gradient, no ground. Every item fully separate with at least 60 pixels of empty black between items, none touching, none cut by the edge. No text.
+

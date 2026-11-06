@@ -1,0 +1,2 @@
+Seamless tileable material texture, perfectly flat straight-on orthographic top-down view of a surface filling the entire square frame edge to edge, even soft diffuse lighting with no directional shadows, no vignette, no perspective, no objects, no text, no borders, high detail PBR albedo look, rich warm painterly fantasy colours. Square image. Blue-violet slate roof tiles #3b3d5c in overlapping rows, each tile slightly different shade from deep indigo to dusty violet-blue, fine edges, subtle moss specks. Straight rows, tiles seen from above.
+

@@ -1,0 +1,2 @@
+Seamless tileable material texture, perfectly flat straight-on orthographic top-down view of a surface filling the entire square frame edge to edge, even soft diffuse lighting with no directional shadows, no vignette, no perspective, no objects, no text, no borders, high detail PBR albedo look, rich warm painterly fantasy colours. Square image. Red-brown fired brick wall in running bond with light lime mortar joints, hand-made bricks with varied terracotta, rust and brown tones, slight chips and soot staining.
+
