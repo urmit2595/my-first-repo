@@ -2029,3 +2029,88 @@ eyeR [
 codex
 The model checks caught two problems: the iso camera still had the flame tip behind the cap, and the old knee motion left both boots at nearly the same height. I’m correcting both. The revised hero is currently at 30 visible draw calls and about 56.7k triangles, within budget.
 
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/hero.js';s=open(p).read().replace('\"head\", 0, 0.272','\"head\", 0, 0.265').replace('head.position.y = 0.272','head.position.y = 0.265')
+s=s.replace('[0.159,0.19],[0.134,0.228],[0.127,0.241]','[0.159,0.20],[0.134,0.248],[0.127,0.263]')
+s=s.replace('0, 0.245, 0','0, 0.267, 0')
+s=s.replace('[[0.137,0.248],[0.127,0.259],[0.103,0.274],[0.07,0.284],[0.034,0.287],[0,0.288]]','[[0.137,0.271],[0.127,0.278],[0.103,0.285],[0.07,0.29],[0.034,0.292],[0,0.293]]')
+s=s.replace('0, 0.292, 0, 0.023','0, 0.298, 0, 0.023').replace('0, 0.302, 0, 0.014','0, 0.309, 0, 0.014').replace('0, 0.327, 0','0, 0.334, 0')
+s=s.replace('[.15,.204],[.13,.24]','[.15,.225],[.13,.263]')
+s=s.replace('0.128, 0.259','0.128, 0.278').replace('0.129, 0.256','0.129, 0.275')
+s=s.replace('\"living flame\", 0, 0.025, 0.038','\"living flame\", 0, 0.025, 0.055')
+s=s.replace('Math.min(1.07, flameSize * flicker), flameSize','Math.min(1.04, flameSize * flicker), Math.min(1.15, flameSize)')
+# End the cape-like sheet silhouette by separating the tip widths and gently biasing each tail.
+s=s.replace('tail.anchor.x - ni * 0.008','tail.anchor.x - ni * (ti ? 0.012 : 0.002)')
+open(p,'w').write(s)
+PY
+node <<'JS'
+const T=require(require('./tools/harness').VENDOR+'/three/build/three.js');global.window={};const noop=()=>{},grad={addColorStop:noop},ctx=new Proxy({createLinearGradient:()=>grad,createRadialGradient:()=>grad},{get:(o,k)=>o[k]||noop,set:(o,k,v)=>(o[k]=v,true)});global.document={createElement:()=>({getContext:()=>ctx})};require('./js/hero.js');
+const dir=new T.Vector3(1,1,1).normalize(),ray=new T.Raycaster();
+for(const anim of ['idle','walk','climb','celebrate','bump','ride','wave']) {
+ const h=window.Hero.create(T,{quality:'high'});h.object3D.rotation.y=35*Math.PI/180;h.setAnim(anim);
+ for(let f=1;f<=96;f++){h.update(1/60,f/60,{speed:1.4,grounded:true});if([30,60,72,96].includes(f)){
+ const flame=h.object3D.getObjectByName('living flame'), pos=flame.children[0].geometry.attributes.position;let tip=new T.Vector3(),max=-1;for(let j=0;j<pos.count;j++)if(pos.getY(j)>max){max=pos.getY(j);tip.fromBufferAttribute(pos,j)}tip.applyMatrix4(flame.matrixWorld);
+ const solids=[];h.object3D.traverse(o=>{if(o.isMesh&&"'!o.material.transparent)solids.push(o)});
+ ray.set(tip.clone().addScaledVector(dir,10),dir.clone().negate());const hit=ray.intersectObjects(solids).find(x=>x.distance<9.998);
+ const ankles=['"'ankle.L','ankle.R'].map(n=>new T.Vector3().setFromMatrixPosition(h.object3D.getObjectByName(n).matrixWorld).y-.066);
+ console.log(anim,f/60,{tipOccluder:hit?.object.parent.name||'clear',soles:ankles.map(x=>+x.toFixed(4)),hip:+h.object3D.getObjectByName('hip.L').rotation.x.toFixed(2)});
+ }}h.dispose();
+}
+JS" in /home/user/my-first-repo/spirelight
+ succeeded in 1204ms:
+idle 0.5 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+idle 1 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+idle 1.2 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+idle 1.6 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+walk 0.5 { tipOccluder: 'head', soles: [ 0, 0.0108 ], hip: 0.4 }
+walk 1 { tipOccluder: 'head', soles: [ 0.0239, 0 ], hip: -0.62 }
+walk 1.2 { tipOccluder: 'head', soles: [ 0, 0.0076 ], hip: 0.33 }
+walk 1.6 { tipOccluder: 'head', soles: [ 0.0174, 0 ], hip: -0.52 }
+climb 0.5 { tipOccluder: 'head', soles: [ 0.0006, 0 ], hip: -0.12 }
+climb 1 { tipOccluder: 'head', soles: [ 0.0023, 0 ], hip: -0.24 }
+climb 1.2 { tipOccluder: 'head', soles: [ 0.0287, 0 ], hip: -0.98 }
+climb 1.6 { tipOccluder: 'head', soles: [ 0, 0.0277 ], hip: 0.95 }
+celebrate 0.5 { tipOccluder: 'head', soles: [ 0.0174, 0.0174 ], hip: 0 }
+celebrate 1 { tipOccluder: 'head', soles: [ 0.0002, 0.0002 ], hip: 0 }
+celebrate 1.2 { tipOccluder: 'head', soles: [ 0.0002, 0.0002 ], hip: 0 }
+celebrate 1.6 { tipOccluder: 'head', soles: [ 0.0472, 0.0472 ], hip: 0 }
+bump 0.5 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+bump 1 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+bump 1.2 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+bump 1.6 { tipOccluder: 'head', soles: [ 0, 0 ], hip: 0 }
+ride 0.5 { tipOccluder: 'head', soles: [ -0.0001, -0.0001 ], hip: -0.38 }
+ride 1 { tipOccluder: 'head', soles: [ -0.0002, -0.0002 ], hip: -0.38 }
+ride 1.2 { tipOccluder: 'head', soles: [ -0.0002, -0.0002 ], hip: -0.38 }
+ride 1.6 { tipOccluder: 'head', soles: [ -0.0002, -0.0002 ], hip: -0.38 }
+wave 0.5 { tipOccluder: 'head', soles: [ 0.0074, 0.0074 ], hip: 0 }
+wave 1 { tipOccluder: 'clear', soles: [ 0.0012, 0.0012 ], hip: 0 }
+wave 1.2 { tipOccluder: 'head', soles: [ 0.0039, 0.0039 ], hip: 0 }
+wave 1.6 { tipOccluder: 'head', soles: [ 0.009, 0.009 ], hip: 0 }
+
+exec
+/bin/bash -lc "node <<'JS'
+const T=require(require('./tools/harness').VENDOR+'/three/build/three.js');global.window={};const noop=()=>{},grad={addColorStop:noop},ctx=new Proxy({createLinearGradient:()=>grad,createRadialGradient:()=>grad},{get:(o,k)=>o[k]||noop,set:(o,k,v)=>(o[k]=v,true)});global.document={createElement:()=>({getContext:()=>ctx})};require('./js/hero.js');const h=window.Hero.create(T,{quality:'high'});h.object3D.rotation.y=35*Math.PI/180;h.update(1/60,0);const f=h.object3D.getObjectByName('living flame'),head=f.parent;const tip=new T.Vector3(0,.197,0);const pos=f.children[0].geometry.attributes.position;for(let j=0;j<pos.count;j++)if(pos.getY(j)>.196)tip.fromBufferAttribute(pos,j);console.log('tip local',tip.toArray());tip.applyMatrix4(f.matrixWorld);console.log('tip head',head.worldToLocal(tip.clone()).toArray());const dir=new T.Vector3(1,1,1).normalize(),ray=new T.Raycaster(tip.clone().addScaledVector(dir,10),dir.clone().negate());console.log(ray.intersectObjects(head.children,true).slice(0,8).map(x=>({parent:x.object.parent.name,d:x.distance,p:head.worldToLocal(x.point.clone()).toArray()})));
+JS" in /home/user/my-first-repo/spirelight
+ exited 1 in 561ms:
+tip local [ -0.01996440999209881, 0.19699999690055847, 0.028771186247467995 ]
+tip head [ -0.019611621085618456, 0.2254811623099388, 0.08377118624746802 ]
+THREE.Sprite: "Raycaster.camera" needs to be set in order to raycast against sprites.
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:19113
+			_viewWorldMatrix.copy(raycaster.camera.matrixWorld);
+			                                       ^
+
+TypeError: Cannot read properties of null (reading 'matrixWorld')
+    at Sprite.raycast (/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:19113:43)
+    at intersectObject (/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:32123:11)
+    at Raycaster.intersectObjects (/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:32108:5)
+    at [stdin]:1:952
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [stdin]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+
+Node.js v22.23.4
+

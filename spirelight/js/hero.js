@@ -167,22 +167,22 @@
       0, 0.239, 0, 1, 1, 0.8, Math.PI / 2);
     ring(torso, 0, 0.218, 0, 0.096, Math.PI / 2, scarfMat);
     ball(torso, -0.094, 0.238, 0.093, 0.038, 0.035, 0.035, scarfMat);
-    var head = group(torso, "head", 0, 0.272, 0);
+    var head = group(torso, "head", 0, 0.265, 0);
     var globe = lathe([[0.114,0.008],[0.145,0.03],[0.173,0.067],[0.183,0.111],
-      [0.178,0.151],[0.159,0.19],[0.134,0.228],[0.127,0.241]]);
+      [0.178,0.151],[0.159,0.20],[0.134,0.248],[0.127,0.263]]);
     var glass = new THREE.Mesh(globe, glassMat); glass.name = "lantern glass"; glass.renderOrder = 3; head.add(glass);
     rod(head, 0, 0.009, 0, 0.12, 0.014);
     ring(head, 0, 0.017, 0, 0.115, Math.PI / 2);
-    rod(head, 0, 0.245, 0, 0.139, 0.01);
-    ring(head, 0, 0.245, 0, 0.135, Math.PI / 2);
-    var dome = lathe([[0.137,0.248],[0.127,0.259],[0.103,0.274],[0.07,0.284],[0.034,0.287],[0,0.288]]);
+    rod(head, 0, 0.267, 0, 0.139, 0.01);
+    ring(head, 0, 0.267, 0, 0.135, Math.PI / 2);
+    var dome = lathe([[0.137,0.271],[0.127,0.278],[0.103,0.285],[0.07,0.29],[0.034,0.292],[0,0.293]]);
     part(head, dome, brass);
-    rod(head, 0, 0.292, 0, 0.023, 0.009);
-    ball(head, 0, 0.302, 0, 0.014);
-    ring(head, 0, 0.327, 0, 0.03, 0);
+    rod(head, 0, 0.298, 0, 0.023, 0.009);
+    ball(head, 0, 0.309, 0, 0.014);
+    ring(head, 0, 0.334, 0, 0.03, 0);
     for (i = 0; i < 4; i++) {
       angle = Math.PI / 4 + i * Math.PI / 2;
-      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.176,.078],[.185,.117],[.175,.16],[.15,.204],[.13,.24]];
+      var ribs = [], ribProfile = [[.116,.017],[.15,.04],[.176,.078],[.185,.117],[.175,.16],[.15,.225],[.13,.263]];
       for (j = 0; j < ribProfile.length; j++) {
         ribs.push(new THREE.Vector3(Math.sin(angle) * ribProfile[j][0], ribProfile[j][1], Math.cos(angle) * ribProfile[j][0]));
       }
@@ -190,11 +190,11 @@
     }
     for (i = 0; i < 16; i++) {
       angle = i * Math.PI / 8;
-      ball(head, Math.sin(angle) * 0.128, 0.259, Math.cos(angle) * 0.128, 0.0045);
+      ball(head, Math.sin(angle) * 0.128, 0.278, Math.cos(angle) * 0.128, 0.0045);
       ball(head, Math.sin(angle) * 0.117, 0.013, Math.cos(angle) * 0.117, 0.005);
-      if (i % 2 === 0) ball(head, Math.sin(angle) * 0.129, 0.256, Math.cos(angle) * 0.129, 0.006, 0.002, 0.006, patina);
+      if (i % 2 === 0) ball(head, Math.sin(angle) * 0.129, 0.275, Math.cos(angle) * 0.129, 0.006, 0.002, 0.006, patina);
     }
-    var flame = group(head, "living flame", 0, 0.025, 0.038);
+    var flame = group(head, "living flame", 0, 0.025, 0.055);
     var flameShape = lathe([[0,0],[0.045,0.008],[0.074,0.03],[0.079,0.057],[0.066,0.083],
       [0.044,0.111],[0.027,0.137],[0.019,0.158],[0.009,0.178],[0,0.197]]);
     var fp = flameShape.attributes.position, colors = new Float32Array(fp.count * 3), color = new THREE.Color();
@@ -307,7 +307,7 @@
         tail.pin.copy(tail.anchor).applyMatrix4(torso.matrixWorld);
         tail.width.set(1, 0, 0).transformDirection(torso.matrixWorld);
         if (!scarfInitialized || teleport) for (var ni = 0; ni < nodes; ni++) {
-          cur[ni].set(tail.anchor.x - ni * 0.008, tail.anchor.y - ni * tail.length, tail.anchor.z + ni * 0.009).applyMatrix4(torso.matrixWorld);
+          cur[ni].set(tail.anchor.x - ni * (ti ? 0.012 : 0.002), tail.anchor.y - ni * tail.length, tail.anchor.z + ni * 0.009).applyMatrix4(torso.matrixWorld);
           prev[ni].copy(cur[ni]);
         }
         for (var sub = 0; sub < steps; sub++) {
@@ -417,7 +417,7 @@
         torso.rotation.z = gait * 0.025 * s + ride * Math.sin(t * 3) * 0.045 + bump * Math.sin(animTimes[4] * 22) * Math.exp(-animTimes[4] * 4) * 0.11;
         torso.scale.y = 1 + 0.008 * Math.sin(t * 2.6);
         var look = Math.sin(t * 0.69) * Math.pow(Math.max(0, Math.sin(t * 0.37)), 4);
-        head.position.y = 0.272 + celebrate * 0.025 + gait * 0.003 * Math.cos(phase * 2);
+        head.position.y = 0.265 + celebrate * 0.025 + gait * 0.003 * Math.cos(phase * 2);
         head.rotation.y = look * 0.5 * weights[0];
         head.rotation.z = bump * 0.28 + wave * 0.11 + ride * Math.sin(t * 2.4) * 0.04;
         head.rotation.x = bump * 0.12 - torso.rotation.x * 0.65;
@@ -454,7 +454,7 @@
         var flicker = 1 + 0.035 * Math.sin(t * 17) + 0.021 * Math.sin(t * 29 + 1) + bump * 0.045 * Math.sin(t * 51);
         var flameSize = (0.82 + glow * 0.18) * (1 + celebrate * 0.28);
         // A broad flare stays inside the glass, with breathing room below the cap.
-        flame.scale.set(flameSize * (2 - flicker), Math.min(1.07, flameSize * flicker), flameSize);
+        flame.scale.set(flameSize * (2 - flicker), Math.min(1.04, flameSize * flicker), Math.min(1.15, flameSize));
         flame.rotation.z = Math.sin(t * 11) * 0.025 + gait * s * 0.03;
         outer.scale.x = 1 + Math.sin(t * 13) * 0.025;
         tongue.scale.y = 1.03 + Math.sin(t * 19) * 0.025;
