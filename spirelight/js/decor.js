@@ -1588,38 +1588,61 @@
   }, { world: true });
 
   // keel: the spire's underside. Footprint (w x d cells) starts at cell `at` and hangs below its bottom face.
-  def("keel", "floor", { w: "cells (2)", d: "cells (2)", depth: "pendant length in cells (3)" }, (env) => {
-    const w = P(env.item, "w", 2), dd = P(env.item, "d", 2), depth = P(env.item, "depth", 3), at = env.item.at || [0, 0, 0];
+  def("keel", "floor", { w: "cells (2)", d: "cells (2)", depth: "total drop in cells (3)" }, (env) => {
+    // Tapering underside: dark weathered stone rings stepping inward (no horizontal surface visible from above),
+    // brass bands, ribs, a gear cluster on the +x / +z faces and a long brass pendant. Footprint starts at cell `at`.
+    const w = P(env.item, "w", 2), dd = P(env.item, "d", 2), depth = Math.max(1.5, P(env.item, "depth", 3)), at = env.item.at || [0, 0, 0];
     env.root.position.set(at[0] + w / 2, at[1], at[2] + dd / 2);
-    const b = new Builder({ ao: 0 }), steps = 4; let y = 0;
-    for (let j = 0; j < steps; j++) {      // stepped corbel rings
-      const s = 1 - j * 0.15, W2 = w * s, D2 = dd * s, h = 0.26;
-      b.box("matte", W2, h, D2, { p: [0, y - h / 2, 0], c: j % 2 ? C.sandDk : C.sand });
-      b.box("metal", W2 + 0.05, 0.035, D2 + 0.05, { p: [0, y - h - 0.0, 0], c: C.brassDk });
-      const nx = Math.max(2, Math.round(W2 / 0.3)), nz = Math.max(2, Math.round(D2 / 0.3));
-      for (let i = 0; i < nx; i++) for (const sz of [-1, 1]) b.box("matte", 0.13, 0.15, 0.1, { p: [(i + 0.5) / nx * W2 - W2 / 2, y - h - 0.09, sz * (D2 / 2 - 0.0)], c: C.sandHi });
-      for (let i = 0; i < nz; i++) for (const sx of [-1, 1]) b.box("matte", 0.1, 0.15, 0.13, { p: [sx * (W2 / 2 - 0.0), y - h - 0.09, (i + 0.5) / nz * D2 - D2 / 2], c: C.sandHi });
-      y -= h + 0.13;
+    const b = new Builder({ ao: 0.0 });
+    const hx0 = Math.max(0.3, w / 2 - 0.15), hz0 = Math.max(0.3, dd / 2 - 0.15);       // inset: never wider than the footprint
+    const mn = Math.min(hx0, hz0), tipY = -Math.min(depth * 0.62, Math.max(1.0, mn * 1.7)), n = 5, rh = -tipY * 0.13, tip = Math.max(0.06, mn * 0.2);
+    const hxAt = (y) => lerp(hx0, tip, Math.min(1, y / tipY)), hzAt = (y) => lerp(hz0, tip, Math.min(1, y / tipY));
+    // frustum with independent half-extents at the top and the bottom (open top: nothing horizontal shows from above)
+    const frus = (key, ty, by, y0, c, grow) => {
+      const g = new THREE.CylinderGeometry(1.4142, 1.4142, 1, 4, 1, true).rotateY(Math.PI / 4), pa = g.attributes.position;
+      const tx = hxAt(ty) + grow, tz = hzAt(ty) + grow, bx = hxAt(by) + grow * 1.7, bz = hzAt(by) + grow * 1.7;
+      for (let i = 0; i < pa.count; i++) { const top = pa.getY(i) > 0; pa.setXYZ(i, pa.getX(i) * (top ? tx : bx), top ? ty - y0 : by - y0, pa.getZ(i) * (top ? tz : bz)); }
+      return b.add(key, g, { p: [0, y0, 0], c });
+    };
+    const stone = [0x75606a, 0x87707a, 0x6a5662];
+    let y = 0;
+    for (let j = 0; j < n; j++) {
+      const yb = y - rh;
+      frus("matte", y, yb, 0, stone[j % 3], 0);                                      // sloped course
+      frus("metal", yb + 0.05, yb - 0.01, 0, j % 2 ? C.brassDk : C.brass, 0.03);     // brass band, flared lip
+      const cx = hxAt(yb) * 1.0 + 0.03, cz = hzAt(yb) * 1.0 + 0.03, nn = Math.max(2, Math.round(Math.min(cx, cz) * 2 / 0.45));
+      for (let i = 0; i < nn; i++) {
+        const u = ((i + 0.5) / nn * 2 - 1);
+        b.box("matte", 0.1, 0.12, 0.07, { p: [u * cx * 0.9, yb - 0.05, cz], c: 0x8c7480 });
+        b.box("matte", 0.07, 0.12, 0.1, { p: [cx, yb - 0.05, u * cz * 0.9], c: 0x8c7480 });
+      }
+      y = yb - 0.01;
     }
-    // inverted pyramid body
-    const sB = 1 - steps * 0.15, hb = 0.9;
-    b.add("matte", new THREE.CylinderGeometry(0.0, 0.7071, hb, 4, 1).rotateY(Math.PI / 4), { p: [0, y - hb / 2, 0], s: [w * sB, 1, dd * sB], c: C.sandDk });
-    b.add("matte", new THREE.CylinderGeometry(0.02 * 0.7071, 0.7071, hb * 0.4, 4, 1).rotateY(Math.PI / 4), { p: [0, y - 0.0 - hb * 0.2, 0], s: [w * sB * 1.03, 1, dd * sB * 1.03], c: C.sandHi });
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.rod("metal", [sx * w * sB / 2, y, sz * dd * sB / 2], [0, y - hb, 0], 0.025, 6, C.brass);
-    // gear cluster on the visible (+z and +x) faces
-    const gz = dd * 0.5 * 0.7 + 0.07, gx = w * 0.5 * 0.7 + 0.07, gy = -0.82;
-    b.add("metal", gearGeom(0.5, 16, 0.085, 0.08, 6), { p: [-w * 0.16, gy, gz], r: [Math.PI / 2, 0.2, 0], c: C.brass });
-    b.add("metal", gearGeom(0.3, 10, 0.06, 0.08, 5), { p: [-w * 0.16 + 0.68, gy - 0.18, gz], r: [Math.PI / 2, 0.5, 0], c: C.patina });
-    b.add("metal", gearGeom(0.42, 14, 0.07, 0.08, 6), { p: [gx, gy + 0.05, -dd * 0.1], r: [0, 0, -Math.PI / 2], c: C.copper });
-    b.add("metal", gearGeom(0.27, 9, 0.055, 0.08, 5), { p: [gx, gy - 0.3, -dd * 0.1 + 0.62], r: [0, 0, -Math.PI / 2], c: C.brassDk });
-    for (const q of [[-w * 0.16, gy, gz + 0.06], [-w * 0.16 + 0.68, gy - 0.18, gz + 0.06]]) b.cyl("metal", 0.07, 0.07, 0.1, 10, { p: q, r: [Math.PI / 2, 0, 0], c: C.brassHi });
-    for (const q of [[gx + 0.06, gy + 0.05, -dd * 0.1], [gx + 0.06, gy - 0.3, -dd * 0.1 + 0.62]]) b.cyl("metal", 0.06, 0.06, 0.1, 10, { p: q, r: [0, 0, -Math.PI / 2], c: C.brassHi });
+    // body down to the tip
+    frus("matte", y, tipY, 0, 0x5a4a56, 0);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {   // brass ribs from the footprint corners to the tip
+      const x0 = sx * hx0, z0 = sz * hz0;
+      b.tube("metal", [[x0, -0.02, z0], [x0 * 0.78, tipY * 0.35, z0 * 0.78], [x0 * 0.35, tipY * 0.75, z0 * 0.35], [0, tipY, 0]], 0.03, { c: C.brass }, 16, false, 5);
+    }
+    for (const t of [-0.5, 0, 0.5]) {                        // mid-face ribs on the visible sides
+      b.tube("metal", [[hx0, -0.02, t * hz0], [hx0 * 0.78, tipY * 0.35, t * hz0 * 0.7], [hx0 * 0.3, tipY * 0.75, t * hz0 * 0.3], [0, tipY, 0]], 0.022, { c: C.brassDk }, 14, false, 5);
+      b.tube("metal", [[t * hx0, -0.02, hz0], [t * hx0 * 0.7, tipY * 0.35, hz0 * 0.78], [t * hx0 * 0.3, tipY * 0.75, hz0 * 0.3], [0, tipY, 0]], 0.022, { c: C.brassDk }, 14, false, 5);
+    }
+    // gear cluster hanging on the +z and +x faces
+    const gs = clamp(mn * 0.55, 0.3, 0.7), gyc = tipY * 0.3;
+    const zf = hzAt(gyc + gs) + 0.1, xf = hxAt(gyc + gs) + 0.1;
+    b.add("metal", gearGeom(gs, 16, gs * 0.17, 0.08, 6), { p: [-hx0 * 0.3, gyc, zf], r: [Math.PI / 2, 0.2, 0], c: C.brass });
+    b.add("metal", gearGeom(gs * 0.6, 10, gs * 0.12, 0.08, 5), { p: [-hx0 * 0.3 + gs * 1.38, gyc - gs * 0.35, zf], r: [Math.PI / 2, 0.5, 0], c: C.patina });
+    b.add("metal", gearGeom(gs * 0.85, 14, gs * 0.15, 0.08, 6), { p: [xf, gyc - 0.05, -hz0 * 0.25], r: [0, 0, -Math.PI / 2], c: C.copper });
+    b.add("metal", gearGeom(gs * 0.55, 9, gs * 0.11, 0.08, 5), { p: [xf, gyc - gs * 0.4, -hz0 * 0.25 + gs * 1.28], r: [0, 0, -Math.PI / 2], c: C.brassDk });
+    for (const q of [[-hx0 * 0.3, gyc, zf + 0.06], [-hx0 * 0.3 + gs * 1.38, gyc - gs * 0.35, zf + 0.06]]) b.cyl("metal", 0.06, 0.06, 0.1, 10, { p: q, r: [Math.PI / 2, 0, 0], c: C.brassHi });
+    for (const q of [[xf + 0.06, gyc - 0.05, -hz0 * 0.25], [xf + 0.06, gyc - gs * 0.4, -hz0 * 0.25 + gs * 1.28]]) b.cyl("metal", 0.06, 0.06, 0.1, 10, { p: q, r: [0, 0, -Math.PI / 2], c: C.brassHi });
     // long brass pendant
-    const top = y - hb, Lp = Math.max(0.8, depth - (-top) + 0.0 + 1.2);
+    const Lp = Math.max(0.8, depth + tipY + 0.6);
     const prof = [[0.0, 0], [0.06, -0.02], [0.1, -0.08], [0.05, -0.16], [0.05, -0.34], [0.13, -0.42], [0.16, -0.55], [0.12, -0.68], [0.065, -0.78], [0.065, -1.1], [0.11, -1.17], [0.075, -1.27], [0.04, -1.45], [0.04, -1.8], [0.012, -2.5]].map(p => [p[0] * 1.35, p[1] * (Lp / 2.5)]);
-    b.lat("metal", prof, { p: [0, top + 0.05, 0], c: C.brass }, 14);
-    b.tor("metal", 0.17, 0.02, { p: [0, top - 0.5 * (Lp / 2.5), 0], r: [Math.PI / 2, 0, 0], c: C.patina }, 16, 6);
-    b.sph("metal", 0.05, { p: [0, top + 0.05 - Lp, 0], c: C.brassHi }, 10, 8);
+    b.lat("metal", prof, { p: [0, tipY + 0.05, 0], c: C.brass }, 14);
+    b.tor("metal", 0.17, 0.02, { p: [0, tipY - 0.5 * (Lp / 2.5), 0], r: [Math.PI / 2, 0, 0], c: C.patina }, 16, 6);
+    b.sph("metal", 0.05, { p: [0, tipY + 0.05 - Lp, 0], c: C.brassHi }, 10, 8);
     b.finish(env.root);
   }, { world: true });
 

@@ -8,7 +8,7 @@ Rules learned (for reviewers and the other designer):
 - x/z rotors are walkable only at angle 0, so they act as drawbridges.
 - Handles are hit-tested on screen, so a crank can always be turned from anywhere. Never put a handle on a -x, -z or -y
   face (invisible); give it a visible post and use +y/+x/+z.
-- Portrait: aim for a screen-x span (x - z)/sqrt2 of at most about 6.5 world units, stack upward instead of sideways.
+- Portrait (spans now 5.7-6.4 for levels 1-4 and the title, 7.8 for chime-stair): aim for a screen-x span (x - z)/sqrt2 of at most about 6.5 world units, stack upward instead of sideways.
 - Every level has a spine (a tall non-walkable shaft at the minimum-x/z side, behind the beacon, so it never occludes a
   tile), one `keel`, struts/chains/pipes/corbels/railings as decor (about 40-60 items; helpers `D()` and `S()` in the file).
 
