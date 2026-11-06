@@ -1,0 +1,234 @@
+{
+ "theme": "ruins",
+ "textures": {
+  "ground": {
+   "file": "ground.jpg",
+   "tile": 8
+  },
+  "sidewalk": {
+   "file": "sidewalk.jpg",
+   "tile": 4
+  },
+  "roof": {
+   "file": "roof.jpg",
+   "tile": 4
+  }
+ },
+ "facades": [
+  {
+   "file": "facades/apartment-block.png",
+   "w": 12.41,
+   "h": 15
+  },
+  {
+   "file": "facades/collapsed-block.png",
+   "w": 12.39,
+   "h": 15
+  },
+  {
+   "file": "facades/bombed-shop.png",
+   "w": 6.59,
+   "h": 6.5
+  }
+ ],
+ "props": {
+  "atlas": "props.png",
+  "items": [
+   {
+    "name": "rubble-a",
+    "rect": [
+     1184,
+     527,
+     394,
+     296
+    ],
+    "h": 2,
+    "zone": "lot",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "rubble-b",
+    "rect": [
+     1623,
+     835,
+     396,
+     167
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "burned-car",
+    "rect": [
+     843,
+     835,
+     401,
+     252
+    ],
+    "h": 1.6,
+    "zone": "lot",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "burned-van",
+    "rect": [
+     780,
+     527,
+     400,
+     299
+    ],
+    "h": 2,
+    "zone": "lot",
+    "weight": 1.5,
+    "flip": true
+   },
+   {
+    "name": "tank-trap",
+    "rect": [
+     476,
+     527,
+     300,
+     301
+    ],
+    "h": 1.5,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "barbed-wire",
+    "rect": [
+     1248,
+     835,
+     371,
+     228
+    ],
+    "h": 0.9,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "jersey-barrier",
+    "rect": [
+     0,
+     835,
+     403,
+     269
+    ],
+    "h": 1.1,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "broken-lamp",
+    "rect": [
+     928,
+     0,
+     261,
+     384
+    ],
+    "h": 4.5,
+    "zone": "curb",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "sandbag-bunker",
+    "rect": [
+     407,
+     835,
+     432,
+     262
+    ],
+    "h": 1.5,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "dead-tree",
+    "rect": [
+     0,
+     0,
+     416,
+     523
+    ],
+    "h": 6,
+    "zone": "lot",
+    "weight": 3,
+    "flip": true
+   },
+   {
+    "name": "oil-drum",
+    "rect": [
+     1193,
+     0,
+     252,
+     377
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "billboard",
+    "rect": [
+     420,
+     0,
+     504,
+     452
+    ],
+    "h": 5,
+    "zone": "far",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "bricks",
+    "rect": [
+     1582,
+     527,
+     459,
+     269
+    ],
+    "h": 0.9,
+    "zone": "walk",
+    "weight": 2,
+    "flip": true
+   },
+   {
+    "name": "dead-shrub",
+    "rect": [
+     1449,
+     0,
+     371,
+     337
+    ],
+    "h": 1.2,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   },
+   {
+    "name": "pallets-broken",
+    "rect": [
+     0,
+     527,
+     472,
+     304
+    ],
+    "h": 1,
+    "zone": "walk",
+    "weight": 1,
+    "flip": true
+   }
+  ]
+ }
+}
