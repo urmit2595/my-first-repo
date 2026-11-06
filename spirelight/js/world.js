@@ -15,44 +15,48 @@
   // colours are sRGB hex values (the backdrop shaders write display colours directly, untouched by tone mapping).
   const DATA = {
     dusk: {
-      skyTop: 0x1d1b45, skyMid: 0x5a3f86, skyLow: 0xff9a6a, gain: 1.0,
+      skyTop: 0x14123a, skyMid: 0x5a3f86, skyLow: 0xff9a6a, gain: 0.78,
       sunUv: [0.03, 0.54], focusX: 0.25,
       cloudLit: 0xffa05e, cloudMid: 0xd46f86, cloudShadow: 0x4a3278, cloudRim: 0xffd2a0, cloudCover: 0.44,
-      sunCol: 0xffa050, glare: 0.45, rays: 0.55, stars: 0.35, aurora: 0, mist: 0.10, mistCol: 0xb5668f,
+      sunCol: 0xffa050, glare: 0.4, rays: 0.4, stars: 0.35, aurora: 0, mist: 0.05, mistCol: 0xb5668f,
       puff: 0xffb48a, bird: 0x2a1a3c, wisp: 0xffd9a0, birds: 1,
-      keyCol: 0xffb272, keyI: 1.4, keyDir: [-0.42, 0.52, 0.74], hemiSky: 0x8a90e0, hemiGround: 0x6b3d62, hemiI: 0.85,
-      rimCol: 0x6fa6ff, rimI: 0.55, rimDir: [0.7, 0.35, -0.5], exposure: 1.05,
+      keyCol: 0xffb272, keyI: 2.1, keyDir: [-0.42, 0.52, 0.74], hemiSky: 0x8a90e0, hemiGround: 0x6b3d62, hemiI: 0.45,
+      rimCol: 0x6fa6ff, rimI: 0.5, rimDir: [0.7, 0.35, -0.5], exposure: 0.95,
+      cloudGain: 0.86,
     },
     night: {
-      skyTop: 0x080a26, skyMid: 0x1a1f55, skyLow: 0x2a5f78, gain: 1.0,
+      skyTop: 0x0d1030, skyMid: 0x141848, skyLow: 0x1f4660, gain: 0.72,
       sunUv: [0.935, 0.92], focusX: 0.72,
-      cloudLit: 0x7fd6d0, cloudMid: 0x3f6f98, cloudShadow: 0x1c1f5a, cloudRim: 0xcff6ff, cloudCover: 0.44,
-      sunCol: 0xaedcff, glare: 0.25, rays: 0.16, stars: 1.0, aurora: 0, mist: 0.10, mistCol: 0x24407a,
+      cloudLit: 0x6fbcc0, cloudMid: 0x3f6f98, cloudShadow: 0x1c1f5a, cloudRim: 0xcff6ff, cloudCover: 0.44,
+      sunCol: 0xaedcff, glare: 0, rays: 0, stars: 1.0, aurora: 0, mist: 0.05, mistCol: 0x24407a,
       puff: 0x6fa6c8, bird: 0x0a0f2c, wisp: 0x9ff4ff, birds: 0,
-      keyCol: 0xa9c8ff, keyI: 0.95, keyDir: [0.55, 0.6, 0.3], hemiSky: 0x5a74d0, hemiGround: 0x3a2f6e, hemiI: 1.0,
-      rimCol: 0xffa064, rimI: 0.5, rimDir: [-0.6, 0.3, 0.55], exposure: 1.15,
+      keyCol: 0xa9c8ff, keyI: 0.8, keyDir: [0.55, 0.6, 0.3], hemiSky: 0x5a74d0, hemiGround: 0x3a2f6e, hemiI: 0.4,
+      rimCol: 0xffa064, rimI: 0.5, rimDir: [-0.6, 0.3, 0.55], exposure: 0.78,
+      cloudGain: 0.62,
     },
     aurora: {
-      skyTop: 0x050d24, skyMid: 0x123a4e, skyLow: 0x1d6a66, gain: 1.0,
+      skyTop: 0x050d24, skyMid: 0x123a4e, skyLow: 0x1d6a66, gain: 0.85,
       sunUv: [0.5, 0.2], focusX: 0.5,
-      cloudLit: 0x7be8c8, cloudMid: 0x3c7a9a, cloudShadow: 0x1a1f58, cloudRim: 0xc8ffe8, cloudCover: 0.46,
-      sunCol: 0x78ffd0, glare: 0.0, rays: 0.0, stars: 0.85, aurora: 0.16, mist: 0.10, mistCol: 0x1b4a6a,
+      cloudLit: 0x56b8a0, cloudMid: 0x2f6482, cloudShadow: 0x1a1f58, cloudRim: 0xc8ffe8, cloudCover: 0.46,
+      sunCol: 0x78ffd0, glare: 0.0, rays: 0.0, stars: 0.85, aurora: 0.16, mist: 0.05, mistCol: 0x1b4a6a,
       puff: 0x5ab5b0, bird: 0x07142a, wisp: 0xb6ffd8, birds: 0,
-      keyCol: 0xb8f0e0, keyI: 1.05, keyDir: [-0.25, 0.7, 0.62], hemiSky: 0x58b8c0, hemiGround: 0x4a2f78, hemiI: 1.0,
-      rimCol: 0xc07aff, rimI: 0.65, rimDir: [0.7, 0.3, -0.5], exposure: 1.12,
+      keyCol: 0xb8f0e0, keyI: 1.0, keyDir: [-0.25, 0.7, 0.62], hemiSky: 0x58b8c0, hemiGround: 0x4a2f78, hemiI: 0.5,
+      rimCol: 0xc07aff, rimI: 0.65, rimDir: [0.7, 0.3, -0.5], exposure: 0.9,
+      cloudGain: 0.6,
     },
     dawn: {
-      skyTop: 0x6f93d0, skyMid: 0xc6a4c8, skyLow: 0xffc08a, gain: 1.0,
+      skyTop: 0x6f93d0, skyMid: 0xc6a4c8, skyLow: 0xffc08a, gain: 0.88,
       sunUv: [0.935, 0.17], focusX: 0.7,
-      cloudLit: 0xffd2a0, cloudMid: 0xf0a2a2, cloudShadow: 0x7c78b4, cloudRim: 0xfff0d0, cloudCover: 0.44,
-      sunCol: 0xffc88a, glare: 0.45, rays: 0.5, stars: 0, aurora: 0, mist: 0.08, mistCol: 0xe6a6b0,
+      cloudLit: 0xf0b078, cloudMid: 0xd08486, cloudShadow: 0x75689c, cloudRim: 0xfff0d0, cloudCover: 0.44,
+      sunCol: 0xffc88a, glare: 0.22, rays: 0.3, stars: 0, aurora: 0, mist: 0.04, mistCol: 0xe6a6b0,
       puff: 0xffcfb0, bird: 0x5a3f68, wisp: 0xfff0c8, birds: 1,
-      keyCol: 0xffc78f, keyI: 1.5, keyDir: [0.72, 0.5, 0.2], hemiSky: 0x9ab4ee, hemiGround: 0x9a6a78, hemiI: 0.95,
-      rimCol: 0xa8c4ff, rimI: 0.5, rimDir: [-0.7, 0.35, 0.45], exposure: 1.0,
+      keyCol: 0xffc78f, keyI: 2.2, keyDir: [-0.7, 0.36, 0.5], hemiSky: 0x9ab4ee, hemiGround: 0x9a6a78, hemiI: 0.5,
+      rimCol: 0xa8c4ff, rimI: 0.5, rimDir: [0.7, 0.35, -0.45], exposure: 0.92,
+      cloudGain: 0.8,
     },
   };
 
-  const NUM_KEYS = ["gain", "glare", "rays", "stars", "aurora", "mist", "cloudCover", "keyI", "hemiI", "rimI", "exposure"];
+  const NUM_KEYS = ["gain", "cloudGain", "glare", "rays", "stars", "aurora", "mist", "cloudCover", "keyI", "hemiI", "rimI", "exposure"];
   const COL_KEYS = ["skyTop", "skyMid", "skyLow", "cloudLit", "cloudMid", "cloudShadow", "cloudRim", "sunCol", "mistCol",
     "puff", "bird", "wisp", "keyCol", "hemiSky", "hemiGround", "rimCol"];
 
@@ -85,7 +89,7 @@
   const FS_CLOUD = [
     "precision highp float; varying vec2 vN;",
     "uniform float uTime, uAspect, uHorizon, uCover; uniform vec2 uSunDir;",
-    "uniform vec3 uLit, uMidC, uShadow, uRim;",
+    "uniform vec3 uLit, uMidC, uShadow, uRim; uniform float uGain;",
     NOISE,
     "float sfbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++){ s += a * vnoise(p); p = p * 2.0 + vec2(5.2, 1.3); a *= 0.5; } return s / 0.9375; }",
     "vec4 layer(vec2 sp, float hz, float scale, float speed, float seed, float rise, float haze){",
@@ -111,14 +115,14 @@
     "  l = layer(sp, hz + 0.05 * k, 1.2, 0.007, 11.0, 0.8, 0.2); acc = acc * (1.0 - l.a) + l;",
     "  l = layer(sp, hz - 0.12 * k, 1.6, 0.011, 27.0, 0.7, 0.0); acc = acc * (1.0 - l.a) + l;",
     "  if (acc.a < 0.002) discard;",
-    "  gl_FragColor = vec4(acc.rgb / acc.a, acc.a); }",
+    "  gl_FragColor = vec4(acc.rgb / acc.a * uGain, acc.a); }",
   ].join("\n");
 
   // Painted cloud bands (alpha RGBA, rgb = grey luminance), tinted per theme, 3 parallax layers in screen space.
   const FS_CLOUDTEX = [
     "precision highp float; varying vec2 vN;",
     "uniform sampler2D uTexN, uTexF; uniform float uAspN, uAspF, uTime, uAspect, uHorizon, uHasF;",
-    "uniform vec2 uSunDir; uniform vec3 uLit, uMidC, uShadow, uRim, uHazeC;",
+    "uniform vec2 uSunDir; uniform vec3 uLit, uMidC, uShadow, uRim, uHazeC; uniform float uGain;",
     // sample a band: top of the cloud mass at yTop (screen units), width = screen units per image repeat
     "vec4 band(sampler2D t, float asp, vec2 sp, float yTop, float width, float scroll, float flip, float yscale){",
     "  float bh = width / asp * yscale;",
@@ -153,7 +157,7 @@
     "  l = shade(band(uTexN, uAspN, sp, hz - 0.19 * k, 4.3 * k, uTime * 0.012 + 0.41, -1.0, 1.2), sp, 0.0, 0.7, below * 0.3);",
     "  acc = acc * (1.0 - l.a) + l;",
     "  if (acc.a < 0.002) discard;",
-    "  gl_FragColor = vec4(acc.rgb / acc.a, acc.a); }",
+    "  gl_FragColor = vec4(acc.rgb / acc.a * uGain, acc.a); }",
   ].join("\n");
 
   const FS_RAYS = [
@@ -486,7 +490,7 @@
       // cloud sea
       S.uCloud = {
         uTime: { value: 0 }, uAspect: { value: 1 }, uHorizon: { value: S.horizon }, uCover: { value: 0.5 }, uSunDir: { value: S.sunDirScreen },
-        uLit: { value: S.cur.cloudLit }, uMidC: { value: S.cur.cloudMid }, uShadow: { value: S.cur.cloudShadow }, uRim: { value: S.cur.cloudRim },
+        uLit: { value: S.cur.cloudLit }, uMidC: { value: S.cur.cloudMid }, uShadow: { value: S.cur.cloudShadow }, uRim: { value: S.cur.cloudRim }, uGain: { value: 1 },
       };
       const mCloud = blend(new T.ShaderMaterial({ uniforms: S.uCloud, vertexShader: VS_FULL, fragmentShader: FS_CLOUD }), "alpha");
       S.meshCloudProc = fullMesh(mCloud, -960); root.add(S.meshCloudProc);
@@ -494,7 +498,7 @@
         uTexN: { value: null }, uTexF: { value: null }, uAspN: { value: 3 }, uAspF: { value: 5 }, uHasF: { value: 0 },
         uTime: { value: 0 }, uAspect: { value: 1 }, uHorizon: { value: S.horizon }, uSunDir: { value: S.sunDirScreen },
         uLit: { value: S.cur.cloudLit }, uMidC: { value: S.cur.cloudMid }, uShadow: { value: S.cur.cloudShadow }, uRim: { value: S.cur.cloudRim },
-        uHazeC: { value: S.cur.skyLow },
+        uHazeC: { value: S.cur.skyLow }, uGain: { value: 1 },
       };
       const mCloudT = blend(new T.ShaderMaterial({ uniforms: S.uCloudT, vertexShader: VS_FULL, fragmentShader: FS_CLOUDTEX }), "alpha");
       S.meshCloudTex = fullMesh(mCloudT, -960); S.meshCloudTex.visible = false; root.add(S.meshCloudTex);
@@ -571,6 +575,7 @@
       gr.addColorStop(0, hex(d.skyTop)); gr.addColorStop(0.3, hex(d.skyMid)); gr.addColorStop(0.5, hex(d.skyLow));
       gr.addColorStop(0.62, hex(d.hemiGround)); gr.addColorStop(1, hex(d.hemiGround));
       g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(0, 0, W, H);
       // bright patch on the key-light side (equirect: u = atan2(z,x)/2pi + .5, v from the top = 0.5 - asin(y)/pi)
       const kx = d.keyDir[0], ky = d.keyDir[1], kz = d.keyDir[2], kl = Math.sqrt(kx * kx + ky * ky + kz * kz);
       const su = (Math.atan2(kz, kx) / (2 * Math.PI) + 0.5) * W, sv = (0.5 - Math.asin(ky / kl) / Math.PI) * H;
@@ -717,7 +722,7 @@
       // push uniforms
       const k = S.uCloud;
       k.uTime.value = tm; k.uAspect.value = S.aspect; k.uHorizon.value = S.horizon; k.uCover.value = c.cloudCover;
-      const ct = S.uCloudT; ct.uTime.value = tm; ct.uAspect.value = S.aspect; ct.uHorizon.value = S.horizon;
+      const ct = S.uCloudT; ct.uGain.value = c.cloudGain; S.uCloud.uGain.value = c.cloudGain; ct.uTime.value = tm; ct.uAspect.value = S.aspect; ct.uHorizon.value = S.horizon;
       const st = S.uStars;
       st.uTime.value = tm; st.uAmt.value = c.stars; st.uAspect.value = S.aspect; st.uPx.value = S.pxRatio * Math.min(1.4, Math.max(0.7, h / 720));
       const au = S.uAur; au.uTime.value = tm; au.uAspect.value = S.aspect; au.uAmt.value = c.aurora;

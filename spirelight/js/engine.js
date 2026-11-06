@@ -102,7 +102,7 @@
 
     levelRoot = new THREE.Group(); levelRoot.name = "level"; scene.add(levelRoot);
     heroPivot = new THREE.Group(); heroPivot.name = "heroPivot"; scene.add(heroPivot);
-    heroW.pos = heroPivot.position;
+    heroW.pos = new THREE.Vector3();
 
     // module init (each may fail: fallbacks cover)
     var inits = [];
@@ -140,7 +140,6 @@
     if (DEBUG) setupDebug();
     resize();
     if (window.ResizeObserver) new ResizeObserver(resize).observe(root); else window.addEventListener("resize", resize);
-    window.addEventListener("resize", resize);
     document.addEventListener("visibilitychange", function () { lastT = 0; fpsReset(); });
     lastT = 0;
     requestAnimationFrame(frame);
@@ -356,6 +355,7 @@
   Game.resize = function () { cam.sized = false; resize(); };
 
   var fitBox = null;
+  // Fit to what the player must reach: walkable tops (all mechanism values), handles and the beacon, plus headroom for Wick.
   function computeFitBox() {
     var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
     function add(x, y, z, ex, ey) {
@@ -368,40 +368,75 @@
       var g = Game.groups[id];
       var vals = g.kind === "static" ? [0] : g.values;
       vals.forEach(function (v) {
-        g.cells.forEach(function (c) { mechPointArr(g, v, c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, out); add(out[0], out[1], out[2], 0.7071, 0.8165); });
+        g.blocks.forEach(function (b) {
+          if (b.kind === "veil" || b.walk === false) return;
+          var c = b.cell, top = b.kind === "stair" ? 0.5 : 1;
+          mechPointArr(g, v, c[0] + 0.5, c[1] + top, c[2] + 0.5, out);
+          add(out[0], out[1], out[2], 0.7071, 0.41); add(out[0], out[1] + 0.9, out[2], 0.3, 0.1); // tile diamond + Wick's head
+        });
+        if (g.handle) { mechPointArr(g, v, g.handle.ref[0], g.handle.ref[1], g.handle.ref[2], out); if (g.handle.on !== "self") { out[0] = g.handle.ref[0]; out[1] = g.handle.ref[1]; out[2] = g.handle.ref[2]; } add(out[0], out[1], out[2], 0.45, 0.45); }
       });
     });
     (Game.level.decor || []).forEach(function (d) {
-      var gr = Game.groups[d.group || "base"], at = d.at, v = gr && gr.kind !== "static" ? gr.values[0] : 0;
-      mechPointArr(gr || Game.groups.base, v, at[0] + 0.5, at[1] + 0.5, at[2] + 0.5, out);
-      var tall = d.type === "beacon" || d.type === "dome" || d.type === "finial" || d.type === "streetlamp" || d.type === "tree" ? 1.6 : 0.6;
-      add(out[0], out[1], out[2], 0.5, 0.5 + tall * 0.5);
+      if (d.type !== "beacon") return;
+      var gr = Game.groups[d.group || "base"] || Game.groups.base, v = gr.kind !== "static" ? gr.values[0] : 0, at = d.at;
+      mechPointArr(gr, v, at[0] + 0.5, at[1] + 0.5, at[2] + 0.5, out);
+      add(out[0], out[1] + 1.2, out[2], 0.6, 1.0);
     });
+    if (minX > maxX) { minX = -3; maxX = 3; minY = -3; maxY = 3; }
     return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
   }
 
+  var MIN_TILE_PX = 34;
   function fitCamera() {
     if (!Game.level || !fitBox) { cam.H = 14; cam.base = 14; positionCamera(); return; }
     var L = Game.level, ins = Game.insets, bw = fitBox.maxX - fitBox.minX, bh = fitBox.maxY - fitBox.minY;
-    var landscape = cam.a >= 1;
     var top = ins.top, bot = ins.bottom, side = ins.side;
     var availW = Math.max(60, cam.w - 2 * side), availH = Math.max(60, cam.h - top - bot);
-    var s = Math.max(bw * 1.04 / availW, bh * 1.04 / availH); // world units per px
-    var H = Math.max(s * cam.h, 6);
-    var cx = (fitBox.minX + fitBox.maxX) / 2, cy = (fitBox.minY + fitBox.maxY) / 2 + (top - bot) / 2 * (H / cam.h);
+    var s = Math.max(bw * 1.1 / availW, bh * 1.1 / availH); // world units per px
+    var Hfit = Math.max(s * cam.h, 6), H = Hfit;
+    var Hmax = cam.h * SQ2 / MIN_TILE_PX; // a tile diamond (1.414 units wide) must be at least MIN_TILE_PX px wide
+    cam.canPan = false;
+    if (H > Hmax) { H = Hmax; cam.canPan = true; }
+    var upp = H / cam.h, boxcx = (fitBox.minX + fitBox.maxX) / 2, boxcy = (fitBox.minY + fitBox.maxY) / 2;
+    var cx = boxcx, cy = boxcy + (top - bot) / 2 * upp;
+    cam.panLim = { x0: 0, x1: 0, y0: 0, y1: 0 };
+    if (cam.canPan) {
+      var uhw = availW / 2 * upp, uhh = availH / 2 * upp;
+      if (bw > 2 * uhw) { cam.panLim.x0 = fitBox.minX + uhw - boxcx; cam.panLim.x1 = fitBox.maxX - uhw - boxcx; }
+      if (bh > 2 * uhh) { cam.panLim.y0 = fitBox.minY + uhh - boxcy; cam.panLim.y1 = fitBox.maxY - uhh - boxcy; }
+    }
     if (L.view && L.view.center) {
       var c = L.view.center; toSXY(c[0], c[1], c[2], _sxy); cx = _sxy.x; cy = _sxy.y;
       var vh = L.view.height || 14;
-      H = vh * Math.max(1, (16 / 9) / cam.a);
+      H = vh * Math.max(1, (16 / 9) / cam.a); cam.canPan = false;
     }
-    cam.base = H; cam.cx0 = cx; cam.cy0 = cy;
+    cam.base = H; cam.cx0 = cx; cam.cy0 = cy; cam.upp = H / cam.h;
+    clampPan();
     positionCamera();
+  }
+  function clampPan() {
+    var L = cam.panLim || { x0: 0, x1: 0, y0: 0, y1: 0 };
+    cam.panX = Math.max(L.x0, Math.min(L.x1, cam.panX || 0)); cam.panY = Math.max(L.y0, Math.min(L.y1, cam.panY || 0));
+  }
+  // keep Wick inside the middle 60% of the usable view when the level is larger than the screen
+  var _fh = [0, 0, 0], _fs = { x: 0, y: 0 };
+  function followHero(dt, instant) {
+    if (!cam.canPan || !heroW.pos) return;
+    var ins = Game.insets, upp = cam.H / cam.h;
+    _fh[0] = heroW.pos.x; _fh[1] = heroW.pos.y + 0.4; _fh[2] = heroW.pos.z; worldToScreen(_fh, _fs);
+    var ux0 = ins.side + 0.2 * (cam.w - 2 * ins.side), ux1 = cam.w - ins.side - 0.2 * (cam.w - 2 * ins.side);
+    var uy0 = ins.top + 0.2 * (cam.h - ins.top - ins.bottom), uy1 = cam.h - ins.bottom - 0.2 * (cam.h - ins.top - ins.bottom);
+    var dx = _fs.x < ux0 ? _fs.x - ux0 : _fs.x > ux1 ? _fs.x - ux1 : 0, dy = _fs.y < uy0 ? _fs.y - uy0 : _fs.y > uy1 ? _fs.y - uy1 : 0;
+    if (!dx && !dy) return;
+    var k = instant ? 1 : Math.min(1, dt * 4);
+    cam.panX += dx * upp * k; cam.panY -= dy * upp * k; clampPan();
   }
 
   function positionCamera() {
     var k = cam.zoomK;
     cam.H = cam.base * k;
-    var cx = (cam.cx0 || 0) + (cam.dx || 0), cy = (cam.cy0 || 0) + (cam.dy || 0);
+    var cx = (cam.cx0 || 0) + (cam.panX || 0) + (cam.dx || 0), cy = (cam.cy0 || 0) + (cam.panY || 0) + (cam.dy || 0);
     cam.cx = cx; cam.cy = cy;
     camera.left = -cam.H * cam.a / 2; camera.right = cam.H * cam.a / 2; camera.top = cam.H / 2; camera.bottom = -cam.H / 2;
     camera.updateProjectionMatrix();
@@ -684,7 +719,7 @@
       var entry = Object.assign({ item: item, object3D: obj, node: g.contentNode, group: g.id }, extra || {});
       entry.worldPos = function (target) { return decorWorldPos(entry, target); };
       Game.decor.push(entry);
-      if (obj.userData && typeof obj.userData.update === "function") decorUpdaters.push(obj.userData);
+      if (obj.userData && typeof obj.userData.update === "function") decorUpdaters.push({ ud: obj.userData, type: item.type });
       return entry;
     }
     var glimOf = {}, plateOf = {}, beacon = null;
@@ -698,6 +733,21 @@
       if (e && d.type === "beacon") { e.beacon = true; beacon = beacon || e; }
       if (e && d.type === "gear") g.gears.push(e.object3D);
     });
+    // automatic dressing of rotor pivots (only with decor types that exist; skipped on low to spare draw calls)
+    if (Game.quality !== "low" && window.Decor && Decor.types) {
+      order.forEach(function (id) {
+        var g = Game.groups[id]; if (g.kind !== "rotor" || !g.cells.length) return;
+        var ax = g.axis, P = g.pivot, occ = {}; g.cells.forEach(function (c) { occ[c.join(",")] = 1; });
+        var on = g.cells.filter(function (c) { var k = [0, 1, 2].filter(function (i) { return i !== { x: 0, y: 1, z: 2 }[ax]; }); return Math.abs(c[k[0]] + 0.5 - P[k[0]]) < 1e-6 && Math.abs(c[k[1]] + 0.5 - P[k[1]]) < 1e-6; });
+        if (!on.length) return;
+        var ai = { x: 0, y: 1, z: 2 }[ax]; on.sort(function (a1, b1) { return a1[ai] - b1[ai]; });
+        var cell = on[0], faces = ["+z", "+x", "+y"].filter(function (f) { var n = FACES[f]; return !occ[(cell[0] + n[0]) + "," + (cell[1] + n[1]) + "," + (cell[2] + n[2])]; });
+        if (!faces.length) return;
+        var hasGear = Game.decor.some(function (e) { return e.item.type === "gear" && (e.item.group || "base") === id; });
+        if (ax !== "y" && Decor.types.hinge) buildDecor({ type: "hinge", at: cell.slice(), face: faces[0], rot: 0, axis: ax }, g);
+        if (!hasGear && Decor.types.gear && Game.quality === "high") { var ge = buildDecor({ type: "gear", at: cell.slice(), face: faces[0], rot: 0, r: 0.3 }, g); if (ge) g.gears.push(ge.object3D); }
+      });
+    }
     // beacon flame position (reference space): box centre of decor object
     Game.decor.forEach(function (e) {
       if (!e.beacon) return;
@@ -757,7 +807,7 @@
     }
     fitFallbackLights(w.bounds());
     fitBox = computeFitBox();
-    cam.zoomK = (Game.reducedMotion || TEST) ? 1 : 1.14; cam.introT = 0;
+    cam.zoomK = (Game.reducedMotion || TEST) ? 1 : 1.14; cam.introT = 0; cam.panX = 0; cam.panY = 0; queuedWalk = null; panDrag = null;
     fitCamera();
 
     // hero
@@ -769,6 +819,7 @@
     if (heroApi.teleport) safe(function () { heroApi.teleport(); });
     setAnim("idle"); safe(function () { heroApi.setGlow && heroApi.setGlow(1); });
     Game.hero.tile = heroW.tile; Game.hero.walking = false;
+    followHero(0, true); followHero(0, true); positionCamera();
     buildDebugEdges();
     return w;
   }
@@ -892,14 +943,22 @@
       lock.plateOn = tile;
       if (!(p.once && lock.used[tile])) {
         lock.used[tile] = true;
-        emit("plate", { tile: tile, group: p.group, pos: e ? e.worldPos().toArray() : wk.stand.slice() });
         var g = Game.groups[p.group], target;
         target = p.to !== undefined ? unwrapTo(g, p.to) : stepTarget(g);
+        emit("plate", { tile: tile, group: p.group, pos: e ? e.worldPos().toArray() : wk.stand.slice(), target: groupCentre(g, target) });
         heroW.moves = []; // plates truncate
         requestMech(g, target, null, true);
       }
     }
     return false;
+  }
+
+  // world centre of a group's blocks when the mechanism is at value v
+  function groupCentre(g, v) {
+    var n = g.cells.length, sx = 0, sy = 0, sz = 0, o = [0, 0, 0];
+    if (!n) return [g.pivot[0], g.pivot[1], g.pivot[2]];
+    for (var i = 0; i < n; i++) { var c = g.cells[i]; mechPointArr(g, v, c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, o); sx += o[0]; sy += o[1]; sz += o[2]; }
+    return [sx / n, sy / n, sz / n];
   }
 
   function startGoal() {
@@ -1007,24 +1066,27 @@
       var step = g.kind === "rotor" ? 15 : 0.25, ti = Math.floor(g.cur / step + 1e-6);
       if (ti !== g.tickIdx) { g.tickIdx = ti; emit("mechTick", { id: g.id, pos: mechPointForHandle(g) }); }
       emit("mechMove", { id: g.id, value: g.cur, delta: g.cur - prev });
-      if (g.handle && g.handle.obj && g.handle.obj.userData.spin) safe(function () { g.handle.obj.userData.spin(g.cur); });
-      g.gears.forEach(function (o) { if (o.userData && o.userData.spin) safe(function () { o.userData.spin(g.cur); }); });
+      if (g.handle && g.handle.obj && g.handle.obj.userData.spin) { try { g.handle.obj.userData.spin(g.cur); } catch (e) { warnOnce("spin", e); } }
+      for (var gi = 0; gi < g.gears.length; gi++) { var go = g.gears[gi]; if (go.userData && go.userData.spin) { try { go.userData.spin(g.cur); } catch (e) { warnOnce("gear spin", e); } } }
     }
   }
 
   // ------------------------------------------------------------------ input
-  var tapCand = null;
+  var tapCand = null, panDrag = null, queuedWalk = null;
   function inputOK() { return Game.state === "play" && !lock.input && !Game.paused; }
   function localXY(e) { var r = root.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
+  var _hitD = 0, _ho = [0, 0, 0];
+  function handleRadius() { return Math.max(22, Math.min(36, 0.75 * SQ2 * cam.h / cam.H)); } // 0.75 x tile width in px, clamped
   function hitHandle(x, y) {
-    var best = null, bd = 36 * 36, o = [0, 0, 0];
+    var R = handleRadius(), best = null, bd = R * R;
     for (var id in Game.groups) {
       var g = Game.groups[id]; if (!g.handle) continue;
-      handleRefWorld(g, g.cur, o); worldToScreen(o, _sc);
+      handleRefWorld(g, g.cur, _ho); worldToScreen(_ho, _sc);
       var d = (_sc.x - x) * (_sc.x - x) + (_sc.y - y) * (_sc.y - y);
       if (d < bd) { bd = d; best = g; }
     }
+    _hitD = Math.sqrt(bd);
     return best;
   }
 
@@ -1042,8 +1104,11 @@
     var p = localXY(e);
     try { canvas.setPointerCapture(e.pointerId); } catch (er) {}
     var g = hitHandle(p.x, p.y);
+    if (g && _hitD > 0.5 * handleRadius()) { // a paver under the finger and the finger not near the handle centre: walk instead
+      screenToPQ(p.x, p.y, _pq); var h0 = Game.geom.raycast(_pq.p, _pq.q);
+      if (h0 && h0.walkableId) g = null;
+    }
     if (g) { grab(g, p, e.pointerId); return; }
-    if (anyMoving()) return;
     tapCand = { x: p.x, y: p.y, id: e.pointerId };
   }
 
@@ -1054,6 +1119,30 @@
     if (g.state === "spring") { g.state = "drag"; g.moving = true; }
     if (heroBusy()) { if (!heroW.resume) heroW.resume = heroW.dest; truncateToStand(); }
     if (drag.locked) { emit("mechLocked", { id: g.id }); }
+    drag.rot = false;
+    if (g.kind === "rotor" && !drag.locked) {
+      var ht = g.handle && g.handle.def && g.handle.def.type;
+      var small = true;
+      if (g.handle && g.handle.on === "self") { tangent(g, g.handle.ref, _T); if (Math.hypot(_T.x, _T.y) >= 0.6) small = false; }
+      if (small && g.blockRef) { tangent(g, g.blockRef, _T); if (Math.hypot(_T.x, _T.y) >= 0.6) small = false; }
+      drag.rot = (g.axis === "y" && (ht === "crank" || ht === "wheel")) || small;
+      if (drag.rot) setupRotary(g, p);
+    }
+  }
+  // rotary gesture: turn the handle by the angle the pointer sweeps around the rotor axis (as seen on screen)
+  var _rc = [0, 0, 0], _ra = [0, 0, 0], _rb = [0, 0, 0], _rs0 = { x: 0, y: 0 }, _rs1 = { x: 0, y: 0 };
+  function setupRotary(g, p) {
+    var P = g.pivot, ax = g.axis, ry = g.handle ? g.handle.ref : P;
+    _rc[0] = ax === "x" ? ry[0] : P[0]; _rc[1] = ax === "y" ? ry[1] : P[1]; _rc[2] = ax === "z" ? ry[2] : P[2];
+    worldToScreen(_rc, _rs0); drag.cx = _rs0.x; drag.cy = _rs0.y;
+    // direction the rotation turns on screen, from a probe point 1 unit off the axis
+    var perp = ax === "y" ? [1, 0, 0] : ax === "x" ? [0, 1, 0] : [1, 0, 0];
+    _ra[0] = _rc[0] + perp[0]; _ra[1] = _rc[1] + perp[1]; _ra[2] = _rc[2] + perp[2];
+    mechPointArr(g, g.cur + 10, _ra[0], _ra[1], _ra[2], _rb);
+    worldToScreen(_ra, _rs0); worldToScreen(_rb, _rs1);
+    var ax0 = _rs0.x - drag.cx, ay0 = _rs0.y - drag.cy, ax1 = _rs1.x - drag.cx, ay1 = _rs1.y - drag.cy;
+    drag.sign = Math.atan2(ax0 * ay1 - ay0 * ax1, ax0 * ax1 + ay0 * ay1) >= 0 ? 1 : -1;
+    drag.lastAng = Math.hypot(p.x - drag.cx, p.y - drag.cy) > 10 ? Math.atan2(p.y - drag.cy, p.x - drag.cx) : null;
   }
 
   var _T = { x: 0, y: 0 };
@@ -1075,15 +1164,30 @@
       if (drag.locked) { var amt = Math.min(1, drag.travel / 60); g.cur = g.value + (g.kind === "rotor" ? 4 : 0.06) * Math.tanh(amt * 2) * (g.dir || 1); g.state = "drag"; g.moving = true; applyGroup(g); return; }
       if (heroBusy()) return; // wait for the hero to settle
       if (!drag.started) { drag.started = true; drag.raw = g.cur; g.state = "drag"; g.moving = true; beginRide(g); }
-      tangent(g, dragRef(g), _T);
-      var den = _T.x * _T.x + _T.y * _T.y; if (den < 1e-6) return;
-      drag.raw += (dx * _T.x + dy * _T.y) / den;
+      if (drag.rot) {
+        if (Math.hypot(p.x - drag.cx, p.y - drag.cy) < 10) return;
+        var ang = Math.atan2(p.y - drag.cy, p.x - drag.cx);
+        if (drag.lastAng === null || drag.lastAng === undefined) { drag.lastAng = ang; return; }
+        var da = ang - drag.lastAng; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+        drag.lastAng = ang; drag.raw += drag.sign * da / DEG;
+      } else {
+        tangent(g, dragRef(g), _T);
+        var den = _T.x * _T.x + _T.y * _T.y; if (den < 1e-6) return;
+        drag.raw += (dx * _T.x + dy * _T.y) / den;
+      }
       if (g.kind === "rotor") { var rg = rotorRange(g, g.value); g.cur = rg ? soft(drag.raw, rg.lo, rg.hi, 12) : drag.raw; }
       else { var lo = Math.min.apply(null, g.values), hi = Math.max.apply(null, g.values); g.cur = soft(drag.raw, lo, hi, 0.25); }
       return;
     }
     if (e.pointerType === "mouse" && !drag) { hoverG = inputOK() ? hitHandle(p.x, p.y) : null; canvas.style.cursor = hoverG ? "grab" : ""; }
-    if (tapCand && e.pointerId === tapCand.id && Math.hypot(p.x - tapCand.x, p.y - tapCand.y) > 14) tapCand = null;
+    if (panDrag && e.pointerId === panDrag.id) {
+      cam.panX -= (p.x - panDrag.lx) * cam.upp; cam.panY += (p.y - panDrag.ly) * cam.upp; clampPan();
+      panDrag.lx = p.x; panDrag.ly = p.y; cam.followHold = 1.5; return;
+    }
+    if (tapCand && e.pointerId === tapCand.id && Math.hypot(p.x - tapCand.x, p.y - tapCand.y) > 14) {
+      if (cam.canPan) { panDrag = { id: tapCand.id, lx: p.x, ly: p.y }; cam.followHold = 1.5; } // one-finger pan on empty sky
+      tapCand = null;
+    }
   }
 
   function onUp(e, cancel) {
@@ -1104,6 +1208,7 @@
       }
       return;
     }
+    if (panDrag && e.pointerId === panDrag.id) { panDrag = null; return; }
     if (tapCand && e.pointerId === tapCand.id && !cancel) {
       var tc = tapCand; tapCand = null;
       if (Math.hypot(p.x - tc.x, p.y - tc.y) <= 14) doTap(p.x, p.y);
@@ -1116,6 +1221,11 @@
     var w = Game.geom; screenToPQ(x, y, _pq);
     var id = w.pick(_pq.p, _pq.q), hit = w.raycast(_pq.p, _pq.q);
     var reach = false, path = null;
+    if (anyMoving()) { // a mechanism is moving: remember the tap and walk when it settles
+      emit("tap", { x: x, y: y, tile: id, reachable: !!id, pos: id ? walkableOf(id).stand.slice() : null });
+      if (id) { queuedWalk = id; spawnRipple(walkableOf(id).stand, 0xffd98a, 0.9); } else { spawnRipple([_pq.p + heroW.pos.y, heroW.pos.y, _pq.q + heroW.pos.y], 0xff8a7a, 1); }
+      return;
+    }
     if (id && id !== heroW.tile) { var anchor = peekAnchor(); path = id === anchor ? [{ id: id }] : w.path(anchor, id); reach = !!path; }
     var pos = id ? walkableOf(id).stand.slice() : null;
     emit("tap", { x: x, y: y, tile: id, reachable: reach, pos: pos });
@@ -1173,7 +1283,7 @@
       if (a[0] === "walk") r = await Game.tapTile(a[1]); else r = await Game.setMech(a[1], a[2]);
       if (a[0] === "walk" ? !(r && r.ok) : !r) { ok = false; why = "step " + k + " " + JSON.stringify(a) + " failed"; break; }
     }
-    if (ok) { var tmo = performance.now() + 60000; while (!done && performance.now() < tmo) await new Promise(function (r2) { setTimeout(r2, 30); }); if (!done) { ok = false; why = "level did not complete"; } }
+    if (ok) { var tmo = performance.now() + 30000 + sol.length * 15000; while (!done && performance.now() < tmo) await new Promise(function (r2) { setTimeout(r2, 30); }); if (!done) { ok = false; why = "level did not complete"; } }
     off();
     return { ok: ok, ms: Math.round(performance.now() - t0), why: why };
   };
@@ -1235,7 +1345,7 @@
       var g = heroW.riding; g.contentNode.updateWorldMatrix(true, false);
       tmpV.copy(heroW.refPos); g.contentNode.localToWorld(tmpV); pos.copy(tmpV);
       var ny = g.kind === "rotor" ? g.cur * DEG : 0; heroW.yaw = heroW.targetYaw = heroW.refYaw + ny;
-    } else if (!lock.goalPhase || true) {
+    } else {
       var remain = dt;
       while (remain > 1e-6) {
         if (!heroW.cur) { if (!heroW.moves.length) break; heroW.cur = heroW.moves.shift(); if (heroW.cur.kind === "a") { leaveTile(heroW.tile); } }
@@ -1273,7 +1383,7 @@
     if (heroW.crossK && !heroW.riding || (heroW.cur && heroW.cur.kind === "a" && heroW.cur.k)) {
       var w = Game.geom;
       for (var i = 0; i < 3; i++) {
-        var dy = [0.05, 0.4, 0.8][i], X = pos.x, Y = pos.y + dy, Z = pos.z, r = w.raycast(X - Y, Z - Y);
+        var dy = CROSS_DY[i], X = pos.x, Y = pos.y + dy, Z = pos.z, r = w.raycast(X - Y, Z - Y);
         if (r && r.kind !== "veil" && r.t > Y + 0.02) want = Math.max(want, r.t - Y + 0.03);
       }
       want = Math.min(0.3, want);
@@ -1282,7 +1392,7 @@
     heroPivot.position.copy(pos);
     if (heroW.offset > 1e-3) heroPivot.position.addScalar(heroW.offset);
     heroPivot.rotation.y = heroW.yaw;
-    safe(function () { heroApi.update(dt, Game.time, { speed: moving ? speedNow : 0, grounded: true }); }, "hero.update");
+    _hu.speed = moving ? speedNow : 0; try { heroApi.update(dt, Game.time, _hu); } catch (e) { warnOnce("hero.update", e); }
   }
 
   function updateGoal(dt) {
@@ -1292,7 +1402,7 @@
     if (lock.goalPhase === 1 && lock.goalT >= t1) {
       lock.goalPhase = 2;
       var b = null; Game.decor.forEach(function (e) { if (e.beacon && !b) b = e; });
-      var pos = b ? b.worldPos().toArray() : [heroW.pos.x, heroW.pos.y + 2, heroW.pos.z];
+      var pos = b ? b.worldPos(tmpV3).toArray() : [heroW.pos.x, heroW.pos.y + 2, heroW.pos.z];
       if (b) safe(function () { b.object3D.userData.ignite && b.object3D.userData.ignite(); }, "ignite");
       emit("beacon", { index: Game.levelIndex, pos: pos });
     }
@@ -1309,7 +1419,7 @@
   }
 
   function updateFX(dt, rdt) {
-    var t = Game.time, o = [0, 0, 0];
+    var t = Game.time, o = _fo;
     // handle hint rings
     for (var id in Game.groups) {
       var g = Game.groups[id]; if (!g.handle) continue;
@@ -1320,7 +1430,7 @@
       var base = g.used ? 0 : 0.25 + 0.4 * pulse; if (hov) base = 0.85;
       if (g.handle.obj && g.handle.obj.userData) {
         var ud = g.handle.obj.userData;
-        if (ud.setHover && g.hov !== hov) { g.hov = hov; safe(function () { ud.setHover(hov); }); }
+        if (ud.setHover && g.hov !== hov) { g.hov = hov; try { ud.setHover(hov); } catch (e) { warnOnce("setHover", e); } }
         if (ud.setHint && g.used && !g.hintOff) { g.hintOff = true; safe(function () { ud.setHint(false); }); }
       }
       r.visible = base > 0.01; r.material.opacity = base; r.scale.setScalar(1 + (g.used ? 0 : 0.12 * pulse) + (hov ? 0.12 : 0));
@@ -1332,7 +1442,8 @@
     }
   }
 
-  var errCount = { world: 0, blocks: 0 };
+  var errCount = { world: 0, blocks: 0 }, warned = {}, _fo = [0, 0, 0], _hu = { speed: 0, grounded: true }, CROSS_DY = [0.05, 0.4, 0.8];
+  function warnOnce(k, e) { if (warned[k]) return; warned[k] = 1; console.warn("[engine] " + k + " threw (logged once):", e); }
   function frame(ms) {
     requestAnimationFrame(frame);
     if (!Game.ready) return;
@@ -1353,6 +1464,7 @@
         // pending mech requests start when the hero is idle
         if (pending.length && !heroBusy()) { var pr = pending.shift(); beginSpring(pr.g, pr.target, pr.resolve); }
         for (var id in Game.groups) { var g = Game.groups[id]; if (g.kind !== "static") tickMech(g, dt); }
+        if (queuedWalk && !anyMoving() && !heroBusy() && !drag) { var qw = queuedWalk; queuedWalk = null; if (qw === heroW.tile) { /* already there */ } else if (Game.geom.path(heroW.tile, qw)) walkTo(qw); else bump(); }
         if (drag && !drag.started && drag.travel >= 6 && !drag.locked && !heroBusy()) { /* started on next move */ }
         updateHero(dt);
         updateGoal(dt);
@@ -1363,11 +1475,12 @@
     // camera
     if (cam.zoomK > 1) { cam.introT += rdt; var k = Math.min(1, cam.introT / 1.6); cam.zoomK = 1 + 0.14 * Math.pow(1 - k, 3); if (k >= 1) cam.zoomK = 1; }
     if (!Game.reducedMotion) { cam.dx = Math.sin(Game.time * 0.17) * 0.05; cam.dy = Math.cos(Game.time * 0.13) * 0.04; } else { cam.dx = 0; cam.dy = 0; }
+    if (cam.followHold > 0) cam.followHold -= rdt; else if (!panDrag && Game.state === "play") followHero(rdt, false);
     positionCamera();
     // modules
     if (mods.world && errCount.world < 3) { try { World.update(rdt, Game.time); } catch (e) { errCount.world++; console.warn("World.update", e); } }
     if (mods.blocks && errCount.blocks < 3 && window.Blocks && Blocks.update) { try { Blocks.update(rdt, Game.time); } catch (e) { errCount.blocks++; console.warn("Blocks.update", e); } }
-    for (var i = 0; i < decorUpdaters.length; i++) { try { decorUpdaters[i].update(rdt, Game.time); } catch (e) { decorUpdaters.splice(i, 1); i--; } }
+    for (var i = 0; i < decorUpdaters.length; i++) { try { decorUpdaters[i].ud.update(rdt, Game.time); } catch (e) { console.warn("[engine] decor updater '" + decorUpdaters[i].type + "' threw and was removed:", e); decorUpdaters.splice(i, 1); i--; } }
     updateFX(dt, rdt);
     if (gradePass) gradePass.uniforms.time.value = Game.time;
     if (DEBUG) drawDebug();

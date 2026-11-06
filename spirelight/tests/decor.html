@@ -102,6 +102,13 @@ html,body{margin:0;overflow:hidden;background:#1b1830}
       add("lantern (hang)", { type: "lantern", at: [4, -1, 3], face: "-y", lit: true });
       add("lantern (hang)", { type: "lantern", at: [6, -1, 3], face: "-y" }); add("banner (hang)", { type: "banner", at: [7, -1, 3], face: "-y", color: "plum" });
 
+      // review additions
+      add("strut", { type: "strut", from: [-3, 1.2, 2], to: [-0.2, 3.4, 0.4] }); add("strut (arch)", { type: "strut", style: "arch", from: [-3.5, 0.5, 3.5], to: [-0.8, 0.8, 3.5] });
+      add("chain", { type: "chain", from: [-1.6, 4.2, 1.2], to: [-1.6, 1.6, 1.2] });
+      add("keel", { type: "keel", at: [18, 4, 0], w: 3, d: 2, depth: 3.5 }); add("keel", { type: "keel", at: [11, -1, 1], w: 3, d: 3, depth: 4 });
+      add("corbel", { type: "corbel", at: [4, 3, -1], face: "+z" }); add("corbel", { type: "corbel", at: [6, 3, -1], face: "+z" });
+      add("hinge", { type: "hinge", at: [13, 0, 2], axis: "x" });
+      var dialObj = add("dial", { type: "dial", at: [11, 0, 3], r: 1.2 });
       items = A;
       var crank = A[0].obj, wheel = A[1].obj, lever = A[2].obj, knob = A.filter(function (a) { return a.item.type === "knob"; })[0].obj;
       var collected = false;
@@ -110,7 +117,7 @@ html,body{margin:0;overflow:hidden;background:#1b1830}
       tb.onFrame(function (dt, t) {
         t += startT;
         crank.userData.spin(t * 40); wheel.userData.spin(t * 30); lever.userData.spin((Math.sin(t * 0.8) * 0.5 + 0.5) * 90); knob.userData.spin(t * 40);
-        crank.userData.setHint(true);
+        crank.userData.setHint(true); if (dialObj) dialObj.userData.spin(t * 40);
         if (!collected && t > num("collect", 2.0)) { collected = true; gl2.userData.collect(); }
         if (num("ignite", 0) > 0 && t > num("ignite", 0)) A.filter(function (a) { return a.label === "beacon"; }).forEach(function (a) { a.obj.userData.ignite(); });
         Decor.update(dt, t);

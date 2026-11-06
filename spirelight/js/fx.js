@@ -3,12 +3,12 @@
 
   // The public object is available even without THREE, a scene, or WebAudio.
   var G = null, T = null, root = null, ready = false, raf = 0, bindings = [];
-  var MAX = 1500, STRIDE = 20, budget = MAX, factor = 1, low = false;
+  var MAX = 1500, STRIDE = 21, budget = MAX, factor = 1, low = false;
   var pool = new Float32Array(MAX * STRIDE), kind = new Uint8Array(MAX);
   var serial = new Float64Array(MAX), sequence = 0, carry = 0;
-  // Record: xyz, velocity xyz, rgb, size, alpha, age, life, delay, base xyz, phase, blend, gravity.
+  // Record: xyz, velocity xyz, rgb, size, alpha, age, life, delay, base xyz, phase, blend, gravity, fade start.
   var glow, dust, ringMesh, texture, ringData = new Float32Array(24 * 10);
-  var a, b, c, matrix, rotation, scale, colour, ray, ndc, plane;
+  var a, b, c, junction, matrix, rotation, scale, colour, ray, ndc, plane;
   var min = [-3, 0, -3], max = [7, 5, 7], theme = "dusk";
   var clock = 0, ambientClock = 0, last = 0, gameTime = NaN, poll = 0, step = 0;
   var paused = false, frameId = 0, moveFrame = -1, petalAt = 7;
@@ -103,7 +103,7 @@
     }
     return found;
   }
-  function particle(p, rgb, size, opacity, life, vx, vy, vz, blend, delay, type, gravity) {
+  function particle(p, rgb, size, opacity, life, vx, vy, vz, blend, delay, type, gravity, fadeStart) {
     var i = slot(); if (i < 0) return;
     var j = i * STRIDE;
     kind[i] = type || 1; serial[i] = ++sequence;
@@ -113,12 +113,13 @@
     pool[j + 8] = (rgb & 255) / 255; pool[j + 9] = size; pool[j + 10] = opacity;
     pool[j + 11] = 0; pool[j + 12] = life; pool[j + 13] = delay || 0;
     pool[j + 17] = Math.random() * Math.PI * 2; pool[j + 18] = blend || 0; pool[j + 19] = gravity || 0;
+    pool[j + 20] = fadeStart || 0;
   }
-  function burst(p, count, rgb, life, speed, blend, size) {
+  function burst(p, count, rgb, life, speed, blend, size, opacity) {
     count = scaled(count);
     for (var i = 0; i < count; i++) {
       var angle = Math.random() * Math.PI * 2, v = speed * (0.3 + Math.random() * 0.7);
-      particle(p, rgb, size || (blend ? 0.027 : 0.018), blend ? 0.32 : 0.85,
+      particle(p, rgb, size || (blend ? 0.027 : 0.018), opacity == null ? (blend ? 0.32 : 0.85) : opacity,
         life * (0.8 + Math.random() * 0.4), Math.cos(angle) * v * 0.7,
         v, Math.sin(angle) * v * 0.7, blend, 0, 1, blend ? 0.2 : 0.1);
     }
@@ -175,8 +176,8 @@
     var tint = theme === "night" ? "#85baff" : theme === "aurora" ? "#69ffe3" : "#ffd08a";
     var second = theme === "aurora" ? "#b895ff" : tint;
     shafts.style.background = "repeating-conic-gradient(from 100deg at " + x + "% " + y + "%,transparent 0deg 13deg," + tint + " 15deg,transparent 19deg 29deg," + second + " 30deg,transparent 33deg 44deg)";
-    shafts.style.opacity = theme === "night" ? "0.06" : "0.09";
-    shafts.style.display = G.reducedMotion || low ? "none" : "block";
+    shafts.style.opacity = theme === "dawn" ? "0.045" : "0.09";
+    shafts.style.display = G.reducedMotion || low || theme === "night" || theme === "aurora" ? "none" : "block";
   }
   function overlay() {
     if (!G.root || !G.root.appendChild) return;
@@ -184,7 +185,7 @@
     shafts.setAttribute("aria-hidden", "true"); flash.setAttribute("aria-hidden", "true");
     shafts.className = "fx-shafts"; flash.className = "fx-flash";
     shafts.style.cssText = "position:absolute;inset:-15%;pointer-events:none;mix-blend-mode:screen;opacity:.09;overflow:hidden";
-    flash.style.cssText = "position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(#fff3c4cc,#ffb35a33 60%,transparent)";
+    flash.style.cssText = "position:absolute;left:50%;top:50%;width:35vh;height:35vh;transform:translate(-50%,-50%);pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(circle,#fff3c4cc,#ffb35a33 45%,transparent 70%)";
     var ui = G.ui && G.ui.parentNode === G.root ? G.ui : null;
     G.root.insertBefore(shafts, ui); G.root.insertBefore(flash, ui);
     if (shafts.animate) sway = shafts.animate([{ transform: "rotate(-2deg)" }, { transform: "rotate(2deg)" }],
@@ -228,6 +229,13 @@
     positionShafts(); resize();
   }
   function changeTheme(name) { theme = scales[name] ? name : "dusk"; }
+  function positionFlash(pos) {
+    if (!flash) return;
+    var screen = null;
+    if (pos && typeof G.worldToScreen === "function") screen = G.worldToScreen(pos);
+    flash.style.left = screen && Number.isFinite(screen.x) ? screen.x + "px" : "50%";
+    flash.style.top = screen && Number.isFinite(screen.y) ? screen.y + "px" : "50%";
+  }
   function beacon(d) {
     var found = readPoint(d.pos, a), decor = G.decor || [];
     if (!found) {
@@ -235,8 +243,10 @@
         if (decor[i].item && decor[i].item.type === "beacon" && decorPoint(decor[i], a)) { found = true; break; }
       }
     }
-    sound("beacon"); if (!found) return;
+    sound("beacon"); flashAt = clock;
+    if (!found) { positionFlash(null); return; }
     beaconPoint[0] = a.x; beaconPoint[1] = a.y; beaconPoint[2] = a.z;
+    positionFlash(beaconPoint);
     cascade.length = 0;
     for (var k = 0; k < decor.length; k++) {
       if (decor[k].item && decor[k].item.type === "beacon") continue;
@@ -255,8 +265,8 @@
       var entry = cascade[cascadeIndex++], obj = entry.decor.object3D;
       try { obj.userData.setLit(true, false); } catch (e) { report(e); }
       if (decorPoint(entry.decor, a)) {
-        burst(a, 5, GOLD, 0.8, 0.45, 0);
-        if (cascadeIndex % 3 === 1) ring(a, GOLD, 0.65, 0.55, 0.35);
+        burst(a, 8, 0xfff6dc, 0.65, 0.45, 0, 0.04, 1);
+        ring(a, GOLD, 0.65, 0.55, 0.75);
       }
     }
     if (cascadeAt >= 0 && elapsed <= 1.55) {
@@ -267,7 +277,8 @@
     }
     if (flash) {
       var f = clock - flashAt;
-      flash.style.opacity = f < 0 || f > 1.45 ? "0" : String(f < 0.25 ? f / 0.25 : (1.45 - f) / 1.2);
+      var strength = theme === "night" || theme === "aurora" ? 0.8 : 0.5;
+      flash.style.opacity = f < 0 || f > 1.6 ? "0" : String(strength * (f < 0.2 ? f / 0.2 : (1.6 - f) / 1.4));
     }
   }
   function path(d) {
@@ -276,9 +287,11 @@
     for (var i = 1; i < pts.length && order < budget; i++) {
       if (!readPoint(pts[i - 1], a) || !readPoint(pts[i], b)) continue;
       var length = a.distanceTo(b); if (!length) continue;
+      var dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+      var join = Math.abs(dx) > 1e-6 && Math.abs(dx - dy) < 1e-6 && Math.abs(dx - dz) < 1e-6;
       for (; offset <= length && order < budget; offset += 0.3) {
         c.copy(a).lerp(b, offset / length); c.y += 0.035;
-        if (scaled(1)) particle(c, 0xffedc7, 0.014, 0.8, 1.2, 0, 0.025, 0, 0, order * 0.035);
+        if (scaled(1)) particle(c, 0xffedc7, 0.014, join ? 0.48 : 0.36, 0.4, 0, 0, 0, 0);
         order++;
       }
       offset -= length;
@@ -288,8 +301,11 @@
     sound("footstep"); step++;
     if (step % 3 === 0 && heroPoint(a)) burst(a, 5, SAND, 0.5, 0.3, 1, 0.03);
     if (Number.isFinite(d.k) && d.k !== 0) {
-      if (!readPoint(d.at, a) && !point(d.from, a) && !heroPoint(a)) return;
-      burst(a, 8, TEAL, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
+      if (!readPoint(d.at, a)) {
+        if (point(d.from, junction) && point(d.to, a)) a.lerp(junction, 0.5);
+        else if (!heroPoint(a)) return;
+      }
+      burst(a, 10, 0xc4fff8, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
     }
   }
   function mechanism(name, d) {
@@ -315,11 +331,13 @@
   function plate(d) {
     sound("plate"); if (!readPoint(d.pos, a) && !point(d.tile, a)) return;
     ring(a, 0xffbd68, 1.5, 0.8, 0.6);
-    var count = scaled(16);
+    if (!readPoint(d.target, b) || a.distanceToSquared(b) < 1e-12) return;
+    var count = scaled(14);
     for (var i = 0; i < count; i++) {
-      var angle = i / count * Math.PI * 2;
-      c.set(a.x + Math.cos(angle) * 0.25, a.y + 0.025, a.z + Math.sin(angle) * 0.25);
-      particle(c, SAND, 0.025, 0.35, 0.65, Math.cos(angle) * 0.5, 0.12, Math.sin(angle) * 0.5, 1);
+      // Evenly spaced starting points all reach the target at 0.6 s, on the world line.
+      c.copy(a).lerp(b, i / count);
+      particle(c, GOLD, 0.018, 0.85, 0.6, (b.x - c.x) / 0.6, (b.y - c.y) / 0.6,
+        (b.z - c.z) / 0.6, 0, 0, 1, 0, 0.4);
     }
   }
   function complete() {
@@ -557,6 +575,7 @@
 
   function particlesFrame(dt, ambientDt, active) {
     glow.count = dust.count = live = ambientCount = 0;
+    var ambientDim = (theme === "night" || theme === "aurora") && clock - cascadeAt < 3 ? 0.4 : 1;
     for (var i = 0; i < budget; i++) {
       var type = kind[i]; if (!type) continue;
       var j = i * STRIDE, alpha = pool[j + 10], age;
@@ -566,9 +585,11 @@
         if (age >= pool[j + 12]) { kind[i] = 0; continue; }
         pool[j] += pool[j + 3] * dt; pool[j + 1] += pool[j + 4] * dt; pool[j + 2] += pool[j + 5] * dt;
         pool[j + 4] -= pool[j + 19] * dt;
-        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - age / pool[j + 12], 1.3);
+        var fade = Math.max(0, age - pool[j + 20]) / (pool[j + 12] - pool[j + 20]);
+        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - fade, 1.3);
       } else {
         ambientCount++;
+        alpha *= ambientDim;
         var phase = pool[j + 17], t = ambientClock;
         if (type === 2) {
           pool[j] = pool[j + 14] + Math.sin(t * 0.22 + phase) * 0.5;
@@ -671,7 +692,7 @@
       window.addEventListener("pointerdown", unlock, true); window.addEventListener("keydown", unlock, true);
       window.addEventListener("touchend", unlock, true);
       if (!T || !G.scene) return;
-      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); scale = new T.Vector3();
+      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); junction = new T.Vector3(); scale = new T.Vector3();
       matrix = new T.Matrix4(); rotation = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -Math.PI / 2);
       colour = new T.Color(); ray = new T.Raycaster(); ndc = new T.Vector2(); plane = new T.Plane(new T.Vector3(0, 1, 0), -1);
       root = new T.Group(); root.name = "Spirelight FX"; G.scene.add(root);

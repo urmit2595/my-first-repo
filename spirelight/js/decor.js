@@ -138,15 +138,17 @@
     if (glow) { g.fillStyle = "#000"; g.fillRect(0, 0, S, S); }
     else {
       const gr = g.createRadialGradient(m * 0.8, m * 0.8, 10, m, m, m);
-      gr.addColorStop(0, "#e8b556"); gr.addColorStop(0.7, "#c8963e"); gr.addColorStop(1, "#8c6428");
+      gr.addColorStop(0, "#a89d94"); gr.addColorStop(0.7, "#8f847c"); gr.addColorStop(1, "#6c635f");
       g.fillStyle = gr; g.fillRect(0, 0, S, S);
+      const id = g.getImageData(0, 0, S, S), rnd = mulberry32(5);
+      for (let i = 0; i < S * S; i++) { const k = 0.93 + rnd() * 0.14; id.data[i * 4] *= k; id.data[i * 4 + 1] *= k; id.data[i * 4 + 2] *= k; }
+      g.putImageData(id, 0, 0);
     }
-    const ink = glow ? "#ffb347" : "#5a3a14", ink2 = glow ? "#fff0b0" : "#3b2410";
+    const ink = glow ? "#ff8a2a" : "#4a3f4a", ink2 = glow ? "#ffd27a" : "#2e2530";
     g.lineCap = "round"; g.lineJoin = "round";
-    g.strokeStyle = ink; g.lineWidth = 6;
+    g.strokeStyle = ink; g.lineWidth = 7;
     g.beginPath(); g.arc(m, m, m * 0.9, 0, TAU); g.stroke();
     g.lineWidth = 3; g.beginPath(); g.arc(m, m, m * 0.8, 0, TAU); g.stroke();
-    // rays: alternating long triangles and short ones
     for (let i = 0; i < 16; i++) {
       const a = i / 16 * TAU, long = i % 2 === 0, r0 = m * 0.4, r1 = m * (long ? 0.74 : 0.6), w = long ? 0.11 : 0.07;
       g.fillStyle = long ? ink2 : ink;
@@ -154,7 +156,7 @@
       g.lineTo(m + Math.cos(a + w) * r0, m + Math.sin(a + w) * r0); g.closePath(); g.fill();
     }
     g.fillStyle = ink2; g.beginPath(); g.arc(m, m, m * 0.34, 0, TAU); g.fill();
-    g.fillStyle = glow ? "#ffffff" : "#c8963e"; g.beginPath(); g.arc(m, m, m * 0.27, 0, TAU); g.fill();
+    g.fillStyle = glow ? "#ffc070" : "#8a7f78"; g.beginPath(); g.arc(m, m, m * 0.27, 0, TAU); g.fill();
     g.strokeStyle = ink; g.lineWidth = 4; g.beginPath(); g.arc(m, m, m * 0.18, 0, TAU); g.stroke();
     return ctex(c, !glow);
   }
@@ -611,6 +613,7 @@
     const env = {
       name, item, ctx: ctx || {}, face: fr.face, n: fr.n, q: fr.q, mode: fr.mode, root, ud: root.userData,
       quality: (ctx && ctx.quality) || "high", own: [], ownG: [], upds: [],
+      def: d,
       rng: mulberry32(hash3(at[0], at[1], at[2], ((ctx && ctx.seed) | 0) + name.length * 131 + (item.seed | 0))),
       upd(fn) { this.upds.push(fn); },
       seg(n) { return Math.max(6, Math.round(n * (this.quality === "low" ? 0.6 : this.quality === "medium" ? 0.85 : 1))); },
@@ -626,6 +629,7 @@
     return env;
   }
   function placeRoot(env) {
+    if (env.def && env.def.world) return;
     const at = env.item.at || [0, 0, 0], n = env.n;
     env.root.position.set(at[0] + 0.5 + 0.5 * n.x, at[1] + 0.5 + 0.5 * n.y, at[2] + 0.5 + 0.5 * n.z);
     env.root.quaternion.copy(env.q);
@@ -654,6 +658,7 @@
     const W = env.root, b = new Builder({ ao: 0.2 });
     const S = (n) => env.seg(n);
     // base plate with bolts, bearing housing
+    b.tor("metal", 0.47, 0.012, { p: [0, 0.014, 0], r: [Math.PI / 2, 0, 0], c: C.brassHi }, S(44), 5);   // grab collar (stays after the hint stops)
     b.cyl("metal", 0.28, 0.31, 0.04, S(28), { p: [0, 0.02, 0], c: C.brassDk });
     b.cyl("metal", 0.235, 0.26, 0.035, S(28), { p: [0, 0.0575, 0], c: C.brass });
     for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + 0.3; b.cyl("metal", 0.02, 0.02, 0.022, 8, { p: [Math.cos(a) * 0.205, 0.085, Math.sin(a) * 0.205], c: C.brassHi }); }
@@ -685,6 +690,7 @@
   def("wheel", "floor", { hint: "pulsing ring (default true)" }, (env) => {
     const W = env.root, b = new Builder({ ao: 0.25 });
     const S = (n) => env.seg(n);
+    b.tor("metal", 0.52, 0.012, { p: [0, 0.014, 0], r: [Math.PI / 2, 0, 0], c: C.brassHi }, S(44), 5);
     b.lat("matte", [[0.33, 0], [0.33, 0.05], [0.27, 0.09], [0.17, 0.13], [0.15, 0.3], [0.19, 0.34], [0.19, 0.41], [0, 0.41]], { c: C.patina }, S(26));
     b.tor("metal", 0.3, 0.018, { p: [0, 0.07, 0], r: [Math.PI / 2, 0, 0], c: C.brass }, S(30), 6);
     b.tor("metal", 0.165, 0.016, { p: [0, 0.2, 0], r: [Math.PI / 2, 0, 0], c: C.brass }, S(24), 6);
@@ -710,6 +716,7 @@
 
   def("lever", "floor", { range: "value span for full travel (default 90)" }, (env) => {
     const W = env.root, b = new Builder({ ao: 0.2 });
+    b.tor("metal", 0.36, 0.011, { p: [0, 0.014, 0], r: [Math.PI / 2, 0, 0], c: C.brassHi }, 36, 5);
     b.box("metal", 0.36, 0.05, 0.26, { p: [0, 0.025, 0], c: C.ironDk });
     b.box("metal", 0.3, 0.03, 0.2, { p: [0, 0.065, 0], c: C.brassDk });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.cyl("metal", 0.016, 0.016, 0.02, 8, { p: [sx * 0.15, 0.09, sz * 0.1], c: C.brassHi });
@@ -735,6 +742,7 @@
 
   def("knob", "floor", {}, (env) => {
     const W = env.root, b = new Builder({ ao: 0.2 });
+    b.tor("metal", 0.34, 0.011, { p: [0, 0.014, 0], r: [Math.PI / 2, 0, 0], c: C.brassHi }, 36, 5);
     b.box("metal", 0.34, 0.05, 0.22, { p: [0, 0.025, 0], c: C.brassDk });
     b.box("metal", 0.26, 0.04, 0.16, { p: [0, 0.07, 0], c: C.brass });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.cyl("metal", 0.015, 0.015, 0.02, 8, { p: [sx * 0.11, 0.1, sz * 0.065], c: C.brassHi });
@@ -776,31 +784,52 @@
   }, { stat: true });
 
   // ================================================================================================ LEVEL PARTS
+  // chime-stone plate: carved stone slab with a round inset, an orange emissive ring and a small bronze chime on a stone post
   def("plate", "floor", {}, (env) => {
-    const W = env.root, b = new Builder({ ao: 0.06 });
-    b.lat("metal", [[0.475, 0], [0.475, 0.022], [0.445, 0.038], [0.42, 0.03], [0.42, 0]], { c: C.brassDk }, env.seg(36));
-    b.cyl("metal", 0.41, 0.41, 0.012, env.seg(36), { p: [0, 0.006, 0], c: C.ironDk });
-    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU + 0.2; b.cyl("metal", 0.016, 0.016, 0.01, 8, { p: [Math.cos(a) * 0.455, 0.036, Math.sin(a) * 0.455], c: C.brassHi }); }
+    const W = env.root, b = new Builder({ ao: 0.06 }), S = (n) => env.seg(n);
+    const slab = new THREE.Shape(), hw = 0.43, rc = 0.07;
+    slab.moveTo(-hw + rc, -hw); slab.lineTo(hw - rc, -hw); slab.quadraticCurveTo(hw, -hw, hw, -hw + rc); slab.lineTo(hw, hw - rc); slab.quadraticCurveTo(hw, hw, hw - rc, hw);
+    slab.lineTo(-hw + rc, hw); slab.quadraticCurveTo(-hw, hw, -hw, hw - rc); slab.lineTo(-hw, -hw + rc); slab.quadraticCurveTo(-hw, -hw, -hw + rc, -hw);
+    const hole = new THREE.Path(); hole.absarc(0, 0, 0.315, 0, TAU, true); slab.holes.push(hole);
+    b.add("matte", new THREE.ExtrudeGeometry(slab, { depth: 0.045, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2, curveSegments: S(20) }).rotateX(-Math.PI / 2), { c: 0x5e5668 });
+    b.cyl("matte", 0.32, 0.32, 0.01, S(28), { p: [0, 0.01, 0], c: 0x2a2230 });                                  // dark well under the disc
+    b.tor("metal", 0.335, 0.008, { p: [0, 0.062, 0], r: [Math.PI / 2, 0, 0], c: C.brassDk }, S(40), 5);           // thin brass lip round the inset
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; b.box("matte", 0.07, 0.016, 0.07, { p: [Math.cos(a) * 0.38, 0.062, Math.sin(a) * 0.38], r: [0, -a, 0], c: 0xb2a8bc }); }
+    // chime post (back corner) with a small bell hanging from a brass arm
+    b.cyl("matte", 0.045, 0.06, 0.2, 8, { p: [-0.34, 0.15, -0.34], c: 0x9a90a4 });
+    b.cyl("matte", 0.07, 0.07, 0.03, 8, { p: [-0.34, 0.26, -0.34], c: 0xb2a8bc });
+    b.rod("metal", [-0.34, 0.25, -0.34], [-0.2, 0.25, -0.2], 0.012, 5, C.brass);
+    b.sph("metal", 0.022, { p: [-0.2, 0.25, -0.2], c: C.brassHi }, 6, 5);
     b.finish(W);
-    const top = new THREE.Group(); top.position.y = 0.045; W.add(top);
-    const tb = new Builder({ ao: 0 });
-    tb.lat("metal", [[0, 0.025], [0.375, 0.025], [0.395, 0.015], [0.4, -0.01], [0.4, -0.03], [0, -0.03]], { c: C.brass }, env.seg(36));
-    tb.finish(top);
-    const dm = new THREE.MeshStandardMaterial({ map: T.plate, emissiveMap: T.plateGlow, emissive: new THREE.Color(1, 0.62, 0.22), emissiveIntensity: 0, metalness: 0.7, roughness: 0.4, envMap: M._envTex, envMapIntensity: 1 });
+    // chime (swings when the plate is pressed)
+    const chime = new THREE.Group(); chime.position.set(-0.2, 0.245, -0.2); W.add(chime);
+    const cb = new Builder({ ao: 0 });
+    cb.lat("metal", [[0, 0], [0.012, 0], [0.02, -0.02], [0.04, -0.07], [0.052, -0.1], [0.048, -0.105], [0.03, -0.09], [0, -0.09]], { c: C.bronze }, 10);
+    cb.sph("metal", 0.012, { p: [0, -0.1, 0], c: C.brassHi }, 6, 5);
+    cb.finish(chime);
+    // sinking stone disc with the sun glyph
+    const top = new THREE.Group(); top.position.y = 0.06; W.add(top);
+    const dm = new THREE.MeshStandardMaterial({ map: T.plate, emissiveMap: T.plateGlow, emissive: new THREE.Color(1, 0.55, 0.15), emissiveIntensity: 0, metalness: 0.1, roughness: 0.75, envMap: M._envTex, envMapIntensity: 0.5 });
     env.own.push(dm);
-    const g = new THREE.CircleGeometry(0.37, env.seg(36)); env.ownG.push(g);
-    const disc = new THREE.Mesh(g, dm); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.0265; disc.receiveShadow = true; top.add(disc);
-    const halo = flatGlow(env, 0xffa640, 1.5, 1.5, 0); halo.position.y = 0.014; W.add(halo);
-    const st = ramp(false, 5);
-    let sunk = 0;
+    const dgeo = new THREE.CylinderGeometry(0.3, 0.3, 0.06, S(36)); env.ownG.push(dgeo);
+    const disc = new THREE.Mesh(dgeo, dm); disc.position.y = -0.03; disc.receiveShadow = true; top.add(disc);   // glyph reads from the top cap UVs
+    // orange emissive ring in the groove (always faintly lit so plates are recognisable; blazes when pressed)
+    const rg = new THREE.TorusGeometry(0.318, 0.016, 6, S(48)); env.ownG.push(rg);
+    const rm = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.4, 0.06) }); env.own.push(rm);
+    const ring = new THREE.Mesh(rg, rm); ring.rotation.x = Math.PI / 2; ring.position.y = 0.05; W.add(ring);
+    const halo = flatGlow(env, 0xff8a30, 1.4, 1.4, 0); halo.position.y = 0.014; W.add(halo);
+    const st = ramp(false, 5), ph = env.rng() * TAU; let swing = 0;
     const apply = (t) => {
-      top.position.y = 0.045 - 0.03 * smooth(st.v);
-      dm.emissiveIntensity = 0.1 + 0.07 * Math.sin(t * 2) * (1 - st.v) + st.v * 1.7;
-      halo.material.opacity = st.v * 0.7; halo.visible = st.v > 0.01;
+      const v = smooth(st.v);
+      top.position.y = 0.06 - 0.04 * v;
+      dm.emissiveIntensity = 0.04 + v * 1.4;
+      const k = 0.55 + 0.2 * Math.sin(t * 2 + ph);
+      rm.color.setRGB(lerp(0.95 * k, 2.2, v), lerp(0.26 * k, 0.7, v), lerp(0.03 * k, 0.08, v));
+      halo.material.opacity = v * 0.45; halo.visible = v > 0.01;
     };
-    env.ud.press = (on, instant) => { st.set(on !== false, instant); env.ud.pressed = on !== false; if (instant) apply(0); };
+    env.ud.press = (on, instant) => { const was = env.ud.pressed; st.set(on !== false, instant); env.ud.pressed = on !== false; if (on !== false && !was) swing = 0.7; if (instant) apply(0); };
     env.ud.pressed = false;
-    env.upd((dt, t) => { st.step(dt); apply(t); void sunk; });
+    env.upd((dt, t) => { st.step(dt); apply(t); swing = Math.max(0, swing - dt * 0.35); chime.rotation.z = Math.sin(t * 9) * swing * 0.5 + Math.sin(t * 1.3 + ph) * 0.03; chime.rotation.x = Math.cos(t * 8) * swing * 0.3; });
     apply(0);
   });
 
@@ -1218,16 +1247,25 @@
     g.position.y = 0;
   }, { stat: true });
 
+  // copper / verdigris lantern-dome: stone drum, low ribbed dome, a brass-caged lantern cupola and a finial
   def("dome", "floor", { r: "radius scale (1)" }, (env) => {
-    const s = P(env.item, "r", 1), W = env.root, b = new Builder({ ao: 0.2 });
+    const s = P(env.item, "r", 1), W = env.root, b = new Builder({ ao: 0.2 }), S = (n) => env.seg(n);
     b.lat("matte", [[0.47, 0], [0.47, 0.08], [0.43, 0.1], [0.43, 0.3], [0.46, 0.32], [0.46, 0.36], [0, 0.36]], { c: C.sand }, 16);
-    for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * TAU; b.box("matte", 0.12, 0.17, 0.05, { p: [Math.cos(a) * 0.435, 0.2, Math.sin(a) * 0.435], r: [0, -a, 0], c: C.sandDk }); }
-    // onion dome in verdigris copper
-    const prof = [[0.46, 0.36], [0.45, 0.4], [0.5, 0.5], [0.52, 0.6], [0.47, 0.72], [0.37, 0.84], [0.23, 0.96], [0.1, 1.06], [0.04, 1.14], [0.05, 1.18], [0, 1.2]];
-    b.lat("matte", prof, { c: C.patina }, env.seg(28));
-    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; b.tube("metal", prof.slice(1, 9).map(p => [Math.cos(a) * (p[0] + 0.012), p[1], Math.sin(a) * (p[0] + 0.012)]), 0.01, { c: C.brass }, 14, false, 4); }
-    b.tor("metal", 0.46, 0.02, { p: [0, 0.37, 0], r: [Math.PI / 2, 0, 0], c: C.brass }, env.seg(28), 6);
-    b.sph("metal", 0.06, { p: [0, 1.22, 0], c: C.brassHi }, 12, 8); b.cyl("metal", 0.012, 0.004, 0.22, 6, { p: [0, 1.38, 0], c: C.brass });
+    for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * TAU; b.box("matte", 0.1, 0.17, 0.05, { p: [Math.cos(a) * 0.435, 0.2, Math.sin(a) * 0.435], r: [0, -a, 0], c: C.sandDk }); }
+    // shallow hemispherical cap in weathered copper with verdigris
+    const prof = []; for (let i = 0; i <= 10; i++) { const a = i / 10 * Math.PI * 0.5; prof.push([Math.cos(a) * 0.5 + (i === 0 ? -0.02 : 0), 0.36 + Math.sin(a) * 0.36]); }
+    b.lat("matte", prof, { c: 0x6fa08a }, S(28));
+    b.lat("matte", [[0.5, 0.355], [0.52, 0.37], [0.51, 0.42], [0.495, 0.43]], { c: C.copper }, S(28));                // copper eave
+    for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; b.tube("metal", prof.slice(0, 11).map(p => [Math.cos(a) * (p[0] + 0.012), p[1] + 0.006, Math.sin(a) * (p[0] + 0.012)]), 0.013, { c: C.brass }, 12, false, 4); }
+    // cupola: brass cage with a small glowing-glass look (dark glass) and a copper roof
+    const y0 = 0.72;
+    b.tor("metal", 0.17, 0.018, { p: [0, y0, 0], r: [Math.PI / 2, 0, 0], c: C.brass }, S(20), 6);
+    b.tor("metal", 0.15, 0.016, { p: [0, y0 + 0.26, 0], r: [Math.PI / 2, 0, 0], c: C.brass }, S(20), 6);
+    for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * TAU; b.rod("metal", [Math.cos(a) * 0.165, y0, Math.sin(a) * 0.165], [Math.cos(a) * 0.15, y0 + 0.26, Math.sin(a) * 0.15], 0.012, 5, C.brassHi); }
+    b.lat("metal", [[0.12, y0 + 0.02], [0.1, y0 + 0.14], [0.12, y0 + 0.25], [0, y0 + 0.25]], { c: 0x4a3a30 }, 10);       // dark inner core seen through the cage
+    b.lat("matte", [[0.2, y0 + 0.26], [0.19, y0 + 0.29], [0.13, y0 + 0.34], [0.06, y0 + 0.41], [0.03, y0 + 0.46], [0, y0 + 0.48]], { c: C.copper }, S(20));
+    b.tor("metal", 0.2, 0.014, { p: [0, y0 + 0.27, 0], r: [Math.PI / 2, 0, 0], c: C.brassHi }, S(20), 5);
+    b.sph("metal", 0.04, { p: [0, y0 + 0.5, 0], c: C.brassHi }, 10, 8); b.cyl("metal", 0.01, 0.003, 0.2, 6, { p: [0, y0 + 0.62, 0], c: C.brass });
     b.finish(W);
     W.scale.setScalar(s);
   }, { stat: true });
@@ -1345,10 +1383,10 @@
           " float edge = smoothstep(0.0, 0.14, x) * smoothstep(1.0, 0.86, x);" +
           " float bottom = smoothstep(0.0, 1.4, (vUv.y)*uLen);" +
           " float top = smoothstep(0.0, 0.05, 1.0 - vUv.y) * 0.5 + 0.5;" +
-          " vec3 deep = vec3(0.45,0.62,0.85), lite = vec3(0.96,0.98,1.0);" +
+          " vec3 deep = vec3(0.30,0.44,0.66), lite = vec3(0.74,0.82,0.94);" +
           " vec3 col = mix(deep, lite, streak*0.85 + 0.1);" +
           " col = mix(col, vec3(1.0,0.82,0.7), 0.12);" +
-          " float a = (0.28 + 0.6*streak) * edge * bottom * top * uAlpha;" +
+          " float a = (0.22 + 0.45*streak) * edge * bottom * top * uAlpha;" +
           " gl_FragColor = vec4(col, a); }",
       });
       env.own.push(m);
@@ -1362,7 +1400,8 @@
       for (let i = 0; i < p.count; i++) {
         const dist = len / 2 - p.getY(i);          // 0 at lip
         const z = 0.2 * Math.sqrt(clamp(dist / 1.2, 0, 1)) + 0.04;
-        p.setXYZ(i, p.getX(i), lipY - dist, z);
+        const wf = 1 + 1.1 * Math.pow(clamp(dist / len, 0, 1), 1.4);   // the sheet fans out toward the bottom
+        p.setXYZ(i, p.getX(i) * wf, lipY - dist, z);
       }
       g.computeVertexNormals();
       const mesh = new THREE.Mesh(g, m); mesh.renderOrder = 5; mesh.frustumCulled = false; return mesh;
@@ -1371,18 +1410,18 @@
     W.add(a, c);
     // foam and spray at the base (also at the lip)
     const base = lipY - len, low = env.quality === "low";
-    // foam puffs 0-2, spray glow 3, lip glow 4: one billboard batch
-    const FB = makeBoard(env, 5); W.add(FB.mesh); FB.mesh.renderOrder = 6;
-    for (let i = 0; i < 3; i++) FB.set(i, 0, base, 0.27, 0.6, 0.6, 0xe8f2ff, 0, 3, 0);
-    FB.set(3, 0, base + 0.1, 0.25, 1.4, 1.4, 0xbfe0ff, 0.35, 0, 1); FB.set(4, 0, lipY - 0.02, 0.12, 0.45, 0.45, 0xffffff, 0.5, 0, 1);
+    // spray: 6 foam puffs + mist glow where the water meets the clouds, plus a lip glow: one billboard batch
+    const NP = 6, FB = makeBoard(env, NP + 2); W.add(FB.mesh); FB.mesh.renderOrder = 6;
+    for (let i = 0; i < NP; i++) FB.set(i, 0, base, 0.27, 0.6, 0.6, 0xe8f2ff, 0, 3, 0);
+    FB.set(NP, 0, base + 0.15, 0.25, 2.4, 1.2, 0xa9c8f0, 0.2, 0, 1); FB.set(NP + 1, 0, lipY - 0.02, 0.12, 0.45, 0.45, 0xdde8ff, 0.3, 0, 1);
     env.upd((dt, t) => {
       a.material.uniforms.uTime.value = t; c.material.uniforms.uTime.value = t;
-      for (let i = 0; i < 3; i++) {
-        const o = i / 3, k = (t * 0.45 + o) % 1, z = 0.5 + k * 0.9;
-        FB.pos(i, (o - 0.4) * w * 1.4 + Math.sin(t + o * 7) * 0.06, base + 0.05 + k * 0.5, 0.27 + k * 0.1);
-        FB.size(i, z, z); FB.alpha(i, low ? 0 : Math.sin(k * Math.PI) * 0.55);
+      for (let i = 0; i < NP; i++) {
+        const o = i / NP, k = (t * 0.4 + o) % 1, z = 0.7 + k * 1.3;
+        FB.pos(i, (o - 0.5) * w * 2.6 + Math.sin(t * 0.8 + o * 7) * 0.12, base + 0.02 + k * 0.7, 0.3 + k * 0.15);
+        FB.size(i, z, z * 0.85); FB.alpha(i, low ? 0 : Math.sin(k * Math.PI) * 0.5);
       }
-      FB.alpha(3, low ? 0 : 0.3 + 0.08 * Math.sin(t * 2.1)); FB.flush();
+      FB.alpha(NP, low ? 0 : 0.18 + 0.05 * Math.sin(t * 2.1)); FB.flush();
     });
   });
 
@@ -1492,6 +1531,169 @@
     if (s !== 1) W.scale.setScalar(s);
   });
 
+  // ================================================================================================ REVIEW ADDITIONS
+  // helpers for world-placed types (strut, chain, keel): the root sits at the origin / its own anchor, not on a face
+  const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+  function basisQuat(x, y, z) { const m = new THREE.Matrix4().makeBasis(x, y, z), q = new THREE.Quaternion(); q.setFromRotationMatrix(m); return q; }
+
+  // strut: brass truss (default) or stone arch-strut between two world points
+  def("strut", "floor", { from: "[x,y,z]", to: "[x,y,z]", style: "truss|arch (truss)" }, (env) => {
+    const A = V3(env.item.from || [0, 0, 0]), B2 = V3(env.item.to || [1, 1, 0]), d = B2.clone().sub(A), L = d.length(), u = d.clone().normalize();
+    let side = new THREE.Vector3().crossVectors(u, new THREE.Vector3(0, 1, 0)); if (side.lengthSq() < 1e-4) side.set(1, 0, 0); side.normalize();
+    const up = new THREE.Vector3().crossVectors(side, u).normalize();
+    const b = new Builder({ ao: 0 }), style = P(env.item, "style", "truss");
+    const pt = (t, o) => [A.x + d.x * t + up.x * o, A.y + d.y * t + up.y * o, A.z + d.z * t + up.z * o];
+    if (style === "arch") {
+      const bow = Math.min(0.7, L * 0.2), n = 12, pts = [];
+      for (let i = 0; i <= n; i++) { const t = i / n, o = Math.sin(t * Math.PI) * bow; pts.push(pt(t, o)); }
+      b.add("matte", sweep(pts, 0.17, 0.17, 24, 10), { c: C.sand });
+      for (const t of [0, 0.5, 1]) { const p = pt(t, Math.sin(t * Math.PI) * bow); b.sph("metal", 0.13, { p, c: C.brass }, 12, 8); b.sph("metal", 0.05, { p: [p[0], p[1] + 0.12, p[2]], c: C.brassHi }, 8, 6); }
+      for (let i = 1; i < 6; i++) { const t = i / 6, p = pt(t, Math.sin(t * Math.PI) * bow); b.tor("metal", 0.18, 0.016, { p, q: basisQuat(side, up, u).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2)), c: C.brassDk }, 14, 5); }
+    } else {
+      const h = 0.16, n = Math.max(2, Math.round(L / 0.34));
+      for (const o of [h, -h]) b.rod("metal", pt(0, o), pt(1, o), 0.024, 8, C.brass);
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        b.rod("metal", pt(t, -h), pt(t, h), 0.016, 6, C.brassDk);
+        if (i < n) b.rod("metal", pt(t, i % 2 ? h : -h), pt((i + 1) / n, i % 2 ? -h : h), 0.014, 6, C.brass);
+        b.sph("metal", 0.034, { p: pt(t, h), c: C.brassHi }, 8, 6); b.sph("metal", 0.03, { p: pt(t, -h), c: C.brassHi }, 8, 6);
+      }
+      for (const t of [0, 1]) {   // end plates with bolts
+        const p = pt(t, 0), q = basisQuat(side, up, u);
+        b.box("metal", 0.3, 0.42, 0.06, { p, q, c: C.brassDk });
+        for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const v = new THREE.Vector3(sx * 0.1, sy * 0.15, 0.04).applyQuaternion(q); b.cyl("metal", 0.025, 0.025, 0.03, 8, { p: [p[0] + v.x, p[1] + v.y, p[2] + v.z], q, c: C.brassHi }); }
+      }
+    }
+    b.finish(env.root);
+  }, { world: true });
+
+  // chain: hanging iron chain between two world points (slight sag)
+  def("chain", "floor", { from: "[x,y,z]", to: "[x,y,z]", sag: "0.05 of length" }, (env) => {
+    const A = V3(env.item.from || [0, 3, 0]), B2 = V3(env.item.to || [0, 0, 0]), d = B2.clone().sub(A), L = d.length(), u = d.clone().normalize();
+    const b = new Builder({ ao: 0 }), sag = P(env.item, "sag", 0.05) * L, link = 0.075, n = Math.max(2, Math.round(L / link));
+    const ref = Math.abs(u.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    const s1 = new THREE.Vector3().crossVectors(u, ref).normalize(), s2 = new THREE.Vector3().crossVectors(u, s1).normalize();
+    const pos = (t) => new THREE.Vector3().copy(A).addScaledVector(d, t).addScaledVector(new THREE.Vector3(0, -1, 0), Math.sin(t * Math.PI) * sag);
+    const g0 = new THREE.TorusGeometry(0.03, 0.0105, 5, 12);
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n, p = pos(t), tg = pos(Math.min(1, t + 0.01)).sub(pos(Math.max(0, t - 0.01))).normalize();
+      const a = i % 2 ? s1 : s2, z = new THREE.Vector3().crossVectors(tg, a).normalize(), a2 = new THREE.Vector3().crossVectors(z, tg);
+      b.add("metal", g0.clone(), { p: [p.x, p.y, p.z], q: basisQuat(tg, a2, z), s: [1.35, 1, 1], c: i % 5 === 0 ? C.ironHi : C.iron });
+    }
+    g0.dispose();
+    for (const [P0, sgn] of [[A, 1], [B2, -1]]) {   // end rings and shackle plates
+      b.tor("metal", 0.06, 0.016, { p: [P0.x, P0.y + 0.0, P0.z], c: C.brass }, 14, 6);
+      b.cyl("metal", 0.05, 0.05, 0.04, 10, { p: [P0.x, P0.y + 0.035 * sgn, P0.z], c: C.brassDk });
+    }
+    b.finish(env.root);
+  }, { world: true });
+
+  // keel: the spire's underside. Footprint (w x d cells) starts at cell `at` and hangs below its bottom face.
+  def("keel", "floor", { w: "cells (2)", d: "cells (2)", depth: "pendant length in cells (3)" }, (env) => {
+    const w = P(env.item, "w", 2), dd = P(env.item, "d", 2), depth = P(env.item, "depth", 3), at = env.item.at || [0, 0, 0];
+    env.root.position.set(at[0] + w / 2, at[1], at[2] + dd / 2);
+    const b = new Builder({ ao: 0 }), steps = 4; let y = 0;
+    for (let j = 0; j < steps; j++) {      // stepped corbel rings
+      const s = 1 - j * 0.15, W2 = w * s, D2 = dd * s, h = 0.26;
+      b.box("matte", W2, h, D2, { p: [0, y - h / 2, 0], c: j % 2 ? C.sandDk : C.sand });
+      b.box("metal", W2 + 0.05, 0.035, D2 + 0.05, { p: [0, y - h - 0.0, 0], c: C.brassDk });
+      const nx = Math.max(2, Math.round(W2 / 0.3)), nz = Math.max(2, Math.round(D2 / 0.3));
+      for (let i = 0; i < nx; i++) for (const sz of [-1, 1]) b.box("matte", 0.13, 0.15, 0.1, { p: [(i + 0.5) / nx * W2 - W2 / 2, y - h - 0.09, sz * (D2 / 2 - 0.0)], c: C.sandHi });
+      for (let i = 0; i < nz; i++) for (const sx of [-1, 1]) b.box("matte", 0.1, 0.15, 0.13, { p: [sx * (W2 / 2 - 0.0), y - h - 0.09, (i + 0.5) / nz * D2 - D2 / 2], c: C.sandHi });
+      y -= h + 0.13;
+    }
+    // inverted pyramid body
+    const sB = 1 - steps * 0.15, hb = 0.9;
+    b.add("matte", new THREE.CylinderGeometry(0.0, 0.7071, hb, 4, 1).rotateY(Math.PI / 4), { p: [0, y - hb / 2, 0], s: [w * sB, 1, dd * sB], c: C.sandDk });
+    b.add("matte", new THREE.CylinderGeometry(0.02 * 0.7071, 0.7071, hb * 0.4, 4, 1).rotateY(Math.PI / 4), { p: [0, y - 0.0 - hb * 0.2, 0], s: [w * sB * 1.03, 1, dd * sB * 1.03], c: C.sandHi });
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.rod("metal", [sx * w * sB / 2, y, sz * dd * sB / 2], [0, y - hb, 0], 0.025, 6, C.brass);
+    // gear cluster on the visible (+z and +x) faces
+    const gz = dd * 0.5 * 0.7 + 0.07, gx = w * 0.5 * 0.7 + 0.07, gy = -0.82;
+    b.add("metal", gearGeom(0.5, 16, 0.085, 0.08, 6), { p: [-w * 0.16, gy, gz], r: [Math.PI / 2, 0.2, 0], c: C.brass });
+    b.add("metal", gearGeom(0.3, 10, 0.06, 0.08, 5), { p: [-w * 0.16 + 0.68, gy - 0.18, gz], r: [Math.PI / 2, 0.5, 0], c: C.patina });
+    b.add("metal", gearGeom(0.42, 14, 0.07, 0.08, 6), { p: [gx, gy + 0.05, -dd * 0.1], r: [0, 0, -Math.PI / 2], c: C.copper });
+    b.add("metal", gearGeom(0.27, 9, 0.055, 0.08, 5), { p: [gx, gy - 0.3, -dd * 0.1 + 0.62], r: [0, 0, -Math.PI / 2], c: C.brassDk });
+    for (const q of [[-w * 0.16, gy, gz + 0.06], [-w * 0.16 + 0.68, gy - 0.18, gz + 0.06]]) b.cyl("metal", 0.07, 0.07, 0.1, 10, { p: q, r: [Math.PI / 2, 0, 0], c: C.brassHi });
+    for (const q of [[gx + 0.06, gy + 0.05, -dd * 0.1], [gx + 0.06, gy - 0.3, -dd * 0.1 + 0.62]]) b.cyl("metal", 0.06, 0.06, 0.1, 10, { p: q, r: [0, 0, -Math.PI / 2], c: C.brassHi });
+    // long brass pendant
+    const top = y - hb, Lp = Math.max(0.8, depth - (-top) + 0.0 + 1.2);
+    const prof = [[0.0, 0], [0.06, -0.02], [0.1, -0.08], [0.05, -0.16], [0.05, -0.34], [0.13, -0.42], [0.16, -0.55], [0.12, -0.68], [0.065, -0.78], [0.065, -1.1], [0.11, -1.17], [0.075, -1.27], [0.04, -1.45], [0.04, -1.8], [0.012, -2.5]].map(p => [p[0], p[1] * (Lp / 2.5)]);
+    b.lat("metal", prof, { p: [0, top + 0.05, 0], c: C.brass }, 14);
+    b.tor("metal", 0.17, 0.02, { p: [0, top - 0.5 * (Lp / 2.5), 0], r: [Math.PI / 2, 0, 0], c: C.patina }, 16, 6);
+    b.sph("metal", 0.05, { p: [0, top + 0.05 - Lp, 0], c: C.brassHi }, 10, 8);
+    b.finish(env.root);
+  }, { world: true });
+
+  // hinge: barrel on an x/z rotor's pivot face. axis "x" | "z" (world axis the barrel runs along)
+  def("hinge", "floor", { axis: "'x' | 'z'" }, (env) => {
+    const g = new THREE.Group(); g.rotation.y = env.yawOf(P(env.item, "axis", "x") === "z" ? "+z" : "+x"); env.root.add(g);
+    const b = new Builder({ ao: 0.15 }), r = 0.1, L = 0.9;
+    b.cyl("metal", r, r, L, 14, { p: [0, r + 0.03, 0], r: [0, 0, Math.PI / 2], c: C.brass });
+    for (const x of [-0.36, 0, 0.36]) b.tor("metal", r + 0.012, 0.016, { p: [x, r + 0.03, 0], r: [0, Math.PI / 2, 0], c: C.brassDk }, 14, 6);
+    for (const sx of [-1, 1]) {
+      b.sph("metal", r * 1.05, { p: [sx * L / 2, r + 0.03, 0], c: C.brassHi }, 10, 8);
+      b.box("metal", 0.2, 0.05, 0.3, { p: [sx * 0.33, 0.025, 0], c: C.iron });
+      b.box("metal", 0.1, 0.1, 0.07, { p: [sx * 0.33, 0.07, 0.0], c: C.ironHi });
+      for (const sz of [-1, 1]) b.cyl("metal", 0.02, 0.02, 0.03, 8, { p: [sx * 0.33, 0.06, sz * 0.12], c: C.brassHi });
+    }
+    b.cyl("metal", 0.03, 0.03, L * 1.05, 8, { p: [0, r + 0.03, 0], r: [0, 0, Math.PI / 2], c: C.ironDk });
+    b.finish(g);
+  }, { stat: true });
+
+  // corbel: carved bracket (wall faces: sits at the top of the face, under an overhang)
+  def("corbel", "wall", {}, (env) => {
+    const b = new Builder({ ao: 0 });
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0.5); sh.lineTo(0.22, 0.5); sh.lineTo(0.22, 0.44); sh.lineTo(0.17, 0.42); sh.quadraticCurveTo(0.13, 0.32, 0.1, 0.22); sh.quadraticCurveTo(0.07, 0.1, 0.02, 0.0); sh.lineTo(0, 0.0); sh.lineTo(0, 0.5);
+    const depth = 0.3;
+    for (const [sc, c, dx] of [[1, C.sandHi, 0]]) b.add("matte", new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.012, bevelSegments: 1, curveSegments: 8 }).translate(0, 0, -depth / 2).rotateY(-Math.PI / 2), { p: [dx, 0, 0], s: sc, c });
+    b.box("matte", 0.36, 0.05, 0.28, { p: [0, 0.475, 0.12], c: C.sand });
+    for (let i = -1; i <= 1; i++) b.box("matte", 0.06, 0.06, 0.05, { p: [i * 0.11, 0.425, 0.235], c: C.sandHi });
+    b.tor("matte", 0.06, 0.014, { p: [0, 0.3, 0.17], r: [0, Math.PI / 2, 0], c: C.sand }, 12, 5);       // volute
+    b.sph("metal", 0.035, { p: [0, 0.05, 0.03], c: C.brass }, 8, 6);
+    b.finish(env.root);
+  }, { stat: true });
+
+  // dial: large turntable clock-dial; spin(value) turns the hands (value in degrees)
+  def("dial", "floor", { r: "radius (1.4)" }, (env) => {
+    const r = P(env.item, "r", 1.4), W = env.root, b = new Builder({ ao: 0 });
+    b.cyl("metal", r + 0.06, r + 0.08, 0.05, env.seg(48), { p: [0, 0.025, 0], c: C.brassDk });
+    b.tor("metal", r + 0.03, 0.035, { p: [0, 0.06, 0], r: [Math.PI / 2, 0, 0], c: C.brass }, env.seg(60), 8);
+    b.tor("metal", r * 0.62, 0.012, { p: [0, 0.056, 0], r: [Math.PI / 2, 0, 0], c: C.brassHi }, env.seg(48), 5);
+    for (let i = 0; i < 12; i++) {   // raised brass hour pips; numerals live in the texture
+      const a = i / 12 * TAU, rr = r * 0.9; b.box("metal", 0.1 * r, 0.03, 0.04 * r, { p: [Math.cos(a) * rr, 0.07, Math.sin(a) * rr], r: [0, -a, 0], c: C.brassHi });
+    }
+    b.finish(W);
+    const dm = new THREE.MeshStandardMaterial({ map: dialFaceTexture(), metalness: 0.2, roughness: 0.55, envMap: M._envTex, envMapIntensity: 0.6 }); env.own.push(dm);
+    const dg = new THREE.CircleGeometry(r, env.seg(60)); env.ownG.push(dg);
+    const disc = new THREE.Mesh(dg, dm); disc.rotation.x = -Math.PI / 2; disc.position.y = 0.052; disc.receiveShadow = true; W.add(disc);
+    const mk = (len, wd, col, y) => {
+      const g = new THREE.Group(); g.position.y = y; const hb = new Builder({ ao: 0 });
+      hb.add("metal", new THREE.BoxGeometry(wd, 0.02, len), { p: [0, 0, len * 0.38], c: col });
+      hb.add("metal", new THREE.ConeGeometry(wd * 1.3, wd * 3, 3).rotateX(Math.PI / 2), { p: [0, 0, len * 0.38 + len * 0.5 + wd], c: col });
+      hb.add("metal", new THREE.CylinderGeometry(wd * 2, wd * 2, 0.025, 12), { c: C.brassHi });
+      hb.finish(g); W.add(g); return g;
+    };
+    const big = mk(r * 0.82, 0.05 * r, C.brass, 0.085), small = mk(r * 0.55, 0.075 * r, C.brassDk, 0.1);
+    env.ud.spin = (v) => { big.rotation.y = -v * Math.PI / 180; small.rotation.y = -v * Math.PI / 180 / 12; };
+    env.ud.spin(0);
+  });
+  let DIAL_TEX = null;
+  function dialFaceTexture() {
+    if (DIAL_TEX) return DIAL_TEX;
+    const S = 512, c = canvas(S, S), g = c.getContext("2d"), m = S / 2;
+    const gr = g.createRadialGradient(m, m, 20, m, m, m); gr.addColorStop(0, "#2e3a66"); gr.addColorStop(1, "#1a2147");
+    g.fillStyle = gr; g.beginPath(); g.arc(m, m, m, 0, TAU); g.fill();
+    g.strokeStyle = "#c8963e"; g.fillStyle = "#e8b556"; g.lineCap = "round";
+    for (let i = 0; i < 60; i++) { const a = i / 60 * TAU, big = i % 5 === 0; g.lineWidth = big ? 6 : 2.5; g.beginPath(); g.moveTo(m + Math.cos(a) * m * (big ? 0.72 : 0.8), m + Math.sin(a) * m * (big ? 0.72 : 0.8)); g.lineTo(m + Math.cos(a) * m * 0.96, m + Math.sin(a) * m * 0.96); g.stroke(); }
+    g.font = "bold 54px serif"; g.textAlign = "center"; g.textBaseline = "middle";
+    const rom = ["XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"];
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU - Math.PI / 2; g.save(); g.translate(m + Math.cos(a) * m * 0.6, m + Math.sin(a) * m * 0.6); g.rotate(a + Math.PI / 2); g.fillText(rom[i], 0, 0); g.restore(); }
+    g.lineWidth = 4; g.beginPath(); g.arc(m, m, m * 0.34, 0, TAU); g.stroke();
+    for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; g.beginPath(); g.moveTo(m + Math.cos(a) * m * 0.12, m + Math.sin(a) * m * 0.12); g.lineTo(m + Math.cos(a) * m * (i % 2 ? 0.24 : 0.31), m + Math.sin(a) * m * (i % 2 ? 0.24 : 0.31)); g.stroke(); }
+    DIAL_TEX = ctex(c); own.push(DIAL_TEX); return DIAL_TEX;
+  }
+
   // ================================================================================================ public API
   const STATIC = {};
   function build(item, ctx) {
@@ -1500,7 +1702,7 @@
     try {
       ctx = ctx || {};
       if (d.stat) {
-        const key = item.type + JSON.stringify([item.face, item.rot, item.side, item.dir, item.len, item.w, item.h, item.r, item.s, item.style, item.path]) + (ctx.quality || "");
+        const key = item.type + JSON.stringify([item.face, item.rot, item.side, item.dir, item.len, item.w, item.h, item.r, item.s, item.style, item.path, item.axis]) + (ctx.quality || "");
         let tpl = STATIC[key];
         if (!tpl) {
           const env = makeEnv(item.type, d, item, ctx); d.build(env); finalizeEnv(env); tpl = STATIC[key] = { root: env.root, q: env.q.clone(), n: env.n.clone() };

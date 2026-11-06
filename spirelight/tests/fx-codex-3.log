@@ -1979,3 +1979,913 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
 
 codex
 The current pool and cascade scheduler can support these changes. I’ll keep the plate ring and audio, add the target trail, make path dots expire together after 0.4 seconds, and localize the beacon glow. I’ll also add harness cases for an impossible join, `heroStep` with `k: 1`, and night lighting.
+exec
+/bin/bash -lc "cat tools/harness.js; cat tests/testbed.js; sed -n '58,72p' js/engine.js" in /home/user/my-first-repo/spirelight
+ succeeded in 146ms:
+// Shared headless harness for Spirelight tests (Playwright + swiftshader).
+// Serves the spirelight/ folder on a random port and swaps the CDN libraries for local copies (the CDNs are blocked
+// in this sandbox). Use it from your own test scripts:
+//
+//   const { open } = require("./harness");
+//   const h = await open("tests/blocks.html", { w: 1280, h: 720 });   // page path relative to spirelight/
+//   await h.page.waitForFunction(() => window.__ready);              // your page sets window.__ready = true
+//   await h.page.screenshot({ path: "design/qa/blocks.png" });
+//   console.log(h.errors);                                            // console errors, page errors, HTTP >= 400
+//   await h.close();
+const http = require("http"), fs = require("fs"), path = require("path");
+const { chromium } = require("playwright");
+
+const ROOT = path.resolve(__dirname, "..");
+const VENDOR = process.env.SL_VENDOR || "/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor";
+const TYPES = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".css": "text/css",
+  ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".svg": "image/svg+xml", ".woff2": "font/woff2",
+  ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".wav": "audio/wav" };
+
+function serve() {
+  const server = http.createServer((req, res) => {
+    const u = decodeURIComponent(req.url.split("?")[0]);
+    const f = path.join(ROOT, u === "/" ? "index.html" : u);
+    if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end("not found"); }
+    res.writeHead(200, { "content-type": TYPES[path.extname(f).toLowerCase()] || "application/octet-stream" });
+    fs.createReadStream(f).pipe(res);
+  });
+  return new Promise(r => server.listen(0, "127.0.0.1", () => r(server)));
+}
+
+async function open(page = "index.html?test", opts = {}) {
+  const server = await serve();
+  const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist",
+    "--autoplay-policy=no-user-gesture-required"] });
+  const ctx = await browser.newContext({ viewport: { width: opts.w || 1280, height: opts.h || 720 },
+    deviceScaleFactor: opts.dpr || 1, isMobile: !!opts.mobile, hasTouch: !!opts.mobile,
+    reducedMotion: opts.reducedMotion ? "reduce" : "no-preference" });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on("pageerror", e => errors.push("PAGEERROR " + e.message));
+  p.on("console", m => {
+    const t = m.text();
+    if ((m.type() === "error" || m.type() === "warning") && !/GPU stall|GL Driver|swiftshader|WebGL-|ReadPixels/i.test(t)) errors.push(m.type() + " " + t);
+    if (opts.log) console.log("[page]", m.type(), t);
+  });
+  p.on("response", r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`); });
+  await p.route("**/three.min.js", r => r.fulfill({ path: path.join(VENDOR, "three/build/three.min.js"), contentType: "application/javascript" }));
+  await p.route("**/three@0.128.0/examples/js/**", r => r.fulfill({ path: path.join(VENDOR, "three/examples/js", r.request().url().split("/examples/js/")[1]), contentType: "application/javascript" }));
+  await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+  if (opts.save !== false) await p.addInitScript(s => { try { if (s) localStorage.setItem("spirelight-v1", JSON.stringify(s)); } catch (e) {} }, opts.save || { unlocked: 99, sound: false, music: false });
+  const url = `http://127.0.0.1:${server.address().port}/${page.replace(/^\//, "")}`;
+  await p.goto(url);
+  return { page: p, browser, ctx, errors, url, close: async () => { await browser.close(); server.close(); } };
+}
+
+module.exports = { open, ROOT, VENDOR };
+// Spirelight testbed: a minimal true-isometric three.js scene for testing one module on its own.
+// Include three.min.js (and any examples/js you need) first, then this file, then your module, then:
+//
+//   Testbed.start({ height: 10, center: [0, 1, 0], bg: 0x241a3a, lights: true, grid: true }, (tb) => {
+//     // tb.THREE, tb.scene, tb.camera, tb.renderer, tb.key (DirectionalLight), tb.hemi, tb.time
+//     tb.scene.add(myObject);
+//     tb.onFrame((dt, t) => { ... });      // per-frame callback
+//     return promiseOrNothing;             // window.__ready becomes true after it settles (and 2 frames rendered)
+//   });
+//
+// Camera: orthographic, looking along -(1,1,1) with +y up, exactly the game's projection (design.md section 4).
+(function () {
+  "use strict";
+  const Testbed = {};
+  Testbed.start = function (opts, setup) {
+    opts = opts || {};
+    const THREE = window.THREE;
+    const canvas = document.createElement("canvas");
+    canvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;display:block";
+    document.body.style.margin = "0";
+    document.body.style.background = "#000";
+    document.body.appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = opts.exposure || 1.0;
+    renderer.shadowMap.enabled = opts.shadows !== false;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(opts.bg != null ? opts.bg : 0x241a3a);
+    const H = opts.height || 10, c = opts.center || [0, 0, 0];
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -200, 400);
+    camera.position.set(c[0] + 50, c[1] + 50, c[2] + 50);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(c[0], c[1], c[2]);
+    const tb = { THREE, scene, camera, renderer, canvas, time: 0, frames: [], onFrame(fn) { this.frames.push(fn); } };
+    if (opts.lights !== false) {
+      tb.hemi = new THREE.HemisphereLight(0xb9c7ff, 0x5a3a52, 0.55);
+      scene.add(tb.hemi);
+      tb.key = new THREE.DirectionalLight(0xffd2a0, 1.6);
+      tb.key.position.set(c[0] - 12, c[1] + 20, c[2] + 8);
+      tb.key.target.position.set(c[0], c[1], c[2]);
+      tb.key.castShadow = true;
+      tb.key.shadow.mapSize.set(2048, 2048);
+      const s = tb.key.shadow.camera; s.left = -H; s.right = H; s.top = H; s.bottom = -H; s.near = 0.5; s.far = 80;
+      tb.key.shadow.bias = -0.0005;
+      scene.add(tb.key, tb.key.target);
+    }
+    if (opts.grid) {
+      const g = new THREE.GridHelper(20, 20, 0x6a5a8a, 0x3a2f55);
+      g.position.set(c[0], 0, c[2]);
+      scene.add(g);
+    }
+    function resize() {
+      const w = window.innerWidth, h = window.innerHeight, a = w / h;
+      renderer.setSize(w, h, false);
+      camera.left = -H * a / 2; camera.right = H * a / 2; camera.top = H / 2; camera.bottom = -H / 2;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener("resize", resize);
+    resize();
+    let last = performance.now(), rendered = 0;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; tb.time += dt;
+      for (const f of tb.frames) { try { f(dt, tb.time); } catch (e) { console.error(e); } }
+      renderer.render(scene, camera);
+      rendered++;
+      requestAnimationFrame(frame);
+    }
+    window.Testbed.tb = tb;
+    Promise.resolve().then(() => setup && setup(tb)).then(() => {
+      requestAnimationFrame(frame);
+      const wait = () => (rendered >= 2 ? (window.__ready = true) : requestAnimationFrame(wait));
+      wait();
+    }).catch(e => { console.error(e); window.__ready = true; window.__error = String(e && e.message || e); });
+    return tb;
+  };
+  window.Testbed = Testbed;
+})();
+  function withTimeout(p, ms) { return Promise.race([Promise.resolve(p), new Promise(function (r) { setTimeout(function () { r("timeout"); }, ms); })]); }
+
+  // ------------------------------------------------------------------ projection helpers
+  function toSXY(x, y, z, out) { out.x = (x - z) / SQ2; out.y = (-x + 2 * y - z) / SQ6; return out; }
+  var _sxy = { x: 0, y: 0 };
+  function worldToScreen(p, out) {
+    toSXY(p[0], p[1], p[2], _sxy);
+    var nx = (_sxy.x - cam.cx) / (cam.H * cam.a / 2), ny = (_sxy.y - cam.cy) / (cam.H / 2);
+    out = out || {};
+    out.x = (nx + 1) / 2 * cam.w; out.y = (1 - ny) / 2 * cam.h;
+    return out;
+  }
+  Game.worldToScreen = function (p) { return worldToScreen(p, {}); };
+  function screenToPQ(x, y, out) {
+    var nx = x / cam.w * 2 - 1, ny = -(y / cam.h * 2 - 1);
+
+apply patch
+patch: completed
+/home/user/my-first-repo/spirelight/js/fx.js
+/home/user/my-first-repo/spirelight/tests/fx.html
+diff --git a/spirelight/js/fx.js b/spirelight/js/fx.js
+index 8845414d8852edc22d277fdd208955464f21c391..7f736ef46fcbb15b05fdacd2084522f61ca7f66e
+--- a/spirelight/js/fx.js
++++ b/spirelight/js/fx.js
+@@ -3,12 +3,12 @@
+ 
+   // The public object is available even without THREE, a scene, or WebAudio.
+   var G = null, T = null, root = null, ready = false, raf = 0, bindings = [];
+-  var MAX = 1500, STRIDE = 20, budget = MAX, factor = 1, low = false;
++  var MAX = 1500, STRIDE = 21, budget = MAX, factor = 1, low = false;
+   var pool = new Float32Array(MAX * STRIDE), kind = new Uint8Array(MAX);
+   var serial = new Float64Array(MAX), sequence = 0, carry = 0;
+-  // Record: xyz, velocity xyz, rgb, size, alpha, age, life, delay, base xyz, phase, blend, gravity.
++  // Record: xyz, velocity xyz, rgb, size, alpha, age, life, delay, base xyz, phase, blend, gravity, fade start.
+   var glow, dust, ringMesh, texture, ringData = new Float32Array(24 * 10);
+-  var a, b, c, matrix, rotation, scale, colour, ray, ndc, plane;
++  var a, b, c, junction, matrix, rotation, scale, colour, ray, ndc, plane;
+   var min = [-3, 0, -3], max = [7, 5, 7], theme = "dusk";
+   var clock = 0, ambientClock = 0, last = 0, gameTime = NaN, poll = 0, step = 0;
+   var paused = false, frameId = 0, moveFrame = -1, petalAt = 7;
+@@ -103,7 +103,7 @@
+     }
+     return found;
+   }
+-  function particle(p, rgb, size, opacity, life, vx, vy, vz, blend, delay, type, gravity) {
++  function particle(p, rgb, size, opacity, life, vx, vy, vz, blend, delay, type, gravity, fadeStart) {
+     var i = slot(); if (i < 0) return;
+     var j = i * STRIDE;
+     kind[i] = type || 1; serial[i] = ++sequence;
+@@ -113,12 +113,13 @@
+     pool[j + 8] = (rgb & 255) / 255; pool[j + 9] = size; pool[j + 10] = opacity;
+     pool[j + 11] = 0; pool[j + 12] = life; pool[j + 13] = delay || 0;
+     pool[j + 17] = Math.random() * Math.PI * 2; pool[j + 18] = blend || 0; pool[j + 19] = gravity || 0;
++    pool[j + 20] = fadeStart || 0;
+   }
+-  function burst(p, count, rgb, life, speed, blend, size) {
++  function burst(p, count, rgb, life, speed, blend, size, opacity) {
+     count = scaled(count);
+     for (var i = 0; i < count; i++) {
+       var angle = Math.random() * Math.PI * 2, v = speed * (0.3 + Math.random() * 0.7);
+-      particle(p, rgb, size || (blend ? 0.027 : 0.018), blend ? 0.32 : 0.85,
++      particle(p, rgb, size || (blend ? 0.027 : 0.018), opacity == null ? (blend ? 0.32 : 0.85) : opacity,
+         life * (0.8 + Math.random() * 0.4), Math.cos(angle) * v * 0.7,
+         v, Math.sin(angle) * v * 0.7, blend, 0, 1, blend ? 0.2 : 0.1);
+     }
+@@ -175,8 +176,8 @@
+     var tint = theme === "night" ? "#85baff" : theme === "aurora" ? "#69ffe3" : "#ffd08a";
+     var second = theme === "aurora" ? "#b895ff" : tint;
+     shafts.style.background = "repeating-conic-gradient(from 100deg at " + x + "% " + y + "%,transparent 0deg 13deg," + tint + " 15deg,transparent 19deg 29deg," + second + " 30deg,transparent 33deg 44deg)";
+-    shafts.style.opacity = theme === "night" ? "0.06" : "0.09";
+-    shafts.style.display = G.reducedMotion || low ? "none" : "block";
++    shafts.style.opacity = theme === "dawn" ? "0.045" : "0.09";
++    shafts.style.display = G.reducedMotion || low || theme === "night" || theme === "aurora" ? "none" : "block";
+   }
+   function overlay() {
+     if (!G.root || !G.root.appendChild) return;
+@@ -184,7 +185,7 @@
+     shafts.setAttribute("aria-hidden", "true"); flash.setAttribute("aria-hidden", "true");
+     shafts.className = "fx-shafts"; flash.className = "fx-flash";
+     shafts.style.cssText = "position:absolute;inset:-15%;pointer-events:none;mix-blend-mode:screen;opacity:.09;overflow:hidden";
+-    flash.style.cssText = "position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(#fff3c4cc,#ffb35a33 60%,transparent)";
++    flash.style.cssText = "position:absolute;left:50%;top:50%;width:35vh;height:35vh;transform:translate(-50%,-50%);pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(circle,#fff3c4cc,#ffb35a33 45%,transparent 70%)";
+     var ui = G.ui && G.ui.parentNode === G.root ? G.ui : null;
+     G.root.insertBefore(shafts, ui); G.root.insertBefore(flash, ui);
+     if (shafts.animate) sway = shafts.animate([{ transform: "rotate(-2deg)" }, { transform: "rotate(2deg)" }],
+@@ -228,6 +229,13 @@
+     positionShafts(); resize();
+   }
+   function changeTheme(name) { theme = scales[name] ? name : "dusk"; }
++  function positionFlash(pos) {
++    if (!flash) return;
++    var screen = null;
++    if (pos && typeof G.worldToScreen === "function") screen = G.worldToScreen(pos);
++    flash.style.left = screen && Number.isFinite(screen.x) ? screen.x + "px" : "50%";
++    flash.style.top = screen && Number.isFinite(screen.y) ? screen.y + "px" : "50%";
++  }
+   function beacon(d) {
+     var found = readPoint(d.pos, a), decor = G.decor || [];
+     if (!found) {
+@@ -235,8 +243,10 @@
+         if (decor[i].item && decor[i].item.type === "beacon" && decorPoint(decor[i], a)) { found = true; break; }
+       }
+     }
+-    sound("beacon"); if (!found) return;
++    sound("beacon"); flashAt = clock;
++    if (!found) { positionFlash(null); return; }
+     beaconPoint[0] = a.x; beaconPoint[1] = a.y; beaconPoint[2] = a.z;
++    positionFlash(beaconPoint);
+     cascade.length = 0;
+     for (var k = 0; k < decor.length; k++) {
+       if (decor[k].item && decor[k].item.type === "beacon") continue;
+@@ -255,8 +265,8 @@
+       var entry = cascade[cascadeIndex++], obj = entry.decor.object3D;
+       try { obj.userData.setLit(true, false); } catch (e) { report(e); }
+       if (decorPoint(entry.decor, a)) {
+-        burst(a, 5, GOLD, 0.8, 0.45, 0);
+-        if (cascadeIndex % 3 === 1) ring(a, GOLD, 0.65, 0.55, 0.35);
++        burst(a, 8, 0xfff6dc, 0.65, 0.45, 0, 0.04, 1);
++        ring(a, GOLD, 0.65, 0.55, 0.75);
+       }
+     }
+     if (cascadeAt >= 0 && elapsed <= 1.55) {
+@@ -267,7 +277,8 @@
+     }
+     if (flash) {
+       var f = clock - flashAt;
+-      flash.style.opacity = f < 0 || f > 1.45 ? "0" : String(f < 0.25 ? f / 0.25 : (1.45 - f) / 1.2);
++      var strength = theme === "night" || theme === "aurora" ? 0.8 : 0.5;
++      flash.style.opacity = f < 0 || f > 1.6 ? "0" : String(strength * (f < 0.2 ? f / 0.2 : (1.6 - f) / 1.4));
+     }
+   }
+   function path(d) {
+@@ -276,9 +287,11 @@
+     for (var i = 1; i < pts.length && order < budget; i++) {
+       if (!readPoint(pts[i - 1], a) || !readPoint(pts[i], b)) continue;
+       var length = a.distanceTo(b); if (!length) continue;
++      var dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
++      var join = Math.abs(dx) > 1e-6 && Math.abs(dx - dy) < 1e-6 && Math.abs(dx - dz) < 1e-6;
+       for (; offset <= length && order < budget; offset += 0.3) {
+         c.copy(a).lerp(b, offset / length); c.y += 0.035;
+-        if (scaled(1)) particle(c, 0xffedc7, 0.014, 0.8, 1.2, 0, 0.025, 0, 0, order * 0.035);
++        if (scaled(1)) particle(c, 0xffedc7, 0.014, join ? 0.48 : 0.36, 0.4, 0, 0, 0, 0);
+         order++;
+       }
+       offset -= length;
+@@ -288,8 +301,11 @@
+     sound("footstep"); step++;
+     if (step % 3 === 0 && heroPoint(a)) burst(a, 5, SAND, 0.5, 0.3, 1, 0.03);
+     if (Number.isFinite(d.k) && d.k !== 0) {
+-      if (!readPoint(d.at, a) && !point(d.from, a) && !heroPoint(a)) return;
+-      burst(a, 8, TEAL, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
++      if (!readPoint(d.at, a)) {
++        if (point(d.from, junction) && point(d.to, a)) a.lerp(junction, 0.5);
++        else if (!heroPoint(a)) return;
++      }
++      burst(a, 10, 0xc4fff8, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
+     }
+   }
+   function mechanism(name, d) {
+@@ -315,11 +331,13 @@
+   function plate(d) {
+     sound("plate"); if (!readPoint(d.pos, a) && !point(d.tile, a)) return;
+     ring(a, 0xffbd68, 1.5, 0.8, 0.6);
+-    var count = scaled(16);
++    if (!readPoint(d.target, b) || a.distanceToSquared(b) < 1e-12) return;
++    var count = scaled(14);
+     for (var i = 0; i < count; i++) {
+-      var angle = i / count * Math.PI * 2;
+-      c.set(a.x + Math.cos(angle) * 0.25, a.y + 0.025, a.z + Math.sin(angle) * 0.25);
+-      particle(c, SAND, 0.025, 0.35, 0.65, Math.cos(angle) * 0.5, 0.12, Math.sin(angle) * 0.5, 1);
++      // Evenly spaced starting points all reach the target at 0.6 s, on the world line.
++      c.copy(a).lerp(b, i / count);
++      particle(c, GOLD, 0.018, 0.85, 0.6, (b.x - c.x) / 0.6, (b.y - c.y) / 0.6,
++        (b.z - c.z) / 0.6, 0, 0, 1, 0, 0.4);
+     }
+   }
+   function complete() {
+@@ -557,6 +575,7 @@
+ 
+   function particlesFrame(dt, ambientDt, active) {
+     glow.count = dust.count = live = ambientCount = 0;
++    var ambientDim = (theme === "night" || theme === "aurora") && clock - cascadeAt < 3 ? 0.4 : 1;
+     for (var i = 0; i < budget; i++) {
+       var type = kind[i]; if (!type) continue;
+       var j = i * STRIDE, alpha = pool[j + 10], age;
+@@ -566,9 +585,11 @@
+         if (age >= pool[j + 12]) { kind[i] = 0; continue; }
+         pool[j] += pool[j + 3] * dt; pool[j + 1] += pool[j + 4] * dt; pool[j + 2] += pool[j + 5] * dt;
+         pool[j + 4] -= pool[j + 19] * dt;
+-        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - age / pool[j + 12], 1.3);
++        var fade = Math.max(0, age - pool[j + 20]) / (pool[j + 12] - pool[j + 20]);
++        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - fade, 1.3);
+       } else {
+         ambientCount++;
++        alpha *= ambientDim;
+         var phase = pool[j + 17], t = ambientClock;
+         if (type === 2) {
+           pool[j] = pool[j + 14] + Math.sin(t * 0.22 + phase) * 0.5;
+@@ -671,7 +692,7 @@
+       window.addEventListener("pointerdown", unlock, true); window.addEventListener("keydown", unlock, true);
+       window.addEventListener("touchend", unlock, true);
+       if (!T || !G.scene) return;
+-      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); scale = new T.Vector3();
++      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); junction = new T.Vector3(); scale = new T.Vector3();
+       matrix = new T.Matrix4(); rotation = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -Math.PI / 2);
+       colour = new T.Color(); ray = new T.Raycaster(); ndc = new T.Vector2(); plane = new T.Plane(new T.Vector3(0, 1, 0), -1);
+       root = new T.Group(); root.name = "Spirelight FX"; G.scene.add(root);
+diff --git a/spirelight/tests/fx.html b/spirelight/tests/fx.html
+index 92e9105a063236000f8c91d2526e73b7729550d5..cf3e226aad039a04004c64cb2c1f7d13a1d8ae1c
+--- a/spirelight/tests/fx.html
++++ b/spirelight/tests/fx.html
+@@ -70,6 +70,7 @@
+     var tiles = {
+       start: { stand: [1.5, 0.58, 3.5], group: "base", ref: [1, 0, 3] },
+       middle: { stand: [3, 0.58, 3.5], group: "base", ref: [3, 0, 3] },
++      join: { stand: [4, 1.58, 4.5], group: "bridge", ref: [4, 1, 4] },
+       plate: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+       p1: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+       g1: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+@@ -97,7 +98,7 @@
+       geom: { walkable: function (id) { return tiles[id] || null; }, transform: function () { return identity; },
+         bounds: function () { return levelBounds; } },
+       groups: { bridge: { id: "bridge", pivotNode: pivot, handle: { object3D: handle } } },
+-      hero: { object3D: hero }, decor: [], level: { theme: "dusk" }
++      hero: { object3D: hero }, decor: [], level: { theme: query.get("theme") || "dusk" }
+     };
+     window.__fxLit = [];
+     var lanterns = [[4.9, 2.6, 2.3], [3.4, 1.5, 2.2], [5.5, 0.85, 3.9],
+@@ -122,12 +123,12 @@
+     var defaults = {
+       tap: { x: 0, y: 0, tile: "middle", reachable: true, pos: tiles.middle.stand },
+       tapUnreachable: { x: 0, y: 0, tile: "p1", reachable: false, pos: tiles.p1.stand },
+-      path: { points: [tiles.start.stand, tiles.middle.stand, tiles.plate.stand] },
++      path: { points: [tiles.start.stand, tiles.middle.stand, tiles.join.stand, [5.5, 1.58, 4.5]] },
+       heroStep: { from: "start", to: "middle", k: 0, at: tiles.start.stand },
+-      junction: { from: "middle", to: "bridge_1", k: 1, at: tiles.middle.stand },
++      junction: { from: "middle", to: "join", k: 1, at: tiles.middle.stand },
+       mechGrab: { id: "bridge" }, mechMove: { id: "bridge", value: 15, delta: 1 },
+       mechTick: { id: "bridge", pos: [5, 1.08, 3] }, mechSnap: { id: "bridge", value: 90, pos: [5, 1.08, 3] },
+-      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "base", pos: tiles.p1.stand },
++      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "bridge", pos: tiles.p1.stand, target: [5, 1.08, 3] },
+       glimmer: { tile: "g1", count: 1, total: 3, pos: tiles.g1.stand }, beacon: { index: 0, pos: [4.5, 3.95, 1.5] },
+       levelComplete: { index: 0 }, levelStart: { index: 0, level: Game.level }, pause: { paused: true },
+       quality: { level: "low" }
+@@ -159,7 +160,7 @@
+       [10, "beacon"], [14, "levelComplete"]];
+     var only = query.get("only"), scripted = query.get("script") !== "0", cursor = 0;
+     if (only) schedule = [[0.4, only]];
+-    if (only === "heroStep") schedule = [[0.4, only], [0.5, only], [0.6, only]];
++    if (only === "heroStep") schedule = [[0.4, "junction"]];
+     if (scripted && only !== "title") window.__fxFire("levelStart");
+     status.textContent = "FX test · " + (only || (scripted ? "sequence" : "manual")) + "\nClick or press a key to unlock audio";
+     tb.onFrame(function (dt, t) {
+
+exec
+/bin/bash -lc 'node --check js/fx.js' in /home/user/my-first-repo/spirelight
+ succeeded in 51ms:
+exec
+/bin/bash -lc 'node tools/shot.js "tests/fx.html?only=plate" design/qa/fx/r3-plate.png --wait 600' in /home/user/my-first-repo/spirelight
+exec
+/bin/bash -lc 'node tools/shot.js "tests/fx.html?only=path" design/qa/fx/r3-path.png --wait 600' in /home/user/my-first-repo/spirelight
+exec
+/bin/bash -lc 'node tools/shot.js "tests/fx.html?only=heroStep" design/qa/fx/r3-heroStep.png --wait 600' in /home/user/my-first-repo/spirelight
+exec
+/bin/bash -lc 'node tools/shot.js "tests/fx.html?only=beacon&theme=night" design/qa/fx/r3-beacon-night.png --wait 600' in /home/user/my-first-repo/spirelight
+ exited 1 in 372ms:
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v22.23.4
+
+ exited 1 in 360ms:
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v22.23.4
+
+ exited 1 in 397ms:
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v22.23.4
+
+ exited 1 in 540ms:
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v22.23.4
+
+codex
+The syntax check passes, but all four screenshot runs failed before opening a page: the sandbox denied the harness’s local server (`listen EPERM 127.0.0.1`). I’ll try the required phone-size run and check the effect timing and geometry in Node. Browser visuals and console results remain unverified.
+exec
+/bin/bash -lc "git diff --check; git diff --stat -- js/fx.js tests/fx.html; node -e 'const fs=require(\"fs\");const {VENDOR}=require(\"./tools/harness\");console.log(VENDOR, fs.existsSync(VENDOR+\"/three/build/three.js\"));'" in /home/user/my-first-repo/spirelight
+exec
+/bin/bash -lc 'node tools/shot.js "index.html?test&level=5" design/qa/fx/l5.png --w 390 --h 844 --dpr 2 --wait 4000' in /home/user/my-first-repo/spirelight
+ exited 1 in 547ms:
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v22.23.4
+
+ succeeded in 697ms:
+spirelight/tests/fx-codex-3.log:2146: trailing whitespace.
++ 
+spirelight/tests/fx-codex-3.log:2299: trailing whitespace.
++ 
+ spirelight/js/fx.js      | 65 ++++++++++++++++++++++++++++++++----------------
+ spirelight/tests/fx.html | 11 ++++----
+ 2 files changed, 49 insertions(+), 27 deletions(-)
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor true
+
+exec
+/bin/bash -lc "node <<'NODE'
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const { VENDOR } = require('./tools/harness');
+const THREE = require(VENDOR + '/three/build/three.js');
+const elements = [];
+const document = { createElement(tag) {
+  const el = { style: {}, setAttribute() {}, remove() {}, getContext() { return {
+    createRadialGradient() { return { addColorStop() {} }; }, fillRect() {}
+  }; } }; elements.push(el); return el;
+} };
+const errors = [], window = { THREE, devicePixelRatio: 1, addEventListener() {}, removeEventListener() {},
+  requestAnimationFrame() { return 1; }, cancelAnimationFrame() {}, __fxReportError(e) { errors.push(e); } };
+let source = fs.readFileSync('js/fx.js', 'utf8');
+source = source.replace('  window.FX =', "'`  window.__inspect = {
+    pool: pool, kind: kind, ringData: ringData, stride: STRIDE,
+    tick: function(dt) { clock += dt; cascadeFrame(); particlesFrame(dt, 0, true); ringsFrame(dt); },
+    reset: function() { clearTransient(false); },
+    alphas: function() { return Array.from(glow.data.alpha.slice(0, 18)); }
+  };
+  window.FX =`);
+vm.runInNewContext(source, { window, document, console, Float32Array, Float64Array, Uint8Array, Math, Number });
+window.FX.sound('"'click'); assert.equal(window.FX.debug().played.click, 1);
+const listeners = {}, lit = [];
+const G = { THREE, scene: new THREE.Scene(), camera: new THREE.OrthographicCamera(-6,6,6,-6,.1,100),
+  root: { insertBefore() {}, appendChild() {} }, renderer: { domElement: { height: 720 } },
+  state: 'play', quality: 'high', save: { sound: false, music: false }, level: { theme: 'night' },
+  bus: { on(n, fn) { listeners[n] = fn; } },
+  worldToScreen() { return { x: 123, y: 234 }; },
+  geom: { walkable(id) { return { stand: id === 'from' ? [0,1,0] : [4,3,2], group: 'base' }; },
+    transform() { return { R: [1,0,0,0,1,0,0,0,1], pivot: [2,1,1], offset: [0,0,0] }; } },
+  decor: [1,2,3].map((x) => { const obj = new THREE.Object3D(); obj.position.set(x,1,0);
+    obj.userData.setLit = (on, instant) => lit.push([x,on,instant]);
+    return { item: { type: 'lantern' }, object3D: obj, worldPos(out) { return out.copy(obj.position); } }; }) };
+window.FX.setup(G); const F = window.FX, I = window.__inspect;
+function transients() {
+  const records=[]; for(let i=0;i<I.kind.length;i++) if(I.kind[i]===1) records.push(Array.from(I.pool.slice(i*I.stride,(i+1)*I.stride)));
+  return records;
+}
+const near = (a,b) => assert(Math.abs(a-b)<1e-5, "'`${a} != ${b}`);
+const shafts = elements.find(e=>e.className==='"'fx-shafts'), flash = elements.find(e=>e.className==='fx-flash');
+assert.equal(shafts.style.display,'none'); assert.equal(F.debug().ambient,78);
+for(const [theme,display,opacity] of [['dusk','block','0.09'],['dawn','block','0.045'],['night','none','0.09'],['aurora','none','0.09']]) {
+  listeners.levelStart({level:{theme}}); assert.equal(shafts.style.display,display); assert.equal(shafts.style.opacity,opacity);
+}
+listeners.title({}); assert.equal(shafts.style.display,'block'); assert.equal(F.debug().music.theme,'dusk');
+listeners.plate({pos:[0,1,0],target:[3,4,3]}); let sparks=transients(); assert.equal(sparks.length,14);
+sparks.forEach((p,i)=> { near(p[0],3*i/14); near(p[0]+p[3]*.6,3); near(p[1]+p[4]*.6,4); near(p[2]+p[5]*.6,3); near(p[12],.6); near(p[20],.4); });
+I.reset(); listeners.plate({pos:[0,1,0]}); assert.equal(transients().length,0); assert.equal(F.debug().rings,1);
+I.reset(); listeners.plate({pos:[0,1,0],target:[0,1,0]}); assert.equal(transients().length,0); assert.equal(F.debug().rings,1);
+I.reset(); listeners.path({points:[[0,1,0],[1,1,0],[2,2,1],[3,2,1]]}); sparks=transients();
+assert(sparks.some(p=>Math.abs(p[10]-.48)<1e-5)); assert(sparks.some(p=>Math.abs(p[10]-.36)<1e-5));
+sparks.forEach(p=> { near(p[12],.4); near(p[13],0); near(p[3]+p[4]+p[5],0); });
+I.tick(.41); assert.equal(transients().length,0);
+I.reset(); listeners.heroStep({from:'from',to:'to',k:1,at:[8,9,10]}); sparks=transients(); assert.equal(sparks.length,10);
+sparks.forEach(p=> assert.deepEqual(p.slice(0,3),[8,9,10]));
+I.reset(); listeners.heroStep({from:'from',to:'to',k:1}); transients().forEach(p=>assert.deepEqual(p.slice(0,3),[2,2,1]));
+listeners.levelStart({level:{theme:'night'}}); I.tick(0); const ambient=I.alphas();
+listeners.beacon({pos:[0,1,0]}); I.tick(.2); assert.equal(lit.length,1); assert.equal(flash.style.left,'123px'); assert.equal(flash.style.top,'234px'); near(+flash.style.opacity,.8);
+I.alphas().forEach((v,i)=>near(v,ambient[i]*.4));
+sparks=transients(); assert.equal(sparks.filter(p=>Math.abs(p[9]-.04)<1e-5).length,8); assert.equal(F.debug().rings,1);
+I.tick(.81); assert.equal(lit.length,2); I.tick(1); assert.equal(lit.length,3); assert(lit.every(p=>p[1]&&"'!p[2]));
+I.tick(1); I.alphas().forEach((v,i)=>near(v,ambient[i])); assert.equal(flash.style.opacity,'"'0');
+I.reset(); G.worldToScreen = undefined; listeners.beacon({pos:[0,1,0]}); assert.equal(flash.style.left,'50%'); assert.equal(flash.style.top,'50%');
+G.reducedMotion=true; listeners.levelStart({level:{theme:'night'}}); assert.equal(F.debug().ambient,39); assert.equal(F.debug().poolSize,750);
+G.reducedMotion=false; listeners.levelStart({level:{theme:'dusk'}});
+for(let i=0;i<200;i++) listeners.plate({pos:[0,1,0],target:[3,4,3]});
+assert(F.debug().live<=1500); assert(F.debug().rings<=24); assert(F.debug().drawCalls<=8); assert.deepEqual(errors,[]);
+const html=fs.readFileSync('tests/fx.html','utf8'); for(const script of html.matchAll(/<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)<\\/script>/g)) new vm.Script(script[1]);
+console.log('PASS: load safety, theme shafts/title, plate geometry/fallbacks, path expiry/join alpha, heroStep source/midpoint, cascade order/size/rings/glow/dimming/restoration, reduced motion, budgets, harness syntax.');
+NODE
+node --check js/fx.js
+git diff --check -- js/fx.js tests/fx.html" in /home/user/my-first-repo/spirelight
+ succeeded in 631ms:
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:35526
+	if (typeof window !== 'undefined') {
+	^
+
+ReferenceError: window is not defined
+    at /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:35526:2
+    at /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:7:65
+    at Object.<anonymous> (/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js:10:2)
+    at Module._compile (node:internal/modules/cjs/loader:1781:14)
+    at Object..js (node:internal/modules/cjs/loader:1913:10)
+    at Module.load (node:internal/modules/cjs/loader:1505:32)
+    at Function._load (node:internal/modules/cjs/loader:1309:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)
+    at Module.require (node:internal/modules/cjs/loader:1527:12)
+    at require (node:internal/modules/helpers:147:16)
+
+Node.js v22.23.4
+
+exec
+/bin/bash -lc "node <<'NODE'
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const THREE=require(require('./tools/harness').VENDOR+'/three/build/three.js');
+const errors=[],elements=[];
+const dom={createElement(){const el={style:{},setAttribute(){},remove(){},getContext(){return {createRadialGradient(){return {addColorStop(){}};},fillRect(){}};}};elements.push(el);return el;}};
+const win={THREE,devicePixelRatio:1,addEventListener(){},removeEventListener(){},requestAnimationFrame(){return 1;},cancelAnimationFrame(){},__fxReportError(e){errors.push(e);}};
+let source=fs.readFileSync('js/fx.js','utf8').replace('  window.FX =',"'`  window.__inspect = { pool: pool, kind: kind, stride: STRIDE,
+ tick: function(dt) {clock+=dt;cascadeFrame();particlesFrame(dt,0,true);ringsFrame(dt);},
+ reset: function(){clearTransient(false);}, alphas: function(){return Array.from(glow.data.alpha.slice(0,18));}};
+ window.FX =`);
+vm.runInNewContext(source,{window:win,document:dom,console,Float32Array,Float64Array,Uint8Array,Math,Number});
+win.FX.sound('"'click');assert.equal(win.FX.debug().played.click,1);
+const listeners={},lit=[];
+const G={THREE,scene:new THREE.Scene(),camera:new THREE.OrthographicCamera(-6,6,6,-6,.1,100),root:{insertBefore(){},appendChild(){}},renderer:{domElement:{height:720}},state:'play',quality:'high',save:{sound:false,music:false},level:{theme:'night'},bus:{on(n,f){listeners[n]=f;}},worldToScreen(){return {x:123,y:234};},geom:{walkable(id){return {stand:id==='from'?[0,1,0]:[4,3,2],group:'base'};},transform(){return {R:[1,0,0,0,1,0,0,0,1],pivot:[2,1,1],offset:[0,0,0]};}},decor:[1,2,3].map(x=>{const obj=new THREE.Object3D();obj.position.set(x,1,0);obj.userData.setLit=(on,instant)=>lit.push([x,on,instant]);return {item:{type:'lantern'},object3D:obj,worldPos(out){return out.copy(obj.position);}};})};
+win.FX.setup(G);const F=win.FX,I=win.__inspect;
+function particles(){const out=[];for(let i=0;i<I.kind.length;i++)if(I.kind[i]===1)out.push(Array.from(I.pool.slice(i*I.stride,(i+1)*I.stride)));return out;}
+const near=(a,b)=>assert(Math.abs(a-b)<1e-5,"'`${a} != ${b}`);
+const shafts=elements.find(e=>e.className==='"'fx-shafts'),flash=elements.find(e=>e.className==='fx-flash');
+assert.equal(shafts.style.display,'none');assert.equal(F.debug().ambient,78);
+for(const [theme,display,opacity] of [['dusk','block','0.09'],['dawn','block','0.045'],['night','none','0.09'],['aurora','none','0.09']]){listeners.levelStart({level:{theme}});assert.equal(shafts.style.display,display);assert.equal(shafts.style.opacity,opacity);}
+listeners.title({});assert.equal(shafts.style.display,'block');assert.equal(F.debug().music.theme,'dusk');
+listeners.plate({pos:[0,1,0],target:[3,4,3]});let p=particles();assert.equal(p.length,14);p.forEach((p,i)=>{near(p[0],3*i/14);near(p[0]+p[3]*.6,3);near(p[1]+p[4]*.6,4);near(p[2]+p[5]*.6,3);near(p[12],.6);near(p[20],.4);});
+for(const data of [{pos:[0,1,0]},{pos:[0,1,0],target:[0,1,0]}]){I.reset();listeners.plate(data);assert.equal(particles().length,0);assert.equal(F.debug().rings,1);}
+I.reset();listeners.path({points:[[0,1,0],[1,1,0],[2,2,1],[3,2,1]]});p=particles();assert(p.some(p=>Math.abs(p[10]-.48)<1e-5));assert(p.some(p=>Math.abs(p[10]-.36)<1e-5));p.forEach(p=>{near(p[12],.4);near(p[13],0);near(p[3]+p[4]+p[5],0);});I.tick(.41);assert.equal(particles().length,0);
+I.reset();listeners.heroStep({from:'from',to:'to',k:1,at:[8,9,10]});p=particles();assert.equal(p.length,10);p.forEach(p=>assert.deepEqual(p.slice(0,3),[8,9,10]));
+I.reset();listeners.heroStep({from:'from',to:'to',k:1});particles().forEach(p=>assert.deepEqual(p.slice(0,3),[2,2,1]));
+listeners.levelStart({level:{theme:'night'}});I.tick(0);const ambient=I.alphas();listeners.beacon({pos:[0,1,0]});I.tick(.2);assert.equal(lit.length,1);assert.equal(flash.style.left,'123px');assert.equal(flash.style.top,'234px');near(+flash.style.opacity,.8);I.alphas().forEach((v,i)=>near(v,ambient[i]*.4));assert.equal(particles().filter(p=>Math.abs(p[9]-.04)<1e-5).length,8);assert.equal(F.debug().rings,1);
+I.tick(.81);assert.equal(lit.length,2);I.tick(1);assert.equal(lit.length,3);assert(lit.every(p=>p[1]&&"'!p[2]));I.tick(1);I.alphas().forEach((v,i)=>near(v,ambient[i]));assert.equal(flash.style.opacity,'"'0');
+I.reset();G.worldToScreen=undefined;listeners.beacon({pos:[0,1,0]});assert.equal(flash.style.left,'50%');assert.equal(flash.style.top,'50%');
+G.reducedMotion=true;listeners.levelStart({level:{theme:'night'}});assert.equal(F.debug().ambient,39);assert.equal(F.debug().poolSize,750);
+G.reducedMotion=false;listeners.levelStart({level:{theme:'dusk'}});for(let i=0;i<200;i++)listeners.plate({pos:[0,1,0],target:[3,4,3]});assert(F.debug().live<=1500);assert(F.debug().rings<=24);assert(F.debug().drawCalls<=8);assert.deepEqual(errors,[]);
+for(const script of fs.readFileSync('tests/fx.html','utf8').matchAll(/<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)<\\/script>/g))new vm.Script(script[1]);
+console.log('PASS: load safety, themes/title, plate geometry/fallbacks, path expiry/join alpha, heroStep source/midpoint, cascade order/size/rings/glow/dimming/restoration, reduced motion, budgets, harness syntax.');
+NODE" in /home/user/my-first-repo/spirelight
+ succeeded in 1411ms:
+PASS: load safety, themes/title, plate geometry/fallbacks, path expiry/join alpha, heroStep source/midpoint, cascade order/size/rings/glow/dimming/restoration, reduced motion, budgets, harness syntax.
+
+exec
+/bin/bash -lc 'git diff --check -- js/fx.js tests/fx.html; node --check js/fx.js; git diff -- js/fx.js tests/fx.html' in /home/user/my-first-repo/spirelight
+ succeeded in 381ms:
+diff --git a/spirelight/js/fx.js b/spirelight/js/fx.js
+index 8845414..7f736ef 100644
+--- a/spirelight/js/fx.js
++++ b/spirelight/js/fx.js
+@@ -3,12 +3,12 @@
+ 
+   // The public object is available even without THREE, a scene, or WebAudio.
+   var G = null, T = null, root = null, ready = false, raf = 0, bindings = [];
+-  var MAX = 1500, STRIDE = 20, budget = MAX, factor = 1, low = false;
++  var MAX = 1500, STRIDE = 21, budget = MAX, factor = 1, low = false;
+   var pool = new Float32Array(MAX * STRIDE), kind = new Uint8Array(MAX);
+   var serial = new Float64Array(MAX), sequence = 0, carry = 0;
+-  // Record: xyz, velocity xyz, rgb, size, alpha, age, life, delay, base xyz, phase, blend, gravity.
++  // Record: xyz, velocity xyz, rgb, size, alpha, age, life, delay, base xyz, phase, blend, gravity, fade start.
+   var glow, dust, ringMesh, texture, ringData = new Float32Array(24 * 10);
+-  var a, b, c, matrix, rotation, scale, colour, ray, ndc, plane;
++  var a, b, c, junction, matrix, rotation, scale, colour, ray, ndc, plane;
+   var min = [-3, 0, -3], max = [7, 5, 7], theme = "dusk";
+   var clock = 0, ambientClock = 0, last = 0, gameTime = NaN, poll = 0, step = 0;
+   var paused = false, frameId = 0, moveFrame = -1, petalAt = 7;
+@@ -103,7 +103,7 @@
+     }
+     return found;
+   }
+-  function particle(p, rgb, size, opacity, life, vx, vy, vz, blend, delay, type, gravity) {
++  function particle(p, rgb, size, opacity, life, vx, vy, vz, blend, delay, type, gravity, fadeStart) {
+     var i = slot(); if (i < 0) return;
+     var j = i * STRIDE;
+     kind[i] = type || 1; serial[i] = ++sequence;
+@@ -113,12 +113,13 @@
+     pool[j + 8] = (rgb & 255) / 255; pool[j + 9] = size; pool[j + 10] = opacity;
+     pool[j + 11] = 0; pool[j + 12] = life; pool[j + 13] = delay || 0;
+     pool[j + 17] = Math.random() * Math.PI * 2; pool[j + 18] = blend || 0; pool[j + 19] = gravity || 0;
++    pool[j + 20] = fadeStart || 0;
+   }
+-  function burst(p, count, rgb, life, speed, blend, size) {
++  function burst(p, count, rgb, life, speed, blend, size, opacity) {
+     count = scaled(count);
+     for (var i = 0; i < count; i++) {
+       var angle = Math.random() * Math.PI * 2, v = speed * (0.3 + Math.random() * 0.7);
+-      particle(p, rgb, size || (blend ? 0.027 : 0.018), blend ? 0.32 : 0.85,
++      particle(p, rgb, size || (blend ? 0.027 : 0.018), opacity == null ? (blend ? 0.32 : 0.85) : opacity,
+         life * (0.8 + Math.random() * 0.4), Math.cos(angle) * v * 0.7,
+         v, Math.sin(angle) * v * 0.7, blend, 0, 1, blend ? 0.2 : 0.1);
+     }
+@@ -175,8 +176,8 @@
+     var tint = theme === "night" ? "#85baff" : theme === "aurora" ? "#69ffe3" : "#ffd08a";
+     var second = theme === "aurora" ? "#b895ff" : tint;
+     shafts.style.background = "repeating-conic-gradient(from 100deg at " + x + "% " + y + "%,transparent 0deg 13deg," + tint + " 15deg,transparent 19deg 29deg," + second + " 30deg,transparent 33deg 44deg)";
+-    shafts.style.opacity = theme === "night" ? "0.06" : "0.09";
+-    shafts.style.display = G.reducedMotion || low ? "none" : "block";
++    shafts.style.opacity = theme === "dawn" ? "0.045" : "0.09";
++    shafts.style.display = G.reducedMotion || low || theme === "night" || theme === "aurora" ? "none" : "block";
+   }
+   function overlay() {
+     if (!G.root || !G.root.appendChild) return;
+@@ -184,7 +185,7 @@
+     shafts.setAttribute("aria-hidden", "true"); flash.setAttribute("aria-hidden", "true");
+     shafts.className = "fx-shafts"; flash.className = "fx-flash";
+     shafts.style.cssText = "position:absolute;inset:-15%;pointer-events:none;mix-blend-mode:screen;opacity:.09;overflow:hidden";
+-    flash.style.cssText = "position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(#fff3c4cc,#ffb35a33 60%,transparent)";
++    flash.style.cssText = "position:absolute;left:50%;top:50%;width:35vh;height:35vh;transform:translate(-50%,-50%);pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(circle,#fff3c4cc,#ffb35a33 45%,transparent 70%)";
+     var ui = G.ui && G.ui.parentNode === G.root ? G.ui : null;
+     G.root.insertBefore(shafts, ui); G.root.insertBefore(flash, ui);
+     if (shafts.animate) sway = shafts.animate([{ transform: "rotate(-2deg)" }, { transform: "rotate(2deg)" }],
+@@ -228,6 +229,13 @@
+     positionShafts(); resize();
+   }
+   function changeTheme(name) { theme = scales[name] ? name : "dusk"; }
++  function positionFlash(pos) {
++    if (!flash) return;
++    var screen = null;
++    if (pos && typeof G.worldToScreen === "function") screen = G.worldToScreen(pos);
++    flash.style.left = screen && Number.isFinite(screen.x) ? screen.x + "px" : "50%";
++    flash.style.top = screen && Number.isFinite(screen.y) ? screen.y + "px" : "50%";
++  }
+   function beacon(d) {
+     var found = readPoint(d.pos, a), decor = G.decor || [];
+     if (!found) {
+@@ -235,8 +243,10 @@
+         if (decor[i].item && decor[i].item.type === "beacon" && decorPoint(decor[i], a)) { found = true; break; }
+       }
+     }
+-    sound("beacon"); if (!found) return;
++    sound("beacon"); flashAt = clock;
++    if (!found) { positionFlash(null); return; }
+     beaconPoint[0] = a.x; beaconPoint[1] = a.y; beaconPoint[2] = a.z;
++    positionFlash(beaconPoint);
+     cascade.length = 0;
+     for (var k = 0; k < decor.length; k++) {
+       if (decor[k].item && decor[k].item.type === "beacon") continue;
+@@ -255,8 +265,8 @@
+       var entry = cascade[cascadeIndex++], obj = entry.decor.object3D;
+       try { obj.userData.setLit(true, false); } catch (e) { report(e); }
+       if (decorPoint(entry.decor, a)) {
+-        burst(a, 5, GOLD, 0.8, 0.45, 0);
+-        if (cascadeIndex % 3 === 1) ring(a, GOLD, 0.65, 0.55, 0.35);
++        burst(a, 8, 0xfff6dc, 0.65, 0.45, 0, 0.04, 1);
++        ring(a, GOLD, 0.65, 0.55, 0.75);
+       }
+     }
+     if (cascadeAt >= 0 && elapsed <= 1.55) {
+@@ -267,7 +277,8 @@
+     }
+     if (flash) {
+       var f = clock - flashAt;
+-      flash.style.opacity = f < 0 || f > 1.45 ? "0" : String(f < 0.25 ? f / 0.25 : (1.45 - f) / 1.2);
++      var strength = theme === "night" || theme === "aurora" ? 0.8 : 0.5;
++      flash.style.opacity = f < 0 || f > 1.6 ? "0" : String(strength * (f < 0.2 ? f / 0.2 : (1.6 - f) / 1.4));
+     }
+   }
+   function path(d) {
+@@ -276,9 +287,11 @@
+     for (var i = 1; i < pts.length && order < budget; i++) {
+       if (!readPoint(pts[i - 1], a) || !readPoint(pts[i], b)) continue;
+       var length = a.distanceTo(b); if (!length) continue;
++      var dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
++      var join = Math.abs(dx) > 1e-6 && Math.abs(dx - dy) < 1e-6 && Math.abs(dx - dz) < 1e-6;
+       for (; offset <= length && order < budget; offset += 0.3) {
+         c.copy(a).lerp(b, offset / length); c.y += 0.035;
+-        if (scaled(1)) particle(c, 0xffedc7, 0.014, 0.8, 1.2, 0, 0.025, 0, 0, order * 0.035);
++        if (scaled(1)) particle(c, 0xffedc7, 0.014, join ? 0.48 : 0.36, 0.4, 0, 0, 0, 0);
+         order++;
+       }
+       offset -= length;
+@@ -288,8 +301,11 @@
+     sound("footstep"); step++;
+     if (step % 3 === 0 && heroPoint(a)) burst(a, 5, SAND, 0.5, 0.3, 1, 0.03);
+     if (Number.isFinite(d.k) && d.k !== 0) {
+-      if (!readPoint(d.at, a) && !point(d.from, a) && !heroPoint(a)) return;
+-      burst(a, 8, TEAL, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
++      if (!readPoint(d.at, a)) {
++        if (point(d.from, junction) && point(d.to, a)) a.lerp(junction, 0.5);
++        else if (!heroPoint(a)) return;
++      }
++      burst(a, 10, 0xc4fff8, 0.4, 0.5, 0); ring(a, TEAL, 0.6, 0.4, 0.45);
+     }
+   }
+   function mechanism(name, d) {
+@@ -315,11 +331,13 @@
+   function plate(d) {
+     sound("plate"); if (!readPoint(d.pos, a) && !point(d.tile, a)) return;
+     ring(a, 0xffbd68, 1.5, 0.8, 0.6);
+-    var count = scaled(16);
++    if (!readPoint(d.target, b) || a.distanceToSquared(b) < 1e-12) return;
++    var count = scaled(14);
+     for (var i = 0; i < count; i++) {
+-      var angle = i / count * Math.PI * 2;
+-      c.set(a.x + Math.cos(angle) * 0.25, a.y + 0.025, a.z + Math.sin(angle) * 0.25);
+-      particle(c, SAND, 0.025, 0.35, 0.65, Math.cos(angle) * 0.5, 0.12, Math.sin(angle) * 0.5, 1);
++      // Evenly spaced starting points all reach the target at 0.6 s, on the world line.
++      c.copy(a).lerp(b, i / count);
++      particle(c, GOLD, 0.018, 0.85, 0.6, (b.x - c.x) / 0.6, (b.y - c.y) / 0.6,
++        (b.z - c.z) / 0.6, 0, 0, 1, 0, 0.4);
+     }
+   }
+   function complete() {
+@@ -557,6 +575,7 @@
+ 
+   function particlesFrame(dt, ambientDt, active) {
+     glow.count = dust.count = live = ambientCount = 0;
++    var ambientDim = (theme === "night" || theme === "aurora") && clock - cascadeAt < 3 ? 0.4 : 1;
+     for (var i = 0; i < budget; i++) {
+       var type = kind[i]; if (!type) continue;
+       var j = i * STRIDE, alpha = pool[j + 10], age;
+@@ -566,9 +585,11 @@
+         if (age >= pool[j + 12]) { kind[i] = 0; continue; }
+         pool[j] += pool[j + 3] * dt; pool[j + 1] += pool[j + 4] * dt; pool[j + 2] += pool[j + 5] * dt;
+         pool[j + 4] -= pool[j + 19] * dt;
+-        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - age / pool[j + 12], 1.3);
++        var fade = Math.max(0, age - pool[j + 20]) / (pool[j + 12] - pool[j + 20]);
++        alpha *= Math.min(1, age / 0.07) * Math.pow(1 - fade, 1.3);
+       } else {
+         ambientCount++;
++        alpha *= ambientDim;
+         var phase = pool[j + 17], t = ambientClock;
+         if (type === 2) {
+           pool[j] = pool[j + 14] + Math.sin(t * 0.22 + phase) * 0.5;
+@@ -671,7 +692,7 @@
+       window.addEventListener("pointerdown", unlock, true); window.addEventListener("keydown", unlock, true);
+       window.addEventListener("touchend", unlock, true);
+       if (!T || !G.scene) return;
+-      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); scale = new T.Vector3();
++      a = new T.Vector3(); b = new T.Vector3(); c = new T.Vector3(); junction = new T.Vector3(); scale = new T.Vector3();
+       matrix = new T.Matrix4(); rotation = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -Math.PI / 2);
+       colour = new T.Color(); ray = new T.Raycaster(); ndc = new T.Vector2(); plane = new T.Plane(new T.Vector3(0, 1, 0), -1);
+       root = new T.Group(); root.name = "Spirelight FX"; G.scene.add(root);
+diff --git a/spirelight/tests/fx.html b/spirelight/tests/fx.html
+index 92e9105..cf3e226 100644
+--- a/spirelight/tests/fx.html
++++ b/spirelight/tests/fx.html
+@@ -70,6 +70,7 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
+     var tiles = {
+       start: { stand: [1.5, 0.58, 3.5], group: "base", ref: [1, 0, 3] },
+       middle: { stand: [3, 0.58, 3.5], group: "base", ref: [3, 0, 3] },
++      join: { stand: [4, 1.58, 4.5], group: "bridge", ref: [4, 1, 4] },
+       plate: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+       p1: { stand: [4.5, 0.58, 3.5], group: "base", ref: [4, 0, 3] },
+       g1: { stand: [2, 1.08, 2], group: "base", ref: [2, 1, 2] },
+@@ -97,7 +98,7 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
+       geom: { walkable: function (id) { return tiles[id] || null; }, transform: function () { return identity; },
+         bounds: function () { return levelBounds; } },
+       groups: { bridge: { id: "bridge", pivotNode: pivot, handle: { object3D: handle } } },
+-      hero: { object3D: hero }, decor: [], level: { theme: "dusk" }
++      hero: { object3D: hero }, decor: [], level: { theme: query.get("theme") || "dusk" }
+     };
+     window.__fxLit = [];
+     var lanterns = [[4.9, 2.6, 2.3], [3.4, 1.5, 2.2], [5.5, 0.85, 3.9],
+@@ -122,12 +123,12 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
+     var defaults = {
+       tap: { x: 0, y: 0, tile: "middle", reachable: true, pos: tiles.middle.stand },
+       tapUnreachable: { x: 0, y: 0, tile: "p1", reachable: false, pos: tiles.p1.stand },
+-      path: { points: [tiles.start.stand, tiles.middle.stand, tiles.plate.stand] },
++      path: { points: [tiles.start.stand, tiles.middle.stand, tiles.join.stand, [5.5, 1.58, 4.5]] },
+       heroStep: { from: "start", to: "middle", k: 0, at: tiles.start.stand },
+-      junction: { from: "middle", to: "bridge_1", k: 1, at: tiles.middle.stand },
++      junction: { from: "middle", to: "join", k: 1, at: tiles.middle.stand },
+       mechGrab: { id: "bridge" }, mechMove: { id: "bridge", value: 15, delta: 1 },
+       mechTick: { id: "bridge", pos: [5, 1.08, 3] }, mechSnap: { id: "bridge", value: 90, pos: [5, 1.08, 3] },
+-      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "base", pos: tiles.p1.stand },
++      mechLocked: { id: "bridge" }, plate: { tile: "p1", group: "bridge", pos: tiles.p1.stand, target: [5, 1.08, 3] },
+       glimmer: { tile: "g1", count: 1, total: 3, pos: tiles.g1.stand }, beacon: { index: 0, pos: [4.5, 3.95, 1.5] },
+       levelComplete: { index: 0 }, levelStart: { index: 0, level: Game.level }, pause: { paused: true },
+       quality: { level: "low" }
+@@ -159,7 +160,7 @@ window.addEventListener("unhandledrejection", function (e) { console.error(e.rea
+       [10, "beacon"], [14, "levelComplete"]];
+     var only = query.get("only"), scripted = query.get("script") !== "0", cursor = 0;
+     if (only) schedule = [[0.4, only]];
+-    if (only === "heroStep") schedule = [[0.4, only], [0.5, only], [0.6, only]];
++    if (only === "heroStep") schedule = [[0.4, "junction"]];
+     if (scripted && only !== "title") window.__fxFire("levelStart");
+     status.textContent = "FX test · " + (only || (scripted ? "sequence" : "manual")) + "\nClick or press a key to unlock audio";
+     tb.onFrame(function (dt, t) {
+
+codex
+Updated only `js/fx.js` and `tests/fx.html`: plate trails, brief path previews, junction sparkles, theme-dependent shafts, localized beacon glow, brighter lantern bursts, and ambient dimming.
+
+Syntax and Node behavior checks passed, including timing, fallbacks, cascade order, and particle limits.
+
+All five screenshot commands failed before page load with `listen EPERM 127.0.0.1`. Intended outputs under `design/qa/fx/`: `r3-plate.png`, `r3-path.png`, `r3-heroStep.png`, `r3-beacon-night.png`, and `l5.png`. None were generated.
+
+Browser console/page errors, visuals, audio, and real-game boot remain unverified.
+tokens used
+51,561
+Updated only `js/fx.js` and `tests/fx.html`: plate trails, brief path previews, junction sparkles, theme-dependent shafts, localized beacon glow, brighter lantern bursts, and ambient dimming.
+
+Syntax and Node behavior checks passed, including timing, fallbacks, cascade order, and particle limits.
+
+All five screenshot commands failed before page load with `listen EPERM 127.0.0.1`. Intended outputs under `design/qa/fx/`: `r3-plate.png`, `r3-path.png`, `r3-heroStep.png`, `r3-beacon-night.png`, and `l5.png`. None were generated.
+
+Browser console/page errors, visuals, audio, and real-game boot remain unverified.
+codex exit 0

@@ -21,7 +21,7 @@
     darkstone: { tex: "darkstone", scale: 2.0, rough: 0.95, metal: 0.0, color: 0xe6d8e8, fb: 0x4a4056, nrm: 1.2 },
     brass:     { tex: "brass",     scale: 2.0, rough: 0.36, metal: 0.8, env: 1.0, color: 0xffeccc, fb: 0xc8963e, nrm: 0.9 },
     copper:    { tex: "copper",    scale: 2.4, rough: 0.5, metal: 0.55, env: 0.9, color: 0xf2fff8, fb: 0x4fa597, nrm: 0.9 },
-    slate:     { tex: "slate",     scale: 2.2, rough: 0.62, metal: 0.05, color: 0xd8d8e6, fb: 0x3b3d5c, nrm: 1.2 },
+    slate:     { tex: "slate",     scale: 2.2, rough: 0.62, metal: 0.05, color: 0xf2f2ff, fb: 0x3b3d5c, nrm: 1.2 },
     wood:      { tex: "wood",      scale: 2.0, rough: 0.82, metal: 0.0, color: 0xf5e2d0, fb: 0x8a5a34, nrm: 1.0 },
     moss:      { tex: "moss",      scale: 1.5, rough: 1.0,  metal: 0.0, color: 0xe8f0d8, fb: 0x6f8f3a, nrm: 1.0 },
     hedge:     { tex: "hedge",     scale: 1.5, rough: 0.82, metal: 0.0, color: 0xeaf4e0, fb: 0x4d8a2c, nrm: 0.8 },
@@ -421,7 +421,7 @@
   };
 
   Builder.prototype.mossStrip = function (a, s, salt, small) {
-    const b = this.buf("mossStrip"), hA = a === 0 ? 2 : 0, r = this.h(salt, 50);
+    const r = this.h(salt, 50);
     const hgt = (small ? 0.1 : 0.2) + 0.1 * this.h(salt, 51), flip = r < 0.5, uo = this.h(salt, 52);
     const o = small ? 0.048 : 0.007, pts = [this.fp(a, s, -0.005, 1.0, o), this.fp(a, s, 1.005, 1.0, o), this.fp(a, s, 1.005, 1 - hgt, o), this.fp(a, s, -0.005, 1 - hgt, o)];
     const u1 = uo * 0.5, uvs = flip ? [[u1 + 0.5, 1], [u1, 1], [u1, 0.68], [u1 + 0.5, 0.68]] : [[u1, 1], [u1 + 0.5, 1], [u1 + 0.5, 0.68], [u1, 0.68]];
@@ -472,12 +472,13 @@
     const det = DETAIL[style] || DETAIL.sandstone;
     if (capped) mats[3] = "darkstone";
     this.box([c[0], c[1], c[2]], [c[0] + 1, c[1] + 1, c[2] + 1], this.low ? 0.03 : 0.035, mats, draw, 0, { tint, faceVar: true });
-    if (walkTop) this.paverSlab(c, style);
+    if (walkTop) { this.paverSlab(c, style); if (style === "wood") this.woodStraps(c); }
     if (capped) this.stoneCap(c, draw, nb);
+    if (style === "slate" && !walkTop && draw[3]) this.roofRidge(c);
     // wall details on exposed sides
     for (const [a, s, fi] of [[0, 1, 1], [0, 0, 0], [2, 1, 5], [2, 0, 4]]) {
       if (!draw[fi]) continue;
-      this.detailSide(a, s, 10 + fi, style, det, tint, walkTop);
+      this.detailSide(a, s, 10 + fi, style, det, tint, walkTop, draw[3], draw[2]);
     }
   };
   // dark weathered stone cap on non-walkable tops, with moss creeping in from the edges
@@ -499,18 +500,31 @@
       this.quadRaw("decal", pts, [0, 1, 0], uvs, pts.map(() => [tn, tn, tn]));
     }
   };
-  Builder.prototype.detailSide = function (a, s, salt, style, det, tint, walkTop) {
+  Builder.prototype.detailSide = function (a, s, salt, style, det, tint, walkTop, topExposed, bottomExposed) {
     const c = this.cell, mat = this.styleBody;
     if (!(style in DETAIL)) return;
     const light = [tint[0] * 1.1, tint[1] * 1.08, tint[2] * 1.03];
     const hasWin = det.win && this.h(salt, 1) < det.win;
     if (hasWin) this.windowOn(a, s, tint, salt);
     if (this.low) return;
-    // carved cornice under every exposed walkable top edge (stays within 0.04 of the cell silhouette)
-    if (walkTop && (style === "sandstone" || style === "brick" || style === "marble" || style === "darkstone" || style === "slate")) {
-      this.faceBox(a, s, -0.01, 1.01, 0.925, 1.0, 0.04, 0.01, mat, salt + 40, light);
-      this.faceBox(a, s, -0.01, 1.01, 0.905, 0.925, 0.022, 0.006, mat, salt + 41, [light[0] * 0.92, light[1] * 0.92, light[2] * 0.92]);
-      for (let i = 0; i < 7; i++) this.faceBox(a, s, 0.035 + i * 0.14, 0.035 + i * 0.14 + 0.08, 0.845, 0.905, 0.03, 0.006, mat, salt + 42 + i, light);
+    // carved cornice under every exposed top edge: full on walkable tops, a subtle lip on roofs and caps
+    const cornStyle = style === "sandstone" || style === "brick" || style === "marble" || style === "darkstone" || style === "slate";
+    if (topExposed && cornStyle) {
+      if (walkTop) {
+        this.faceBox(a, s, -0.01, 1.01, 0.925, 1.0, 0.04, 0.01, mat, salt + 40, light);
+        this.faceBox(a, s, -0.01, 1.01, 0.905, 0.925, 0.022, 0.006, mat, salt + 41, [light[0] * 0.92, light[1] * 0.92, light[2] * 0.92]);
+        for (let i = 0; i < 7; i++) this.faceBox(a, s, 0.035 + i * 0.14, 0.035 + i * 0.14 + 0.08, 0.845, 0.905, 0.03, 0.006, mat, salt + 42 + i, light);
+      } else {
+        this.faceBox(a, s, -0.01, 1.01, 0.94, 1.0, 0.028, 0.008, mat, salt + 40, [light[0] * 0.95, light[1] * 0.95, light[2] * 0.95]);
+      }
+    }
+    // corbel brackets under overhangs (block exposed below): stepped stone brackets on the visible faces
+    if (bottomExposed && s === 1 && !this.low && (style === "sandstone" || style === "brick" || style === "marble") && this.h(salt, 11) < 0.75) {
+      for (const hc of [0.2, 0.8]) {
+        this.faceBox(a, s, hc - 0.07, hc + 0.07, -0.05, 0.0, 0.07, 0.006, mat, salt + 100, light);
+        this.faceBox(a, s, hc - 0.06, hc + 0.06, -0.12, -0.05, 0.045, 0.006, mat, salt + 101, light);
+        this.faceBox(a, s, hc - 0.05, hc + 0.05, -0.19, -0.12, 0.022, 0.006, mat, salt + 102, light);
+      }
     }
     // plinth on the lowest course of a stack
     if (!this.occ(c[0], c[1] - 1, c[2]) && style !== "brass" && style !== "copper" && style !== "wood")
@@ -519,6 +533,10 @@
     if (!hasWin && det.trim && this.h(salt, 2) < det.trim) {
       this.faceBox(a, s, -0.01, 1.01, 0.5, 0.57, 0.03, 0.01, mat, salt + 70, light);
       this.faceBox(a, s, -0.01, 1.01, 0.57, 0.6, 0.018, 0.006, mat, salt + 71, light);
+    }
+    if (style === "wood") {
+      for (const hc of [0.14, 0.86]) this.faceBox(a, s, hc - 0.045, hc + 0.045, 0.04, 0.96, 0.014, 0.004, "iron", salt + 110, [0.9, 0.9, 0.9]);
+      this.faceBox(a, s, 0.0, 1.0, 0.47, 0.53, 0.012, 0.004, "iron", salt + 111, [0.9, 0.9, 0.9]);
     }
     // vents and iron rings (never on window faces)
     if (!hasWin && style !== "darkstone") {
@@ -553,6 +571,21 @@
     this.quadRaw("grime", pts, nrm, uvs, pts.map(() => [k, k, k]));
   };
 
+  Builder.prototype.woodStraps = function (c) {
+    const x = c[0], y = c[1], z = c[2], F = [1, 1, 0, 1, 1, 1], M = Array(6).fill("iron");
+    for (const t of [0.17, 0.74]) this.box([x + t, y + 1.025, z + 0.09], [x + t + 0.09, y + 1.046, z + 0.91], 0.005, M, F, 8, { tint: [1, 1, 1] });
+    for (const t of [0.17, 0.74]) for (const e of [0.13, 0.84]) this.box([x + t + 0.025, y + 1.045, z + e], [x + t + 0.065, y + 1.057, z + e + 0.04], 0.004, M, F, 9, { tint: [1.4, 1.3, 1.1] });
+  };
+  Builder.prototype.roofRidge = function (c) {
+    const x = c[0], y = c[1], z = c[2], isS = (dx, dz) => (this.map.get((x + dx) + "," + y + "," + (z + dz)) || {}).style === "slate";
+    const alongX = (isS(-1, 0) || isS(1, 0)) || !(isS(0, -1) || isS(0, 1));
+    const lo = [x, y + 0.99, z], hi = [x + 1, y + 1.1, z + 1], cl = [x, y + 1.1, z], ch = [x + 1, y + 1.135, z + 1];
+    if (alongX) { lo[2] += 0.22; hi[2] -= 0.22; cl[2] += 0.43; ch[2] -= 0.43; if (isS(-1, 0)) { lo[0] -= 0.0; } }
+    else { lo[0] += 0.22; hi[0] -= 0.22; cl[0] += 0.43; ch[0] -= 0.43; }
+    const t = [this.tint[0] * 0.95, this.tint[1] * 0.95, this.tint[2] * 0.97];
+    this.box(lo, hi, 0.02, Array(6).fill("slate"), [1, 1, 0, 1, 1, 1], 4, { tint: t });
+    this.box(cl, ch, 0.008, Array(6).fill("copper"), [1, 1, 0, 1, 1, 1], 5, { tint: [1, 1, 1] });
+  };
   Builder.prototype.paverSlab = function (c, style) {
     const x = c[0], y = c[1], z = c[2];
     const jx0 = this.walkTop(x - 1, y, z), jx1 = this.walkTop(x + 1, y, z), jz0 = this.walkTop(x, y, z - 1), jz1 = this.walkTop(x, y, z + 1);
@@ -654,35 +687,48 @@
   };
 
   // ---- hedge -----------------------------------------------------------------------------------------------------------------------------------------
+  function vnoise(x, y, z, sd) {
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), fx = x - xi, fy = y - yi, fz = z - zi;
+    const sm = t => t * t * (3 - 2 * t), u = sm(fx), v = sm(fy), w = sm(fz);
+    const h = (i, j, k) => hash(xi + i, yi + j, zi + k, sd);
+    const l = (a, b, t) => a + (b - a) * t;
+    return l(l(l(h(0, 0, 0), h(1, 0, 0), u), l(h(0, 1, 0), h(1, 1, 0), u), v), l(l(h(0, 0, 1), h(1, 0, 1), u), l(h(0, 1, 1), h(1, 1, 1), u), v), w);
+  }
+  Builder.prototype.isHedge = function (x, y, z) { const b = this.map.get(x + "," + y + "," + z); return !!b && b.style === "hedge"; };
+  // Adjacent hedge cells share smooth, un-rounded joins and one continuous lumpy noise field: a single leafy mass.
   Builder.prototype.hedge = function (blk) {
-    const c = this.cell, tint = this.tint = tintFor(this, "hedge", 0), N = this.low ? 4 : 8, R = 0.2, inner = 0.5 - R;
+    const c = this.cell, N = this.low ? 4 : 10, R = 0.2, inner = 0.5 - R;
+    const j = this.h(0, 70) - 0.5, tint = this.tint = [1 + j * 0.05, 1 + j * 0.04, 1 + j * 0.05];
     this.styleBody = "hedge";
-    const b = this.buf("hedge");
+    const b = this.buf("hedge"), sd = this.seed + 77;
+    const nbr = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]];
+    const hasN = nbr.map(d => this.isHedge(c[0] + d[0], c[1] + d[1], c[2] + d[2]));
     for (let fi = 0; fi < 6; fi++) {
-      const a = fi >> 1, s = fi & 1, d = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]][fi];
+      const a = fi >> 1, s = fi & 1, d = nbr[fi];
       if (this.occ(c[0] + d[0], c[1] + d[1], c[2] + d[2])) continue;
       const b1 = (a + 1) % 3, c1 = (a + 2) % 3, base = b.pos.length / 3;
-      for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
-        const P = [0, 0, 0]; P[a] = s ? 0.5 : -0.5; P[b1] = i / N - 0.5; P[c1] = j / N - 0.5;
-        const cl = P.map(v => Math.max(-inner, Math.min(inner, v))), dd = [P[0] - cl[0], P[1] - cl[1], P[2] - cl[2]];
-        let L = Math.hypot(dd[0], dd[1], dd[2]); const n = L < 1e-6 ? (() => { const q = [0, 0, 0]; q[a] = s ? 1 : -1; return q; })() : [dd[0] / L, dd[1] / L, dd[2] / L];
+      for (let jj = 0; jj <= N; jj++) for (let i = 0; i <= N; i++) {
+        const P = [0, 0, 0]; P[a] = s ? 0.5 : -0.5; P[b1] = i / N - 0.5; P[c1] = jj / N - 0.5;
+        const cl = [0, 0, 0];
+        for (let k = 0; k < 3; k++) { const lo = hasN[k * 2] ? -0.6 : -inner, hi = hasN[k * 2 + 1] ? 0.6 : inner; cl[k] = Math.max(lo, Math.min(hi, P[k])); }
+        const dd = [P[0] - cl[0], P[1] - cl[1], P[2] - cl[2]], L = Math.hypot(dd[0], dd[1], dd[2]);
+        let n; if (L < 1e-6) { n = [0, 0, 0]; n[a] = s ? 1 : -1; } else n = [dd[0] / L, dd[1] / L, dd[2] / L];
         const W = [c[0] + 0.5 + cl[0] + n[0] * R, c[1] + 0.5 + cl[1] + n[1] * R, c[2] + 0.5 + cl[2] + n[2] * R];
-        const lump = (hash(Math.round(W[0] * 40), Math.round(W[1] * 40), Math.round(W[2] * 40), this.seed) - 0.5) * 0.05;
+        // world-continuous two-octave noise: lumps, tufts and slight overhang past the cell silhouette
+        const n1 = vnoise(W[0] * 5.3, W[1] * 5.3, W[2] * 5.3, sd), n2 = vnoise(W[0] * 11.7 + 9, W[1] * 11.7, W[2] * 11.7, sd + 1);
+        const lump = (n1 - 0.5) * 0.13 + (n2 - 0.5) * 0.06 + 0.02;
         W[0] += n[0] * lump; W[1] += n[1] * lump; W[2] += n[2] * lump;
-        const col = this.color(a, s, W, tint);
+        const col = this.color(a, s, W, tint), crev = 0.62 + 0.62 * Math.max(0, Math.min(1, (n1 * 0.65 + n2 * 0.35) * 1.15 - 0.05));
         const uvp = a === 1 ? [W[0], W[2]] : a === 0 ? [W[2], W[1]] : [W[0], W[1]];
-        const r1 = this.h(5, 1) * 1.5, r2 = this.h(5, 2) * 1.5;
-        b.pos.push(W[0], W[1], W[2]); b.nor.push(n[0], n[1], n[2]); b.uv.push((uvp[0] + r1) / MAT.hedge.scale, (uvp[1] + r2) / MAT.hedge.scale); b.col.push(col[0], col[1], col[2]);
+        b.pos.push(W[0], W[1], W[2]); b.nor.push(n[0], n[1], n[2]);
+        b.uv.push(uvp[0] / MAT.hedge.scale + 0.31 * a, uvp[1] / MAT.hedge.scale);
+        b.col.push(col[0] * crev, col[1] * crev, col[2] * crev * 0.97);
       }
-      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-        const q = base + j * (N + 1) + i; const p0 = [b.pos[q * 3], b.pos[q * 3 + 1], b.pos[q * 3 + 2]];
-        const i1 = q + 1, i2 = q + N + 2, i3 = q + N + 1;
-        // winding via first triangle vs vertex normal
-        const A = q * 3, B = i1 * 3, C = i2 * 3;
+      for (let jj = 0; jj < N; jj++) for (let i = 0; i < N; i++) {
+        const q = base + jj * (N + 1) + i, i1 = q + 1, i2 = q + N + 2, i3 = q + N + 1, A = q * 3, B = i1 * 3, C = i2 * 3;
         const e1 = [b.pos[B] - b.pos[A], b.pos[B + 1] - b.pos[A + 1], b.pos[B + 2] - b.pos[A + 2]], e2 = [b.pos[C] - b.pos[A], b.pos[C + 1] - b.pos[A + 1], b.pos[C + 2] - b.pos[A + 2]];
         const cr = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-        const dot = cr[0] * b.nor[A] + cr[1] * b.nor[A + 1] + cr[2] * b.nor[A + 2];
-        if (dot >= 0) b.idx.push(q, i1, i2, q, i2, i3); else b.idx.push(q, i2, i1, q, i3, i2);
+        if (cr[0] * b.nor[A] + cr[1] * b.nor[A + 1] + cr[2] * b.nor[A + 2] >= 0) b.idx.push(q, i1, i2, q, i2, i3); else b.idx.push(q, i2, i1, q, i3, i2);
       }
     }
   };
