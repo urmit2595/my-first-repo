@@ -72,6 +72,12 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .toggle button[aria-pressed=true]{background:#2bb64c}
 .loading{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:#0b1328;font:22px 'Lilita One',sans-serif}
 .loading .err{max-width:280px;text-align:center;color:#ffb4ab;font:15px Nunito,sans-serif;font-weight:800}
+.lvgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:min(56vh,420px);overflow:auto;padding:4px 2px 8px;margin:8px 0 4px}
+.lvtile{min-height:76px;border-radius:12px;background:linear-gradient(#5ab0ff,#2f7bff);border:2px solid #0d1630;box-shadow:0 3px 0 #0d1630;color:#fff;display:grid;justify-items:center;align-content:center;gap:2px;padding:6px 4px}
+.lvtile b{font:24px/1 'Lilita One',sans-serif}.lvtile small{font:10px/1.1 'Lilita One',sans-serif;opacity:.9;text-align:center}
+.lvtile .st{display:flex;gap:1px}.lvtile .st svg{width:14px;height:14px}
+.lvtile.cur{background:linear-gradient(#5be07a,#2bb64c)}
+.lvtile:disabled{background:#2a3760;color:#8090b8;box-shadow:none;cursor:default}
 .flash{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(transparent 50%,#ff1e1e88);opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.hand,.tap{animation:none}.float{animation-duration:.01s}}
 </style>
@@ -82,12 +88,12 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
   <div class="count" id="count" hidden><img src="assets/i-helmet.png" alt=""><span id="countN">1</span></div>
 
   <div class="hud" id="hud">
-    <div></div>
+    <button class="round" id="levelsBtn" aria-label="Choose level"><svg viewBox="0 0 24 24" fill="#fff"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></button>
     <button class="round" id="pauseBtn" aria-label="Pause" hidden><svg viewBox="0 0 24 24" fill="#fff"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
     <button class="round" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="#fff"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L15 3.5h-4L10.7 6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
   </div>
   <div class="levelpill" id="levelPill">
-    <div class="name" id="levelName">PARIS TOWER</div>
+    <div class="name" id="levelName">OLD TOWN</div>
     <div class="lv" id="levelNo">Level 1</div>
     <div class="progress" id="progress" hidden><i id="progFill"></i><b id="progPct">0%</b><span class="flag"></span></div>
   </div>
@@ -118,6 +124,12 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
     <button class="btn go" id="retryBtn">TRY AGAIN</button>
   </div></div>
 
+  <div class="modal" id="levelsModal" hidden><div class="panel" role="dialog" aria-labelledby="levelsTitle">
+    <h2 id="levelsTitle" class="stroke">LEVELS</h2>
+    <div class="lvgrid" id="lvgrid"></div>
+    <button class="btn alt" id="levelsClose">BACK</button>
+  </div></div>
+
   <div class="modal" id="pauseModal" hidden><div class="panel" role="dialog" aria-labelledby="pauseTitle">
     <h2 id="pauseTitle" class="stroke">PAUSED</h2>
     <div class="toggle">SOUND <button id="soundBtn" aria-pressed="true">ON</button></div>
@@ -135,7 +147,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 // ---------- persistence ----------
 const SAVE_KEY = "squad-surge-v1";
 const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
-Object.assign(save, { level: 1, best: {}, sound: true, vibe: true, ...save });
+Object.assign(save, { level: 1, unlocked: 1, best: {}, stars: {}, bestSquad: {}, sound: true, vibe: true, ...save });
+save.unlocked = Math.max(save.unlocked, save.level);
 for (const k of ["coins", "gems", "up"]) delete save[k]; // drop old shop data from earlier builds
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
 
@@ -153,7 +166,7 @@ const WEAPONS = [
   { name: "BAZOOKA", img: "assets/w-bazooka.png", dmg: 7, rate: 0.4, spread: 1, splash: 2.6 },
 ];
 const THEMES = [
-  { name: "PARIS TOWER", sky: ["#f9c48f", "#fde8c9"], fog: 0xf6d2aa, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "zombie", deco: "city", landmark: "eiffel" },
+  { name: "OLD TOWN", sky: ["#f9c48f", "#fde8c9"], fog: 0xf6d2aa, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "zombie", deco: "city", landmark: "tower" },
   { name: "GOLDEN BRIDGE", sky: ["#6fb6ff", "#d8eeff"], fog: 0xbfe0ff, ground: null, water: 0x2f8fd0, road: "t-asphalt", side: "t-concrete", enemy: "grunt", deco: "bridge" },
   { name: "OLD PIER", sky: ["#7fd3e6", "#e9fbff"], fog: 0xc6eef5, ground: null, water: 0x1d9fb8, road: "t-concrete", side: "t-cobble", enemy: "zombie", deco: "pier" },
   { name: "RUINED CITY", sky: ["#9aa7b8", "#e7d6c2"], fog: 0xcfc6bb, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "grunt", deco: "city" },
@@ -285,10 +298,18 @@ function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; 
 // ---------- world / level ----------
 let L = null;               // current level state
 const world = new THREE.Group(); scene.add(world);
+const SLAM_R = 3.0, SLAM_WARN = 1.6, SLAM_AT = 2.6; // boss slam: red ring warns, then hits soldiers inside it
+const slamRing = new THREE.Mesh(new THREE.RingBufferGeometry(SLAM_R - 0.5, SLAM_R, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, depthWrite: false }));
+slamRing.rotation.x = -Math.PI / 2; slamRing.renderOrder = 2; slamRing.visible = false; scene.add(slamRing);
+const slamFill = new THREE.Mesh(new THREE.CircleBufferGeometry(SLAM_R - 0.5, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.18, depthWrite: false }));
+slamFill.rotation.x = -Math.PI / 2; slamFill.renderOrder = 2; slamFill.visible = false; scene.add(slamFill);
+const slamCenter = b => [b.x, b.z + 7];
 let layers = null;          // sprite layers
 const floatsEl = $("floats");
 const tmpV = new THREE.Vector3();
 
+const LEVEL_NAMES = ["OLD TOWN", "RED BRIDGE", "SALT PIER", "BROKEN BLOCKS", "DUNE ROAD", "IRON ARENA", "MARKET STREET", "STORM BRIDGE", "FOG HARBOR", "ASH DISTRICT", "SUN CANYON", "LAST STAND"];
+function levelName(level) { const lap = Math.ceil(level / LEVEL_NAMES.length); return LEVEL_NAMES[(level - 1) % LEVEL_NAMES.length] + (lap > 1 ? ` ${lap}` : ""); }
 function themeFor(level) { return THEMES[(level - 1) % THEMES.length]; }
 function skyTexture(top, bottom) {
   const c = document.createElement("canvas"); c.width = 4; c.height = 256; const x = c.getContext("2d");
@@ -362,7 +383,7 @@ function buildEnvironment(theme, length) {
       wall.position.set(s * (ROAD + 4.6), 1.1, cz); world.add(wall);
     }
   }
-  if (theme.landmark === "eiffel") {
+  if (theme.landmark === "tower") { // lattice radio tower on the horizon
     const g = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color: 0x8a6a55 });
     const legs = new THREE.CylinderBufferGeometry(0.6, 3.2, 22, 4, 1, true);
     const l1 = new THREE.Mesh(legs, m); l1.position.y = 11; g.add(l1);
@@ -400,21 +421,21 @@ function refreshGate(gate) {
 function makeSolid(kind, x, z, hp, extra = {}) {
   const spec = {
     blockBlue: { tex: "blockBlue", w: 2.1, h: 2.1, hw: 1.1 }, blockYellow: { tex: "blockYellow", w: 2.3, h: 2.3, hw: 1.2 },
-    crate: { tex: "crate", w: 2.3, h: 2.2, hw: 1.2 }, tyres: { tex: "tyres", w: 1.7, h: 1.9, hw: 0.9 }, weaponCase: { tex: "weaponCase", w: 2.6, h: 1.85, hw: 1.3 },
+    crate: { tex: "crate", w: 2.3, h: 2.2, hw: 1.2 }, tyres: { tex: "tyres", w: 1.7, h: 1.9, hw: 0.9 }, ammo: { tex: "ammo", w: 2.0, h: 1.66, hw: 1.05 }, weaponCase: { tex: "weaponCase", w: 2.6, h: 1.85, hw: 1.3 },
   }[kind];
   const mesh = new THREE.Mesh(new THREE.PlaneBufferGeometry(spec.w, spec.h), new THREE.MeshBasicMaterial({ map: TEX[spec.tex], alphaTest: 0.5 }));
   mesh.position.set(x, spec.h / 2, z); world.add(mesh);
-  const depth = new THREE.Mesh(new THREE.BoxBufferGeometry(spec.w * 0.92, spec.h * 0.92, 1.2), new THREE.MeshLambertMaterial({ color: { blockBlue: 0x1f5fd6, blockYellow: 0xd99a00, crate: 0x7a4a22, tyres: 0x222222, weaponCase: 0x5c6a80 }[kind] }));
+  const depth = new THREE.Mesh(new THREE.BoxBufferGeometry(spec.w * 0.92, spec.h * 0.92, 1.2), new THREE.MeshLambertMaterial({ color: { blockBlue: 0x1f5fd6, blockYellow: 0xd99a00, crate: 0x7a4a22, tyres: 0x222222, ammo: 0x4a5a2a, weaponCase: 0x5c6a80 }[kind] }));
   depth.position.set(x, spec.h / 2, z - 0.62); world.add(depth);
   const lab = makeLabel(256, 128);
   const lp = new THREE.Mesh(new THREE.PlaneBufferGeometry(spec.w * 0.95, spec.w * 0.47), new THREE.MeshBasicMaterial({ map: lab.tex, transparent: true, depthWrite: false }));
-  lp.position.set(x, kind === "weaponCase" ? spec.h + 0.55 : spec.h * 0.5, z + 0.08); lp.renderOrder = 3; world.add(lp);
+  lp.position.set(x, kind === "weaponCase" || kind === "ammo" ? spec.h + 0.55 : spec.h * 0.5, z + 0.08); lp.renderOrder = 3; world.add(lp);
   const o = { kind, x, z, hw: spec.hw, hp, maxHp: hp, alive: true, mesh, depth, lp, lab, hitT: 0, ...extra };
   labelSolid(o); return o;
 }
 function labelSolid(o) {
   if (o.kind === "blockBlue" || o.kind === "blockYellow") drawLabel(o.lab, `+${o.reward}`);
-  else drawLabel(o.lab, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" ? "#ffe066" : "#fff");
+  else drawLabel(o.lab, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" ? "#ffe066" : o.kind === "ammo" ? "#9dff7a" : "#fff");
 }
 function enemy(type, x, z, level) {
   const hpScale = 1 + (level - 1) * 0.1;
@@ -437,13 +458,13 @@ function generateLevel(level) {
     gates.push(makeGate(z, ["x", 2], ["+", -3])); z -= 24;
     for (let i = 0; i < 6; i++) solids.push(makeSolid("blockBlue", -4.6, z - i * 2.6, 3, { reward: 1 }));
     horde(z - 4, 8, 2.2, 10); z -= 32;
-    solids.push(makeSolid("weaponCase", 3.3, z, 30, { weapon: 1 })); horde(z - 6, 8, 3); z -= 30;
+    solids.push(makeSolid("weaponCase", 3.3, z, 30, { weapon: 1 })); solids.push(makeSolid("ammo", -3.3, z, 18, { ammo: true })); horde(z - 6, 8, 3); z -= 30;
     gates.push(makeGate(z, ["+", 6], ["+", -8])); z -= 26;
     horde(z, 16, 4.5, 10);
   } else {
     // every level opens with a free boost so the squad isn't wiped by the first wave
     gates.push(makeGate(z, ["+", 4 + d], ["+", 8 + d])); z -= 26;
-    const pool = ["gates", "horde", "lanes", "tyres", "gates", "case", "brutes", "horde"];
+    const pool = ["gates", "horde", "lanes", "tyres", "gates", "case", "brutes", "horde", "ammo"];
     while (z > -length + 30) {
       const seg = pool[Math.floor(r() * pool.length)];
       if (seg === "gates") {
@@ -460,6 +481,9 @@ function generateLevel(level) {
       } else if (seg === "tyres") {
         for (const x of [-3.6, 0, 3.6]) if (r() < 0.75) solids.push(makeSolid("tyres", x, z, 10 + d * 5, {}));
         z -= 18;
+      } else if (seg === "ammo") {
+        solids.push(makeSolid("ammo", (r() < 0.5 ? -1 : 1) * 3.3, z, 20 + d * 8, { ammo: true }));
+        horde(z - 4, 4 + d, 2, 4); z -= 22;
       } else if (seg === "case") {
         solids.push(makeSolid("weaponCase", (r() < 0.5 ? -1 : 1) * 3.3, z, 30 + d * 18, { weapon: 1 + Math.floor(r() * (level >= 4 ? 4 : 3)) }));
         horde(z - 4, 4 + d, 2, 4); z -= 24;
@@ -506,18 +530,20 @@ let resumeState = "play";
 function startLevel(level) {
   floatsEl.innerHTML = "";
   L = generateLevel(level);
-  Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, reached: 0, winT: 0 });
+  Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, reached: 0, winT: 0, rateMult: 1 });
   addSoldiers(START_SQUAD);
-  $("levelName").textContent = L.theme.name; $("levelNo").textContent = `Level ${level}`;
+  $("levelName").textContent = levelName(level); $("levelNo").textContent = `Level ${level}`;
   setWeapon(0);
 }
-function setWeapon(i) { L.weapon = i; $("weaponImg").src = WEAPONS[i].img; $("weaponName").textContent = WEAPONS[i].name; }
+function setWeapon(i) { L.weapon = i; $("weaponImg").src = WEAPONS[i].img; weaponLabel(); }
+function weaponLabel() { $("weaponName").textContent = WEAPONS[L.weapon].name + (L.rateMult > 1 ? ` · RATE x${L.rateMult.toFixed(1)}` : ""); }
 function show(id, on) { $(id).hidden = !on; }
 function setState(s) {
   state = s;
   const playing = s === "play" || s === "boss";
   show("home", s === "home"); show("progress", playing || s === "paused"); show("pauseBtn", playing); show("settingsBtn", s === "home");
   show("weaponTag", playing); show("count", playing);
+  show("levelsBtn", s === "home"); show("levelsModal", s === "levels"); if (s === "levels") renderLevels();
   show("bossbar", s === "boss"); show("winModal", s === "win"); show("loseModal", s === "lose"); show("pauseModal", s === "paused");
 }
 
@@ -540,6 +566,7 @@ const keys = {};
 addEventListener("keydown", e => {
   keys[e.key] = true;
   if (state === "home" && ["ArrowLeft", "ArrowRight", "a", "d", " ", "Enter"].includes(e.key)) setState("play");
+  if (state === "levels" && e.key === "Escape") { setState("home"); return; }
   if (e.key === "Escape" || e.key === "p") togglePause();
 });
 addEventListener("keyup", e => keys[e.key] = false);
@@ -548,6 +575,7 @@ function togglePause() {
   else if (state === "paused") setState(resumeState);
 }
 $("pauseBtn").onclick = togglePause; $("settingsBtn").onclick = () => { resumeState = "home"; setState("paused"); };
+$("levelsBtn").onclick = () => setState("levels"); $("levelsClose").onclick = () => setState("home");
 $("resumeBtn").onclick = () => setState(resumeState);
 $("quitBtn").onclick = () => { startLevel(save.level); setState("home"); };
 $("nextBtn").onclick = () => { startLevel(save.level); setState("home"); };
@@ -561,7 +589,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && (st
 
 // ---------- simulation ----------
 const ENEMY_ASPECT = { zombie: 0.86, grunt: 0.787, brute: 0.946 };
-function fireRate() { return (1 / 0.3) * WEAPONS[L.weapon].rate; }
+function fireRate() { return (1 / 0.3) * WEAPONS[L.weapon].rate * L.rateMult; }
 function damage() { return WEAPONS[L.weapon].dmg; }
 
 function step(dt) {
@@ -673,13 +701,19 @@ function step(dt) {
   // boss
   if (state === "boss" && b0.hp > 0) {
     b0.t += dt; b0.flash = Math.max(0, b0.flash - dt);
-    b0.z += 1.1 * dt; b0.x += (L.sx - b0.x) * dt * 0.4;
+    b0.z += 1.1 * dt;
+    if (b0.slamT < SLAM_WARN) b0.x += (L.sx - b0.x) * dt * 0.4; // the boss stops aiming once the warning ring shows: dodge sideways
     b0.slamT += dt;
-    if (b0.slamT > 2.6) {
+    if (b0.slamT > SLAM_AT) {
       b0.slamT = 0; L.shake = 0.4; sfx("boom"); vibe(120);
-      const dist = L.sz - b0.z;
-      if (dist < 12) { const k = 1 + Math.ceil(L.level / 2); killSoldiers(k); flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); }
-      L.fx.push({ x: b0.x, y: 0.5, z: b0.z + 2, f: 9, t: 0, dur: 0.5, size: 5 });
+      const [cx, cz] = slamCenter(b0), cap = 2 + L.level;
+      let k = 0;
+      for (let i = L.soldiers.length - 1; i >= 0 && k < cap; i--) {
+        const sd = L.soldiers[i];
+        if (Math.hypot(sd.x - cx, sd.z - cz) < SLAM_R) { L.fx.push({ x: sd.x, y: 0.6, z: sd.z, f: 4, t: 0, dur: 0.35, size: 1.1 }); L.soldiers.splice(i, 1); k++; }
+      }
+      if (k) { flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); } else if (L.sz - b0.z < 14) floatText(L.sx, 2.5, L.sz, "DODGED!", "#7fd0ff");
+      L.fx.push({ x: cx, y: 0.3, z: cz, f: 9, t: 0, dur: 0.5, size: SLAM_R * 1.6 });
     }
     if (b0.z + 2.6 > L.sz - R) killSoldiers(L.soldiers.length);
     $("bossFill").style.width = `${Math.max(0, b0.hp / b0.maxHp) * 100}%`;
@@ -705,6 +739,7 @@ function breakSolid(o, earned) {
   if (!earned) return;
   sfx("hit");
   if (o.reward) { addSoldiers(o.reward); floatText(o.x, 2.2, o.z, `+${o.reward}`, "#7fd0ff"); L.fx.push({ x: o.x, y: 1.4, z: o.z, f: 14, t: 0, dur: 0.4, size: 1.8 }); }
+  if (o.ammo) { L.rateMult = Math.min(2.2, L.rateMult * 1.35); weaponLabel(); floatText(o.x, 2.6, o.z, "FIRE RATE UP!", "#9dff7a"); sfx("gate"); vibe(40); }
   if (o.weapon) { if (o.weapon > L.weapon) setWeapon(o.weapon); floatText(o.x, 2.6, o.z, WEAPONS[L.weapon].name + "!", "#ffe066"); sfx("win"); vibe(60); }
 }
 function hitEnemy(e, dmg) {
@@ -722,12 +757,30 @@ function bossDown() {
 }
 let flashTimer = 0;
 function flashRed() { const f = $("flash"); f.style.opacity = 1; clearTimeout(flashTimer); flashTimer = setTimeout(() => f.style.opacity = 0, 140); }
+const STAR_PATH = "M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.6 5.8 21l1.4-7L2 9.3l7-.8z";
+function starIcons(n) { return [0, 1, 2].map(i => `<svg viewBox="0 0 24 24"><path d="${STAR_PATH}" fill="${i < n ? "#ffd84a" : "#3a4a78"}" stroke="#0d1630" stroke-width="1.5"/></svg>`).join(""); }
+function renderLevels() {
+  const grid = $("lvgrid"); grid.innerHTML = "";
+  const last = Math.max(12, Math.ceil((save.unlocked + 1) / 3) * 3);
+  for (let n = 1; n <= last; n++) {
+    const b = document.createElement("button"), open = n <= save.unlocked;
+    b.className = "lvtile" + (n === save.level ? " cur" : ""); b.disabled = !open;
+    b.innerHTML = open ? `<b class="stroke">${n}</b><small>${levelName(n)}</small><span class="st">${starIcons(save.stars[n] || 0)}</span>` : `<b>🔒</b><small>${n}</small>`;
+    b.setAttribute("aria-label", open ? `Level ${n}, ${levelName(n)}, ${save.stars[n] || 0} stars` : `Level ${n}, locked`);
+    b.onclick = () => { save.level = n; persist(); startLevel(n); setState("home"); };
+    grid.appendChild(b);
+  }
+  grid.querySelector(".cur")?.scrollIntoView({ block: "nearest" });
+}
 function win() {
   if (state !== "boss") return;
   const n = L.soldiers.length, stars = n >= 30 + L.level * 10 ? 3 : n >= 10 + L.level * 3 ? 2 : 1;
-  save.best[L.level] = 1; save.level = L.level + 1; persist();
-  $("stars").innerHTML = [0, 1, 2].map(i => `<svg viewBox="0 0 24 24"><path d="M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.6 5.8 21l1.4-7L2 9.3l7-.8z" fill="${i < stars ? "#ffd84a" : "#3a4a78"}" stroke="#0d1630" stroke-width="1.5"/></svg>`).join("");
-  $("winSub").textContent = `${n} soldiers survived · ${L.theme.name}`;
+  const newBest = n > (save.bestSquad[L.level] || 0);
+  save.best[L.level] = 1; save.stars[L.level] = Math.max(save.stars[L.level] || 0, stars);
+  if (newBest) save.bestSquad[L.level] = n;
+  save.level = L.level + 1; save.unlocked = Math.max(save.unlocked, save.level); persist();
+  $("stars").innerHTML = starIcons(stars);
+  $("winSub").textContent = `${n} soldiers survived · ${levelName(L.level)}${newBest ? " · NEW BEST!" : ""}`;
   sfx("win"); setState("win");
 }
 function explode(x, z, dmg, radius, skip = null) {
@@ -784,6 +837,13 @@ function render(dt) {
   }
   sold.end(); enem.end(); brute.end(); boss.end(); fx.end(); shadow.end();
   // solids flash when hit
+  const warn = state === "boss" && L.boss.hp > 0 && L.boss.slamT >= SLAM_WARN;
+  slamRing.visible = slamFill.visible = warn;
+  if (warn) {
+    const [cx, cz] = slamCenter(L.boss), p = (L.boss.slamT - SLAM_WARN) / (SLAM_AT - SLAM_WARN);
+    slamRing.position.set(cx, 0.06, cz); slamFill.position.set(cx, 0.05, cz);
+    slamRing.material.opacity = 0.55 + 0.45 * Math.abs(Math.sin(L.time * 14)); slamFill.scale.setScalar(Math.max(0.05, p));
+  }
   for (const o of L.solids) if (o.alive) { o.hitT = Math.max(0, o.hitT - dt); o.mesh.scale.setScalar(o.hitT > 0 ? 1.06 : 1); }
   renderer.render(scene, camera);
   // squad count badge above the squad
@@ -812,7 +872,7 @@ function frame(now) {
       loadTex("brute", "assets/brute.png"), loadTex("boss", "assets/boss.png"), loadTex("fx", "assets/fx.jpg"),
       loadTex("blockBlue", "assets/block-blue.png"), loadTex("blockYellow", "assets/block-yellow.png"), loadTex("crate", "assets/crate.png"),
       loadTex("gateRed", "assets/gate-red.png"), loadTex("gateBlue", "assets/gate-blue.png"), loadTex("tyres", "assets/tyres.png"),
-      loadTex("weaponCase", "assets/weapon-case.png"),
+      loadTex("weaponCase", "assets/weapon-case.png"), loadTex("ammo", "assets/ammo.png"),
       loadTex("t-asphalt", "assets/t-asphalt.jpg"), loadTex("t-concrete", "assets/t-concrete.jpg"), loadTex("t-cobble", "assets/t-cobble.jpg"), loadTex("t-dirt", "assets/t-dirt.jpg"),
       document.fonts ? document.fonts.load("40px 'Lilita One'").catch(() => null) : null,
     ]);
