@@ -496,6 +496,9 @@
     return Array.from(map.values());
   }
 
+  var CAPPED = { ivy: 1, flowers: 1, vines: 1, plant: 1, tree: 1 };
+  var SHADOW_TYPES = { beacon: 1, tree: 1, arch: 1 }; // decor that casts shadows; everything else only receives
+
   var fxRoot = null, ringGeo = null, ringMat = null;
   function buildRingAssets() {
     fxRoot = new THREE.Group(); fxRoot.name = "fx"; scene.add(fxRoot);
@@ -528,6 +531,99 @@
     }
     if (node) { node.updateWorldMatrix(true, false); node.localToWorld(v); }
     return v;
+  }
+
+
+  // ------------------------------------------------------------------ decor batching
+  // Probe a throw-away copy of each decor item: any mesh whose transform, visibility or material ever changes (update, spin,
+  // setLit, press, ignite, ...) is dynamic. The static meshes of all decor in a group are then baked into one mesh per
+  // (material, flags), keeping their transforms. Materials are untouched, so setLit etc. still work.
+  var PROBE_CALLS = [["setLit", true], ["setLit", false], ["spin", 45], ["spin", 120], ["press", true], ["press", false], ["ignite"], ["collect"], ["setHover", true], ["setHint", false]];
+  function meshesOf(obj) { var l = []; obj.traverse(function (o) { if (o.isMesh || o.isSprite || o.isPoints || o.isLine) l.push(o); }); return l; }
+  function effVisible(o) { while (o) { if (!o.visible) return false; o = o.parent; } return true; }
+  function snap(root, list) {
+    root.updateMatrixWorld(true);
+    return list.map(function (m) { return { e: m.matrixWorld.elements.slice(), v: effVisible(m), mat: m.material && (m.material.uuid || ""), op: m.material && m.material.opacity }; });
+  }
+  function sameSnap(a, b) {
+    if (a.v !== b.v || a.mat !== b.mat) return false;
+    for (var i = 0; i < 16; i++) if (Math.abs(a.e[i] - b.e[i]) > 1e-5) return false;
+    return true;
+  }
+  function probeDynamic(item, ctx, count) {
+    var probe = null;
+    try { probe = Decor.build(item, ctx); } catch (e) { return null; }
+    if (!probe) return null;
+    var list = meshesOf(probe); if (list.length !== count) { try { Decor.dispose(probe); } catch (e) {} return null; }
+    var dyn = list.map(function () { return false; }), s0 = snap(probe, list), ud = probe.userData || {};
+    function check() { var s1 = snap(probe, list); for (var i = 0; i < list.length; i++) if (!sameSnap(s0[i], s1[i])) dyn[i] = true; }
+    function pump(t0) { if (!ud.update) return; for (var k = 0; k < 12; k++) { try { ud.update(0.05, t0 + k * 0.4); } catch (e) {} } check(); }
+    pump(0.3);
+    PROBE_CALLS.forEach(function (c) { if (typeof ud[c[0]] === "function") { try { ud[c[0]](c[1]); } catch (e) {} pump(5); } });
+    try { Decor.dispose(probe); } catch (e) {}
+    return dyn;
+  }
+
+  function mergeDecor(def, theme) {
+    if (!THREE.BufferGeometryUtils || !THREE.BufferGeometryUtils.mergeBufferGeometries) return;
+    var BGU = THREE.BufferGeometryUtils, byGroup = {}, inv = new THREE.Matrix4(), rel = new THREE.Matrix4();
+    Game.decor.forEach(function (e) {
+      if (e.handleOf) return; // handles animate with the mechanism; keep as they are
+      var item = e.item, ctx = { theme: theme, quality: Game.quality, seed: hashStr(def.id + ":" + item.type + ":" + item.at.join(",")) };
+      var list = meshesOf(e.object3D); if (!list.length) return;
+      var dyn = probeDynamic(item, ctx, list.length); if (!dyn) return;
+      var g = Game.groups[e.group]; g.contentNode.updateMatrixWorld(true);
+      inv.copy(g.contentNode.matrixWorld).invert();
+      list.forEach(function (m, i) {
+        if (dyn[i] || !m.isMesh || m.isSkinnedMesh || m.isInstancedMesh || Array.isArray(m.material) || !m.geometry || !m.visible || !effVisible(m)) return;
+        m.updateWorldMatrix(true, false);
+        rel.multiplyMatrices(inv, m.matrixWorld);
+        if (rel.determinant() < 0) return;
+        var ga = m.geometry.attributes, sig = Object.keys(ga).sort().join(",") + (m.geometry.index ? "i" : "n") + (m.geometry.morphAttributes && Object.keys(m.geometry.morphAttributes).length ? "m" : "");
+        var key = e.group + "|" + m.material.uuid + "|" + sig + "|" + (m.castShadow ? 1 : 0) + (m.receiveShadow ? 1 : 0) + "|" + m.renderOrder + "|" + (m.frustumCulled ? 1 : 0);
+        (byGroup[key] = byGroup[key] || []).push({ m: m, rel: rel.clone(), gid: e.group });
+      });
+    });
+    var before = 0, after = 0;
+    Object.keys(byGroup).forEach(function (k) {
+      var arr = byGroup[k]; if (arr.length < 2) return;
+      var geos = arr.map(function (a) { var g2 = a.m.geometry.clone(); g2.applyMatrix4(a.rel); return g2; });
+      var merged = BGU.mergeBufferGeometries(geos, false); if (!merged) return;
+      var f = arr[0].m, mesh = new THREE.Mesh(merged, f.material);
+      mesh.castShadow = f.castShadow; mesh.receiveShadow = f.receiveShadow; mesh.renderOrder = f.renderOrder; mesh.name = "decor-merged";
+      mesh.userData.merged = true;
+      Game.groups[arr[0].gid].contentNode.add(mesh);
+      arr.forEach(function (a) { if (a.m.parent) a.m.parent.remove(a.m); });
+      before += arr.length; after++;
+      geos.forEach(function (g2) { g2.dispose(); });
+    });
+    Game.decorMerge = { before: before, after: after };
+  }
+
+
+  // One position-only mesh per group casts the shadow of all its opaque block meshes (layer 1: invisible to the main camera,
+  // seen by the key light's shadow camera). Cuts the shadow pass from ~1 draw per block material to 1 per group.
+  var proxyMat = null;
+  function shadowProxy(g, obj) {
+    if (Game.quality === "low" || !THREE.BufferGeometryUtils) return;
+    var geos = [], meshes = [];
+    obj.updateWorldMatrix(true, true);
+    var inv = new THREE.Matrix4().copy(g.contentNode.matrixWorld).invert(), rel = new THREE.Matrix4();
+    obj.traverse(function (o) {
+      if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || !o.castShadow || Array.isArray(o.material) || !o.geometry.attributes.position) return;
+      if (o.material.transparent || o.material.alphaTest > 0) return;
+      var src = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      var geo = new THREE.BufferGeometry(); geo.setAttribute("position", src.attributes.position);
+      rel.multiplyMatrices(inv, o.matrixWorld); geo.applyMatrix4(rel);
+      geos.push(geo); meshes.push(o);
+    });
+    if (!geos.length) return;
+    var merged = THREE.BufferGeometryUtils.mergeBufferGeometries(geos, false); if (!merged) return;
+    proxyMat = proxyMat || new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide });
+    var m = new THREE.Mesh(merged, proxyMat); m.castShadow = true; m.receiveShadow = false; m.frustumCulled = false; m.layers.set(1); m.name = "shadow-proxy";
+    g.contentNode.add(m);
+    meshes.forEach(function (o) { o.castShadow = false; });
+    var k = keyLight(); if (k && k.shadow && k.shadow.camera) k.shadow.camera.layers.enable(1);
   }
 
   function loadLevel(def) {
@@ -568,6 +664,7 @@
       if (obj) {
         obj.traverse(function (o) { if (o.isMesh && !o.userData.noShadow && !o.castShadow && !o.receiveShadow) { o.castShadow = true; o.receiveShadow = true; } });
         g.contentNode.add(obj);
+        safe(function () { shadowProxy(g, obj); }, "shadowProxy");
       }
     });
     // decor
@@ -578,10 +675,8 @@
       if (!obj) obj = safe(function () { return fallbackDecor(item); }, "fallbackDecor");
       if (!obj) return null;
       g.contentNode.add(obj);
-      safe(function () {
-        var bb = new THREE.Box3().setFromObject(obj), sz = bb.getSize(new THREE.Vector3());
-        if (Math.max(sz.x, sz.y, sz.z) < 0.5) obj.traverse(function (o) { if (o.isMesh) o.castShadow = false; });
-      }, "shadow cull");
+      var casts = SHADOW_TYPES[item.type] && Game.quality !== "low";
+      obj.traverse(function (o) { if (o.isMesh) o.castShadow = !!casts; });
       var entry = Object.assign({ item: item, object3D: obj, node: g.contentNode, group: g.id }, extra || {});
       entry.worldPos = function (target) { return decorWorldPos(entry, target); };
       Game.decor.push(entry);
@@ -589,9 +684,12 @@
       return entry;
     }
     var glimOf = {}, plateOf = {}, beacon = null;
+    var capN = Game.quality === "low" ? 2 : Game.quality === "medium" ? 6 : 1e9, capCount = 0;
     (def.decor || []).forEach(function (d) {
       var g = Game.groups[d.group || "base"] || Game.groups.base;
+      if (CAPPED[d.type] && ++capCount > capN) return; // low-value plants skipped on weaker tiers
       var item = Object.assign({}, d, { face: d.face || "+y", rot: d.rot || 0 });
+      if (d.type === "chimney" && Game.quality !== "high" && item.smoke === undefined) item.smoke = false;
       var e = buildDecor(item, g);
       if (e && d.type === "beacon") { e.beacon = true; beacon = beacon || e; }
       if (e && d.type === "gear") g.gears.push(e.object3D);
@@ -637,6 +735,7 @@
     Game.plateOf = plateOf; Game.glimOf = glimOf;
     Object.keys(Game.groups).forEach(function (id) { applyGroup(Game.groups[id]); });
     levelRoot.updateMatrixWorld(true);
+    safe(function () { mergeDecor(def, theme); }, "mergeDecor");
 
     // world / camera
     if (window.World && mods.world) {
@@ -656,6 +755,7 @@
     heroW.pos.set(st.stand[0], st.stand[1], st.stand[2]);
     heroW.yaw = heroW.targetYaw = Math.PI / 4;
     heroPivot.position.copy(heroW.pos); heroPivot.rotation.y = heroW.yaw;
+    if (heroApi.teleport) safe(function () { heroApi.teleport(); });
     setAnim("idle"); safe(function () { heroApi.setGlow && heroApi.setGlow(1); });
     Game.hero.tile = heroW.tile; Game.hero.walking = false;
     buildDebugEdges();
@@ -1135,7 +1235,7 @@
         if (dist <= sp * remain + 1e-6) {
           remain -= dist / sp; pos.copy(m.to); heroW.cur = null;
           if (m.jump) {
-            var from = heroW.tile; pos.copy(m.jump); heroW.crossK = m.k;
+            var from = heroW.tile; pos.copy(m.jump); heroW.crossK = m.k; if (heroApi.teleport) safe(function () { heroApi.teleport(); });
             heroW.tile = m.newTile; Game.hero.tile = heroW.tile;
             emit("heroStep", { from: from, to: m.newTile, k: m.k, at: [m.to.x, m.to.y, m.to.z] });
           }

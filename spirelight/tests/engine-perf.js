@@ -22,7 +22,7 @@ for (let i = 0; i < args.length; i++) { if (args[i].startsWith("--")) { opt[args
       const cats = {}; const add = (k, o) => { (cats[k] = cats[k] || []).push(o); };
       Object.keys(Game.groups).forEach(id => {
         const g = Game.groups[id], dec = new Set(Game.decor.map(e => e.object3D));
-        g.contentNode.children.forEach(c => { if (!dec.has(c)) add("blocks:" + id, c); });
+        g.contentNode.children.forEach(c => { if (dec.has(c)) return; add(c.name === "decor-merged" ? "decor:(merged)" : c.name === "shadow-proxy" ? "shadow-proxy" : "blocks:" + id, c); });
       });
       Game.decor.forEach(e => add("decor:" + (e.handleOf ? "handle" : e.plate ? "plate" : e.glimmer ? "glimmer" : e.item.type), e.object3D));
       add("hero", I.heroPivot); add("fx", I.fxRoot);
