@@ -3,155 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Naruto vs Sasuke - Mini Arena</title>
+    <title>Shuriken Showdown</title>
     <style>
         :root {
-            --naruto: #ffba08;
-            --sasuke: #5e72e4;
-            --bg: linear-gradient(180deg, #0d1b2a 0%, #1b263b 70%, #415a77 100%);
+            --kaito: #ffb703;
+            --ryn: #6c7cff;
+            --ink: #f7fafc;
+            --panel: rgba(255,255,255,0.06);
+            --line: rgba(255,255,255,0.12);
+            --accent: #06d6a0;
         }
         * { box-sizing: border-box; }
         body {
             margin: 0;
             font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            color: #f7fafc;
+            color: var(--ink);
             background: #0b132b;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 16px;
-            padding: 18px;
+            gap: 14px;
+            padding: 16px;
         }
-        header {
-            text-align: center;
-        }
+        header { text-align: center; }
         h1 { margin: 0; letter-spacing: 0.5px; }
-        .subtitle { opacity: 0.85; }
+        .subtitle { opacity: 0.85; margin: 6px 0 0; }
+        #toolbar {
+            width: min(100%, 960px);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+        }
+        #toolbar label { font-size: 14px; opacity: 0.9; }
+        select, button {
+            font: inherit;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            padding: 8px 12px;
+            background: #1b263b;
+            color: var(--ink);
+        }
+        #startBtn {
+            border: none;
+            background: var(--accent);
+            color: #0b132b;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        #pauseBtn, #muteBtn { cursor: pointer; }
+        button:active { transform: translateY(1px); }
         #arena-wrapper {
             position: relative;
             width: min(100%, 960px);
-            border: 2px solid rgba(255,255,255,0.1);
+            border: 2px solid var(--line);
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 12px 30px rgba(0,0,0,0.35);
-            background: #0b132b;
-        }
-        #hud {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 12px;
-            background: rgba(0,0,0,0.35);
-            backdrop-filter: blur(6px);
-        }
-        .bar {
-            flex: 1;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            height: 18px;
-            position: relative;
-            overflow: hidden;
-        }
-        .bar span {
-            display: block;
-            height: 100%;
-            transition: width 0.2s ease;
-        }
-        .label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            margin-bottom: 4px;
-            letter-spacing: 0.2px;
-        }
-        #hud .panel {
-            flex: 1;
-            min-width: 200px;
         }
         #gameCanvas {
             width: 100%;
-            height: 420px;
+            height: auto;
+            aspect-ratio: 960 / 460;
             display: block;
-            background: var(--bg);
+            background: #0d1b2a;
+            touch-action: none;
         }
+        #touch {
+            display: none;
+            width: min(100%, 960px);
+            justify-content: space-between;
+            gap: 12px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #touch .pad { display: flex; gap: 8px; flex-wrap: wrap; }
+        #touch button {
+            min-width: 58px;
+            min-height: 52px;
+            font-weight: 700;
+            touch-action: none;
+        }
+        @media (pointer: coarse) { #touch { display: flex; } }
         #controls {
             width: min(100%, 960px);
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 12px;
         }
         .card {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
+            background: var(--panel);
+            border: 1px solid var(--line);
             border-radius: 12px;
             padding: 12px 14px;
             line-height: 1.5;
-            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
         }
         .card h3 { margin-top: 0; }
-        .keys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
+        .card ul { margin: 0; padding-left: 18px; }
         .key { font-weight: 700; color: #ffd166; }
-        #log { font-family: "Fira Code", monospace; max-height: 140px; overflow-y: auto; font-size: 13px; }
-        #startBtn {
-            padding: 10px 16px;
-            border-radius: 10px;
-            border: none;
-            background: #06d6a0;
-            color: #0b132b;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: transform 0.1s ease, box-shadow 0.2s;
-        }
-        #startBtn:active { transform: translateY(1px); }
+        #log { font-family: "Fira Code", monospace; max-height: 150px; overflow-y: auto; font-size: 13px; }
         footer { opacity: 0.8; font-size: 13px; }
     </style>
 </head>
 <body>
     <header>
-        <h1>Naruto vs Sasuke</h1>
-        <p class="subtitle">Fast-paced micro arena. You play Naruto; Sasuke is driven by simple AI.</p>
+        <h1>Shuriken Showdown</h1>
+        <p class="subtitle">Best-of-three arena duel. You play Kaito; Ryn is controlled by the AI.</p>
     </header>
 
+    <div id="toolbar">
+        <label for="difficulty">AI difficulty</label>
+        <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard</option>
+        </select>
+        <button id="startBtn">Start match</button>
+        <button id="pauseBtn">Pause</button>
+        <button id="muteBtn">Sound: on</button>
+    </div>
+
     <div id="arena-wrapper">
-        <div id="hud">
-            <div class="panel">
-                <div class="label"><span>Naruto (You)</span><span id="narutoHPLabel">100</span></div>
-                <div class="bar"><span id="narutoHP" style="background: var(--naruto); width: 100%"></span></div>
-            </div>
-            <div class="panel" style="text-align:center; max-width:160px;">
-                <button id="startBtn">Start / Reset</button>
-            </div>
-            <div class="panel">
-                <div class="label"><span>Sasuke (AI)</span><span id="sasukeHPLabel">100</span></div>
-                <div class="bar"><span id="sasukeHP" style="background: var(--sasuke); width: 100%"></span></div>
-            </div>
+        <canvas id="gameCanvas" width="960" height="460"></canvas>
+    </div>
+
+    <div id="touch">
+        <div class="pad">
+            <button data-hold="left">◀</button>
+            <button data-hold="right">▶</button>
+            <button data-hold="jump">▲</button>
+            <button data-hold="block">Guard</button>
         </div>
-        <canvas id="gameCanvas" width="960" height="420"></canvas>
+        <div class="pad">
+            <button data-tap="punch">Punch</button>
+            <button data-tap="shoot">Star</button>
+            <button data-tap="special">Vortex</button>
+        </div>
     </div>
 
     <section id="controls">
         <div class="card">
-            <h3>Move & Jump</h3>
-            <div class="keys">
-                <div><span class="key">A / D</span> Move left / right</div>
-                <div><span class="key">W</span> Jump</div>
-            </div>
+            <h3>Move</h3>
+            <ul>
+                <li><span class="key">A / D</span> or <span class="key">← / →</span> move</li>
+                <li><span class="key">W</span> or <span class="key">↑</span> jump</li>
+                <li><span class="key">S</span> or <span class="key">↓</span> guard (blocks 75%)</li>
+            </ul>
         </div>
         <div class="card">
-            <h3>Attacks</h3>
-            <div class="keys">
-                <div><span class="key">J</span> Chakra Punch</div>
-                <div><span class="key">K</span> Kunai Throw</div>
-                <div><span class="key">J + K</span> Rasengan Combo</div>
-            </div>
+            <h3>Attack</h3>
+            <ul>
+                <li><span class="key">J</span> Palm Strike (8)</li>
+                <li><span class="key">K</span> Throwing Star (6)</li>
+                <li><span class="key">J → K</span> Spiral Burst combo (16, close range)</li>
+                <li><span class="key">L</span> Vortex Blast (18, costs 50 energy)</li>
+            </ul>
         </div>
         <div class="card">
             <h3>Tips</h3>
             <ul>
-                <li>Rasengan triggers if you press J then K quickly.</li>
-                <li>Keep Sasuke at bay—he dashes when you're low.</li>
-                <li>Reset anytime to restart the duel.</li>
+                <li>Jump over stars, or guard while facing them.</li>
+                <li>Stars cancel each other out; a Vortex goes through stars.</li>
+                <li>Energy fills when you deal or take damage.</li>
+                <li><span class="key">Enter</span> starts, <span class="key">P</span> pauses.</li>
             </ul>
         </div>
         <div class="card">
@@ -160,231 +175,777 @@
         </div>
     </section>
 
-    <footer>
-        Built with plain HTML, CSS, and JS. Fight on!
-    </footer>
+    <footer>Built with plain HTML, CSS, and JS. No downloads, no libraries.</footer>
 
     <script>
+    (() => {
+        'use strict';
+
+        // ---------- Setup ----------
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const keys = {};
-        const logEl = document.getElementById('log');
-        const hpUI = {
-            narutoBar: document.getElementById('narutoHP'),
-            sasukeBar: document.getElementById('sasukeHP'),
-            narutoLabel: document.getElementById('narutoHPLabel'),
-            sasukeLabel: document.getElementById('sasukeHPLabel'),
-        };
-
-        const SFX = {
-            punch: new Audio('https://actions.google.com/sounds/v1/cartoon/punch_02.mp3'),
-            whoosh: new Audio('https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.mp3'),
-            rasengan: new Audio('https://actions.google.com/sounds/v1/human_voices/chanting_male.mp3'),
-        };
-        Object.values(SFX).forEach(a => a.volume = 0.35);
-
-        const ground = 360;
+        const W = canvas.width, H = canvas.height;
+        const GROUND = 400;
         const GRAVITY = 0.8;
-        const WIDTH = canvas.width;
+        const ROUND_FRAMES = 60 * 60;   // 60 seconds at 60 steps/s
+        const WINS_NEEDED = 2;
+        const SPECIAL_COST = 50;
+        const logEl = document.getElementById('log');
+        const difficultyEl = document.getElementById('difficulty');
 
-        function createFighter(opts) {
+        const DIFFICULTY = {
+            easy:   { punchRate: 0.04, react: 30, speed: 2.2, shootRate: 0.012, blockChance: 0.15, dodgeChance: 0.30, comboChance: 0.0, specialRate: 0.01 },
+            normal: { punchRate: 0.09, react: 18, speed: 2.8, shootRate: 0.025, blockChance: 0.35, dodgeChance: 0.60, comboChance: 0.35, specialRate: 0.03 },
+            hard:   { punchRate: 0.18, react: 9,  speed: 3.3, shootRate: 0.045, blockChance: 0.60, dodgeChance: 0.85, comboChance: 0.75, specialRate: 0.06 },
+        };
+
+        // ---------- Sound (synthesized, no network) ----------
+        let audio = null, muted = false, noiseBuf = null;
+        function initAudio() {
+            if (audio) return;
+            try {
+                audio = new (window.AudioContext || window.webkitAudioContext)();
+                noiseBuf = audio.createBuffer(1, audio.sampleRate * 0.4, audio.sampleRate);
+                const d = noiseBuf.getChannelData(0);
+                for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+            } catch (e) { audio = null; }
+        }
+        function tone(type, f0, f1, dur, vol) {
+            const t = audio.currentTime;
+            const o = audio.createOscillator(), g = audio.createGain();
+            o.type = type;
+            o.frequency.setValueAtTime(f0, t);
+            o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            o.connect(g).connect(audio.destination);
+            o.start(t); o.stop(t + dur);
+        }
+        function noise(dur, vol, freq) {
+            const t = audio.currentTime;
+            const s = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+            s.buffer = noiseBuf;
+            f.type = 'lowpass'; f.frequency.value = freq;
+            g.gain.setValueAtTime(vol, t);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            s.connect(f).connect(g).connect(audio.destination);
+            s.start(t); s.stop(t + dur);
+        }
+        function sfx(name) {
+            if (!audio || muted) return;
+            switch (name) {
+                case 'punch':   noise(0.08, 0.25, 1200); break;
+                case 'hit':     noise(0.15, 0.4, 700); tone('square', 180, 60, 0.12, 0.08); break;
+                case 'block':   tone('triangle', 900, 600, 0.08, 0.12); break;
+                case 'shoot':   tone('square', 1400, 500, 0.1, 0.05); break;
+                case 'burst':   tone('sawtooth', 200, 900, 0.25, 0.1); noise(0.25, 0.25, 2000); break;
+                case 'vortex':  tone('sawtooth', 90, 40, 0.6, 0.15); tone('sine', 300, 1200, 0.5, 0.08); break;
+                case 'clash':   tone('triangle', 2000, 1200, 0.1, 0.1); break;
+                case 'jump':    tone('sine', 300, 600, 0.12, 0.05); break;
+                case 'bell':    tone('sine', 880, 870, 0.5, 0.12); break;
+                case 'ko':      tone('sawtooth', 300, 40, 0.9, 0.15); break;
+            }
+        }
+
+        // ---------- State ----------
+        let state = 'menu';          // menu | intro | fight | roundEnd | gameOver | paused
+        let stateTimer = 0;
+        let pausedFrom = null;
+        let round = 1, roundTimer = ROUND_FRAMES;
+        let kaito, ryn, projectiles = [], particles = [], floaters = [];
+        let shake = 0, banner = '', frameCount = 0;
+        const held = { left: false, right: false, jump: false, block: false };
+        const queued = [];
+
+        function createFighter(o) {
             return {
-                ...opts,
-                vy: 0,
-                onGround: true,
-                facing: 1,
-                cooldown: 0,
-                comboWindow: 0,
-                alive: true,
+                name: o.name, x: o.x, y: GROUND, color: o.color, scarf: o.scarf,
+                ai: !!o.ai, wins: o.wins || 0,
+                hp: 100, hpShown: 100, energy: 0,
+                vy: 0, walk: 0, kb: 0, onGround: true, facing: o.x < W / 2 ? 1 : -1,
+                cooldown: 0, comboWindow: 0, stun: 0, hitFlash: 0, attackAnim: 0, attackKind: '',
+                blocking: false, anim: 0,
+                // AI brain
+                think: 0, move: 0, blockTimer: 0, pending: null,
             };
         }
 
-        let naruto, sasuke, projectiles, running = false;
-
-        function resetGame() {
-            naruto = createFighter({ x: 160, y: ground, color: '#ffdd57', name: 'Naruto', hp: 100 });
-            sasuke = createFighter({ x: WIDTH - 160, y: ground, color: '#7180ff', name: 'Sasuke', hp: 100, ai: true });
-            projectiles = [];
+        function newMatch() {
+            initAudio();
+            round = 1;
+            kaito = createFighter({ name: 'Kaito', x: 180, color: '#ffb703', scarf: '#e63946' });
+            ryn = createFighter({ name: 'Ryn', x: W - 180, color: '#6c7cff', scarf: '#e0e1dd', ai: true });
             logEl.innerHTML = '';
-            updateHPUI();
-            running = true;
+            log(`New match on ${difficultyEl.value} difficulty. First to ${WINS_NEEDED} rounds wins.`);
+            startRound();
         }
 
-        function log(message) {
+        function startRound() {
+            const kw = kaito.wins, rw = ryn.wins;
+            kaito = createFighter({ name: 'Kaito', x: 180, color: '#ffb703', scarf: '#e63946', wins: kw });
+            ryn = createFighter({ name: 'Ryn', x: W - 180, color: '#6c7cff', scarf: '#e0e1dd', ai: true, wins: rw });
+            projectiles = []; particles = []; floaters = [];
+            queued.length = 0;
+            roundTimer = ROUND_FRAMES;
+            setState('intro', 100);
+            banner = `Round ${round}`;
+            sfx('bell');
+        }
+
+        function setState(s, timer = 0) { state = s; stateTimer = timer; }
+
+        function log(msg) {
             const div = document.createElement('div');
-            div.textContent = message;
+            div.textContent = msg;
             logEl.prepend(div);
-            while (logEl.childNodes.length > 30) logEl.removeChild(logEl.lastChild);
+            while (logEl.childNodes.length > 40) logEl.removeChild(logEl.lastChild);
         }
 
-        function updateHPUI() {
-            const nHP = Math.max(Math.min(naruto.hp, 100), 0);
-            const sHP = Math.max(Math.min(sasuke.hp, 100), 0);
-            hpUI.narutoBar.style.width = nHP + '%';
-            hpUI.sasukeBar.style.width = sHP + '%';
-            hpUI.narutoLabel.textContent = nHP;
-            hpUI.sasukeLabel.textContent = sHP;
-        }
+        // ---------- Combat ----------
+        function opponentOf(f) { return f === kaito ? ryn : kaito; }
+        function canAct(f) { return f.cooldown === 0 && f.stun === 0 && !f.blocking && f.hp > 0; }
 
-        function handleInput() {
-            if (!running) return;
-            const speed = 3.5;
-            if (keys['a']) naruto.x -= speed;
-            if (keys['d']) naruto.x += speed;
-            naruto.x = Math.max(30, Math.min(WIDTH - 30, naruto.x));
-
-            if (keys['w'] && naruto.onGround) {
-                naruto.vy = -12;
-                naruto.onGround = false;
+        function punch(f) {
+            if (!canAct(f)) return;
+            const foe = opponentOf(f);
+            f.cooldown = 20; f.comboWindow = 32;
+            f.attackAnim = 10; f.attackKind = 'punch';
+            sfx('punch');
+            const inFront = Math.sign(foe.x - f.x) === f.facing || Math.abs(foe.x - f.x) < 10;
+            if (inFront && Math.abs(foe.x - f.x) < 84 && Math.abs(foe.y - f.y) < 60) {
+                damage(foe, f, 8, 'Palm Strike', 6, 10);
             }
-
-            if (naruto.cooldown > 0) naruto.cooldown--;
-            if (naruto.comboWindow > 0) naruto.comboWindow--;
         }
 
-        function attack(attacker, target, type) {
-            if (attacker.cooldown > 0 || !attacker.alive || !target.alive) return;
-            if (type === 'punch') {
-                attacker.cooldown = 20;
-                SFX.punch.currentTime = 0; SFX.punch.play();
-                if (Math.abs(attacker.x - target.x) < 70) {
-                    target.hp -= 10;
-                    log(`${attacker.name} lands a Chakra Punch! (-10)`);
+        function shoot(f) {
+            if (!canAct(f)) return;
+            const foe = opponentOf(f);
+            if (f.comboWindow > 0) {
+                // Spiral Burst: only lands at close range
+                f.cooldown = 40; f.comboWindow = 0;
+                f.attackAnim = 18; f.attackKind = 'burst';
+                sfx('burst');
+                spawnRing(f.x + f.facing * 40, f.y - 40, '#8ecae6', 22);
+                if (Math.abs(foe.x - f.x) < 95 && Math.abs(foe.y - f.y) < 70) {
+                    damage(foe, f, 16, 'Spiral Burst', 14, 22);
                 } else {
-                    log(`${attacker.name} whiffs the punch.`);
+                    log(`${f.name}'s Spiral Burst misses.`);
                 }
-                attacker.comboWindow = 25;
+                return;
             }
-            if (type === 'kunai') {
-                attacker.cooldown = 30;
-                SFX.whoosh.currentTime = 0; SFX.whoosh.play();
-                const dir = attacker.facing;
-                projectiles.push({ x: attacker.x, y: attacker.y - 30, vx: 6 * dir, owner: attacker.name });
-                if (attacker.comboWindow > 0) {
-                    // combo finisher
-                    attacker.cooldown = 50;
-                    target.hp -= 20;
-                    SFX.rasengan.currentTime = 0; SFX.rasengan.play();
-                    log(`${attacker.name} unleashes Rasengan! (-20)`);
-                    attacker.comboWindow = 0;
-                } else {
-                    log(`${attacker.name} throws a kunai.`);
-                }
-            }
-            updateHPUI();
-            checkEnd();
+            if (projectiles.filter(p => p.owner === f && p.kind === 'star').length >= 3) return;
+            f.cooldown = 24;
+            f.attackAnim = 8; f.attackKind = 'throw';
+            sfx('shoot');
+            projectiles.push({ owner: f, kind: 'star', x: f.x + f.facing * 28, y: f.y - 42, vx: 8 * f.facing, r: 7, dmg: 6, spin: 0 });
         }
 
-        function aiLogic() {
-            if (!sasuke.alive || !running) return;
-            const distance = sasuke.x - naruto.x;
-            sasuke.facing = distance > 0 ? -1 : 1;
-            // movement
-            if (Math.abs(distance) > 140) sasuke.x += Math.sign(-distance) * 2.5;
-            else if (Math.abs(distance) < 90) sasuke.x += Math.sign(distance) * 2;
+        function special(f) {
+            if (!canAct(f) || f.energy < SPECIAL_COST) return;
+            f.energy -= SPECIAL_COST;
+            f.cooldown = 45;
+            f.attackAnim = 20; f.attackKind = 'special';
+            sfx('vortex');
+            shake = Math.max(shake, 6);
+            log(`${f.name} unleashes a Vortex Blast!`);
+            projectiles.push({ owner: f, kind: 'vortex', x: f.x + f.facing * 40, y: f.y - 42, vx: 5.5 * f.facing, r: 22, dmg: 18, spin: 0 });
+        }
 
-            // jump over projectiles
-            const incoming = projectiles.some(p => p.owner !== 'Sasuke' && Math.abs(p.x - sasuke.x) < 60);
-            if (incoming && sasuke.onGround) {
-                sasuke.vy = -10;
-                sasuke.onGround = false;
+        function damage(target, attacker, amount, label, knock, stun = 12) {
+            if (target.hp <= 0) return;
+            const facingAttacker = Math.sign(attacker.x - target.x) === target.facing;
+            let dealt = amount;
+            if (target.blocking && facingAttacker) {
+                dealt = Math.max(1, Math.round(amount * 0.25));
+                target.kb = attacker.facing * knock * 0.3;
+                sfx('block');
+                spawnSparks(target.x - target.facing * -20, target.y - 45, '#caf0f8', 8);
+                floatText(target.x, target.y - 90, `-${dealt} guard`, '#caf0f8');
+                log(`${target.name} guards the ${label}. (-${dealt})`);
+            } else {
+                target.stun = stun;
+                target.hitFlash = 14;
+                target.kb = Math.sign(target.x - attacker.x || attacker.facing) * knock;
+                if (knock > 10 && target.onGround) { target.vy = -6; target.onGround = false; }
+                sfx('hit');
+                shake = Math.max(shake, Math.min(10, amount * 0.5));
+                spawnSparks(target.x, target.y - 45, attacker.color, 14);
+                floatText(target.x, target.y - 90, `-${dealt}`, '#ffd166');
+                log(`${attacker.name} lands ${label}! (-${dealt})`);
+            }
+            target.hp = Math.max(0, target.hp - dealt);
+            attacker.energy = Math.min(100, attacker.energy + dealt * 1.2);
+            target.energy = Math.min(100, target.energy + dealt * 0.6);
+            if (target.hp === 0) endRound(attacker, 'KO');
+        }
+
+        function endRound(winner, how) {
+            if (state !== 'fight') return;
+            if (winner) {
+                winner.wins++;
+                banner = how === 'KO' ? 'K.O.!' : 'Time!';
+                log(`${winner.name} wins round ${round} by ${how === 'KO' ? 'knockout' : 'decision'}.`);
+            } else {
+                banner = 'Draw';
+                log(`Round ${round} is a draw.`);
+            }
+            sfx(how === 'KO' ? 'ko' : 'bell');
+            if (how === 'KO') shake = 14;
+            setState('roundEnd', 150);
+        }
+
+        // ---------- AI ----------
+        function aiStep(ai) {
+            const d = DIFFICULTY[difficultyEl.value] || DIFFICULTY.normal;
+            const foe = opponentOf(ai);
+            const dx = foe.x - ai.x, dist = Math.abs(dx);
+
+            // Notice incoming projectiles once each, then react after a delay.
+            for (const p of projectiles) {
+                if (p.owner === ai || p.seen) continue;
+                const toward = Math.sign(ai.x - p.x) === Math.sign(p.vx);
+                if (toward && Math.abs(ai.x - p.x) < 280) {
+                    p.seen = true;
+                    if (Math.random() < d.dodgeChance && !ai.pending) {
+                        const jump = p.kind === 'vortex' ? Math.random() < 0.8 : Math.random() < 0.55;
+                        const eta = Math.abs(ai.x - p.x) / Math.abs(p.vx);
+                        ai.pending = { t: Math.max(0, Math.min(d.react * 0.6, eta - 14)), action: jump ? 'jump' : 'block' };
+                    }
+                }
+            }
+            if (ai.pending && --ai.pending.t <= 0) {
+                if (ai.pending.action === 'jump') tryJump(ai);
+                else ai.blockTimer = 26;
+                ai.pending = null;
             }
 
-            // attack logic
-            if (sasuke.cooldown > 0) sasuke.cooldown--;
-            if (sasuke.comboWindow > 0) sasuke.comboWindow--;
-            if (Math.abs(distance) < 80) attack(sasuke, naruto, 'punch');
-            else if (Math.abs(distance) < 220 && sasuke.cooldown === 0) attack(sasuke, naruto, 'kunai');
+            // Periodic decisions about movement and guarding.
+            if (--ai.think <= 0) {
+                ai.think = d.react + Math.floor(Math.random() * d.react);
+                const toward = Math.sign(dx);
+                const r = Math.random();
+                if (dist > 280) ai.move = toward;
+                else if (dist < 100) ai.move = r < 0.45 ? -toward : (r < 0.7 ? 0 : toward);
+                else ai.move = r < 0.4 ? toward : (r < 0.7 ? 0 : -toward);
+                if (dist < 90 && foe.cooldown === 0 && Math.random() < d.blockChance) ai.blockTimer = 18;
+                if (difficultyEl.value === 'hard' && dist > 200 && Math.random() < 0.15) tryJump(ai);
+            }
 
-            // desperation dash when low
-            if (sasuke.hp < 40 && Math.random() < 0.02 && sasuke.onGround) {
-                sasuke.vy = -8;
-                sasuke.x += sasuke.facing * 40;
+            if (ai.blockTimer > 0) ai.blockTimer--;
+            ai.blocking = ai.blockTimer > 0 && ai.stun === 0;
+            ai.walk = ai.blocking || ai.stun ? 0 : ai.move * d.speed;
+
+            if (!canAct(ai)) return;
+            if (ai.comboWindow > 0 && dist < 90 && Math.random() < d.comboChance) shoot(ai);
+            else if (dist < 80) { if (Math.random() < d.punchRate) punch(ai); }
+            else if (ai.energy >= SPECIAL_COST && dist > 180 && Math.random() < d.specialRate) special(ai);
+            else if (dist > 110 && Math.random() < d.shootRate) shoot(ai);
+        }
+
+        // ---------- Player ----------
+        function tryJump(f) {
+            if (f.onGround && f.stun === 0 && !f.blocking) {
+                f.vy = -12.5; f.onGround = false;
+                if (!f.ai) sfx('jump');
             }
         }
 
+        function playerStep(f) {
+            f.blocking = held.block && f.stun === 0 && f.onGround;
+            const dir = (held.right ? 1 : 0) - (held.left ? 1 : 0);
+            f.walk = f.blocking || f.stun ? 0 : dir * 3.6;
+            if (held.jump) tryJump(f);
+            while (queued.length) {
+                const a = queued.shift();
+                if (a === 'punch') punch(f);
+                else if (a === 'shoot') shoot(f);
+                else if (a === 'special') special(f);
+            }
+        }
+
+        // ---------- Simulation ----------
         function physics(f) {
+            f.x += f.walk + f.kb;
+            f.kb *= 0.82;
+            if (Math.abs(f.kb) < 0.05) f.kb = 0;
             if (!f.onGround) {
                 f.vy += GRAVITY;
                 f.y += f.vy;
-                if (f.y >= ground) { f.y = ground; f.onGround = true; f.vy = 0; }
+                if (f.y >= GROUND) { f.y = GROUND; f.vy = 0; f.onGround = true; }
             }
+            f.x = Math.max(30, Math.min(W - 30, f.x));
+            if (f.walk !== 0 && f.onGround) f.anim += 0.25;
+            if (f.cooldown > 0) f.cooldown--;
+            if (f.comboWindow > 0) f.comboWindow--;
+            if (f.stun > 0) f.stun--;
+            if (f.hitFlash > 0) f.hitFlash--;
+            if (f.attackAnim > 0) f.attackAnim--;
+            f.hpShown += (f.hp - f.hpShown) * 0.06;
+            if (state === 'fight') f.energy = Math.min(100, f.energy + 0.03);
+        }
+
+        function separate() {
+            const dx = ryn.x - kaito.x;
+            const overlapY = Math.abs(ryn.y - kaito.y) < 60;
+            if (overlapY && Math.abs(dx) < 44) {
+                const push = (44 - Math.abs(dx)) / 2;
+                const s = dx === 0 ? 1 : Math.sign(dx);
+                kaito.x -= push * s; ryn.x += push * s;
+                kaito.x = Math.max(30, Math.min(W - 30, kaito.x));
+                ryn.x = Math.max(30, Math.min(W - 30, ryn.x));
+            }
+        }
+
+        function updateProjectiles() {
+            for (const p of projectiles) { p.x += p.vx; p.spin += 0.4; }
+
+            // Projectile vs projectile
+            for (let i = 0; i < projectiles.length; i++) {
+                for (let j = i + 1; j < projectiles.length; j++) {
+                    const a = projectiles[i], b = projectiles[j];
+                    if (a.dead || b.dead || a.owner === b.owner) continue;
+                    if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r) {
+                        if (a.kind === b.kind) { a.dead = b.dead = true; }
+                        else if (a.kind === 'vortex') b.dead = true;
+                        else a.dead = true;
+                        sfx('clash');
+                        spawnSparks((a.x + b.x) / 2, (a.y + b.y) / 2, '#ffffff', 10);
+                    }
+                }
+            }
+
+            // Projectile vs fighters
+            for (const p of projectiles) {
+                if (p.dead) continue;
+                const t = opponentOf(p.owner);
+                const left = t.x - 20, right = t.x + 20, top = t.y - 72, bottom = t.y;
+                const cx = Math.max(left, Math.min(p.x, right));
+                const cy = Math.max(top, Math.min(p.y, bottom));
+                if (Math.hypot(p.x - cx, p.y - cy) < p.r) {
+                    p.dead = true;
+                    damage(t, p.owner, p.dmg, p.kind === 'vortex' ? 'Vortex Blast' : 'Throwing Star', p.kind === 'vortex' ? 16 : 5, p.kind === 'vortex' ? 24 : 8);
+                }
+                if (p.x < -40 || p.x > W + 40) p.dead = true;
+            }
+            projectiles = projectiles.filter(p => !p.dead);
+        }
+
+        function updateEffects() {
+            for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += p.g; p.life--; }
+            particles = particles.filter(p => p.life > 0);
+            for (const f of floaters) { f.y -= 0.8; f.life--; }
+            floaters = floaters.filter(f => f.life > 0);
+            shake *= 0.85;
+            if (shake < 0.3) shake = 0;
+        }
+
+        function spawnSparks(x, y, color, n) {
+            for (let i = 0; i < n; i++) {
+                const a = Math.random() * Math.PI * 2, s = 1.5 + Math.random() * 4;
+                particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, g: 0.15, life: 20 + Math.random() * 15, max: 35, color, size: 2 + Math.random() * 3 });
+            }
+        }
+        function spawnRing(x, y, color, n) {
+            for (let i = 0; i < n; i++) {
+                const a = (i / n) * Math.PI * 2;
+                particles.push({ x, y, vx: Math.cos(a) * 4, vy: Math.sin(a) * 4, g: 0, life: 18, max: 18, color, size: 3 });
+            }
+        }
+        function floatText(x, y, text, color) { floaters.push({ x, y, text, color, life: 50 }); }
+
+        function update() {
+            frameCount++;
+            if (state === 'paused' || state === 'menu') return;
+
+            if (state === 'intro') {
+                if (--stateTimer === 40) banner = 'Fight!';
+                if (stateTimer <= 0) setState('fight');
+            }
+
+            if (state === 'fight') {
+                playerStep(kaito);
+                aiStep(ryn);
+                if (--roundTimer <= 0) {
+                    const w = kaito.hp === ryn.hp ? null : (kaito.hp > ryn.hp ? kaito : ryn);
+                    endRound(w, 'time');
+                }
+            } else {
+                kaito.walk = ryn.walk = 0;
+                kaito.blocking = ryn.blocking = false;
+                queued.length = 0;
+            }
+
+            if (kaito.hp > 0 && ryn.hp > 0) {
+                kaito.facing = kaito.x <= ryn.x ? 1 : -1;
+                ryn.facing = -kaito.facing;
+            }
+            physics(kaito); physics(ryn);
+            separate();
+            if (state === 'fight') updateProjectiles();
+            updateEffects();
+
+            if (state === 'roundEnd' && --stateTimer <= 0) {
+                if (kaito.wins >= WINS_NEEDED || ryn.wins >= WINS_NEEDED) {
+                    const champ = kaito.wins > ryn.wins ? kaito : ryn;
+                    banner = champ === kaito ? 'You win!' : 'Ryn wins';
+                    log(`${champ.name} wins the match ${champ.wins}–${opponentOf(champ).wins}. Press Enter for a rematch.`);
+                    setState('gameOver');
+                } else {
+                    round++;
+                    startRound();
+                }
+            }
+        }
+
+        // ---------- Rendering ----------
+        const stars = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * 230, s: Math.random() * 1.6 + 0.3, t: Math.random() * 6 }));
+
+        function drawBackground() {
+            const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+            sky.addColorStop(0, '#0d1b2a');
+            sky.addColorStop(0.7, '#1b263b');
+            sky.addColorStop(1, '#415a77');
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, W, H);
+
+            for (const s of stars) {
+                ctx.globalAlpha = 0.4 + 0.4 * Math.sin(frameCount * 0.03 + s.t);
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(s.x, s.y, s.s, s.s);
+            }
+            ctx.globalAlpha = 1;
+
+            // Moon
+            ctx.fillStyle = '#f1faee';
+            ctx.beginPath(); ctx.arc(780, 120, 34, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(241,250,238,0.08)';
+            ctx.beginPath(); ctx.arc(780, 120, 60, 0, Math.PI * 2); ctx.fill();
+
+            // Distant hills
+            ctx.fillStyle = '#22334d';
+            ctx.beginPath(); ctx.moveTo(0, GROUND - 40);
+            for (let x = 0; x <= W; x += 40) ctx.lineTo(x, GROUND - 60 - Math.sin(x * 0.012) * 30 - Math.sin(x * 0.031) * 12);
+            ctx.lineTo(W, GROUND); ctx.lineTo(0, GROUND); ctx.fill();
+
+            // Ground
+            ctx.fillStyle = '#1b263b';
+            ctx.fillRect(0, GROUND, W, H - GROUND);
+            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < W; i += 60) {
+                ctx.beginPath(); ctx.moveTo(i, GROUND); ctx.lineTo(i + 20, H); ctx.stroke();
+            }
+            ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+            ctx.beginPath(); ctx.moveTo(0, GROUND); ctx.lineTo(W, GROUND); ctx.stroke();
         }
 
         function drawFighter(f) {
-            ctx.fillStyle = f.color;
-            ctx.fillRect(f.x - 25, f.y - 60, 50, 60);
+            const flash = f.hitFlash > 0 && f.hitFlash % 4 < 2;
+            const air = GROUND - f.y;
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.beginPath();
+            ctx.ellipse(f.x, GROUND + 4, Math.max(10, 24 - air * 0.08), 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.save();
+            ctx.translate(f.x, f.y);
+            if (f.hp <= 0) { ctx.rotate(-f.facing * Math.PI / 2 * 0.9); ctx.translate(0, 10); }
+
+            // Scarf trailing behind
+            ctx.strokeStyle = f.scarf;
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(0, -58);
+            for (let i = 1; i <= 4; i++) {
+                ctx.lineTo(-f.facing * i * 9, -58 + Math.sin(frameCount * 0.2 + i) * 3 + i * 2);
+            }
+            ctx.stroke();
+
+            // Legs
+            const swing = f.onGround ? Math.sin(f.anim) * 8 : 6;
+            ctx.strokeStyle = '#1d1d1d';
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(-6, -24); ctx.lineTo(-8 + swing, 0);
+            ctx.moveTo(6, -24); ctx.lineTo(8 - swing, 0);
+            ctx.stroke();
+
+            // Body
+            ctx.fillStyle = flash ? '#ffffff' : f.color;
+            roundRect(-16, -56, 32, 36, 8);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.fillRect(-16, -32, 32, 5); // belt
+
+            // Arm (extends when attacking)
+            let reach = 10;
+            if (f.attackAnim > 0) reach = f.attackKind === 'punch' ? 30 : f.attackKind === 'burst' ? 34 : 24;
+            ctx.strokeStyle = flash ? '#ffffff' : f.color;
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(f.facing * 8, -46);
+            ctx.lineTo(f.facing * (8 + reach), -44 + (f.blocking ? -10 : 0));
+            ctx.stroke();
+
+            // Head
+            ctx.fillStyle = flash ? '#ffffff' : '#f2cc8f';
+            ctx.beginPath(); ctx.arc(0, -68, 12, 0, Math.PI * 2); ctx.fill();
+            // Hair
+            ctx.fillStyle = f.ai ? '#22223b' : '#3d2c1e';
+            ctx.beginPath(); ctx.arc(0, -72, 12, Math.PI, 0); ctx.fill();
+            // Headband
+            ctx.fillStyle = f.scarf;
+            ctx.fillRect(-12, -72, 24, 4);
+            // Eye
             ctx.fillStyle = '#111';
-            ctx.fillRect(f.x - (f.facing === 1 ? -5 : 15), f.y - 45, 20, 8); // headband
-            ctx.fillStyle = 'rgba(255,255,255,0.6)';
-            ctx.fillRect(f.x - 18, f.y - 25, 36, 14); // torso band
+            ctx.fillRect(f.facing * 5 - 2, -67, 4, 3);
+
+            // Guard shield
+            if (f.blocking) {
+                ctx.strokeStyle = 'rgba(202,240,248,0.85)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, -40, 40, f.facing === 1 ? -Math.PI / 3 : Math.PI * 2 / 3, f.facing === 1 ? Math.PI / 3 : Math.PI * 4 / 3);
+                ctx.stroke();
+            }
+
+            // Charged aura when special is ready
+            if (f.energy >= SPECIAL_COST && f.hp > 0) {
+                ctx.strokeStyle = `rgba(142,202,230,${0.25 + 0.2 * Math.sin(frameCount * 0.15)})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.ellipse(0, -40, 28, 48, 0, 0, Math.PI * 2); ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function roundRect(x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
         }
 
         function drawProjectiles() {
-            ctx.fillStyle = '#f08c00';
-            for (let i = projectiles.length - 1; i >= 0; i--) {
-                const p = projectiles[i];
-                p.x += p.vx;
-                ctx.fillRect(p.x - 6, p.y - 6, 12, 12);
-                const hitSasuke = p.owner === 'Naruto' && Math.abs(p.x - sasuke.x) < 24 && Math.abs(p.y - sasuke.y) < 40;
-                const hitNaruto = p.owner === 'Sasuke' && Math.abs(p.x - naruto.x) < 24 && Math.abs(p.y - naruto.y) < 40;
-                if (hitSasuke) {
-                    sasuke.hp -= 6; projectiles.splice(i,1); log('Kunai hits Sasuke! (-6)'); updateHPUI(); checkEnd();
-                    continue;
+            for (const p of projectiles) {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                if (p.kind === 'star') {
+                    ctx.rotate(p.spin);
+                    ctx.fillStyle = p.owner.ai ? '#c8d0ff' : '#ffd166';
+                    ctx.beginPath();
+                    for (let i = 0; i < 8; i++) {
+                        const r = i % 2 === 0 ? p.r + 2 : p.r * 0.4;
+                        const a = (i / 8) * Math.PI * 2;
+                        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                    }
+                    ctx.closePath(); ctx.fill();
+                } else {
+                    const g = ctx.createRadialGradient(0, 0, 2, 0, 0, p.r);
+                    g.addColorStop(0, '#ffffff');
+                    g.addColorStop(0.4, p.owner.ai ? '#9fa8ff' : '#8ecae6');
+                    g.addColorStop(1, 'rgba(142,202,230,0)');
+                    ctx.fillStyle = g;
+                    ctx.beginPath(); ctx.arc(0, 0, p.r + Math.sin(p.spin) * 2, 0, Math.PI * 2); ctx.fill();
+                    ctx.rotate(p.spin);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.arc(0, 0, p.r * 0.6, 0, Math.PI * 1.2); ctx.stroke();
                 }
-                if (hitNaruto) {
-                    naruto.hp -= 6; projectiles.splice(i,1); log('Kunai hits Naruto! (-6)'); updateHPUI(); checkEnd();
-                    continue;
-                }
-                if (p.x < 0 || p.x > WIDTH) projectiles.splice(i,1);
+                ctx.restore();
             }
         }
 
-        function drawBackground() {
-            ctx.fillStyle = '#1b263b';
-            ctx.fillRect(0, 320, WIDTH, 140);
-            ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-            ctx.lineWidth = 2;
-            for (let i = 0; i < WIDTH; i += 60) {
-                ctx.beginPath();
-                ctx.moveTo(i, 320);
-                ctx.lineTo(i + 20, 420);
-                ctx.stroke();
+        function drawEffects() {
+            for (const p of particles) {
+                ctx.globalAlpha = Math.max(0, p.life / p.max);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+            }
+            ctx.globalAlpha = 1;
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 18px "Segoe UI", sans-serif';
+            for (const f of floaters) {
+                ctx.globalAlpha = Math.min(1, f.life / 20);
+                ctx.fillStyle = f.color;
+                ctx.fillText(f.text, f.x, f.y);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function drawBar(x, y, w, h, frac, ghost, color, rtl) {
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(x, y, w, h);
+            const gw = w * Math.max(0, ghost), fw = w * Math.max(0, frac);
+            ctx.fillStyle = 'rgba(255,255,255,0.55)';
+            ctx.fillRect(rtl ? x + w - gw : x, y, gw, h);
+            ctx.fillStyle = color;
+            ctx.fillRect(rtl ? x + w - fw : x, y, fw, h);
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.fillRect(0, 0, W, 64);
+            const bw = 360;
+            drawBar(20, 26, bw, 16, kaito.hp / 100, kaito.hpShown / 100, kaito.color, false);
+            drawBar(W - 20 - bw, 26, bw, 16, ryn.hp / 100, ryn.hpShown / 100, ryn.color, true);
+            drawBar(20, 46, bw * 0.6, 6, kaito.energy / 100, 0, kaito.energy >= SPECIAL_COST ? '#8ecae6' : '#4a6fa5', false);
+            drawBar(W - 20 - bw * 0.6, 46, bw * 0.6, 6, ryn.energy / 100, 0, ryn.energy >= SPECIAL_COST ? '#8ecae6' : '#4a6fa5', true);
+
+            ctx.font = 'bold 14px "Segoe UI", sans-serif';
+            ctx.fillStyle = '#f7fafc';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Kaito (You)  ${Math.ceil(kaito.hp)}`, 20, 18);
+            ctx.textAlign = 'right';
+            ctx.fillText(`${Math.ceil(ryn.hp)}  Ryn (AI)`, W - 20, 18);
+
+            // Round pips
+            for (let i = 0; i < WINS_NEEDED; i++) {
+                ctx.fillStyle = i < kaito.wins ? '#ffd166' : 'rgba(255,255,255,0.2)';
+                ctx.beginPath(); ctx.arc(20 + bw - 8 - i * 18, 54, 5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = i < ryn.wins ? '#ffd166' : 'rgba(255,255,255,0.2)';
+                ctx.beginPath(); ctx.arc(W - 20 - bw + 8 + i * 18, 54, 5, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Timer
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 30px "Segoe UI", sans-serif';
+            const secs = Math.ceil(roundTimer / 60);
+            ctx.fillStyle = secs <= 10 && state === 'fight' ? '#ef476f' : '#f7fafc';
+            ctx.fillText(String(secs), W / 2, 40);
+            ctx.font = '12px "Segoe UI", sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillText(`Round ${round}`, W / 2, 58);
+        }
+
+        function drawOverlay() {
+            let big = '', small = '';
+            if (state === 'menu') { big = 'Shuriken Showdown'; small = 'Press Enter or Start match'; }
+            else if (state === 'intro' || state === 'roundEnd') big = banner;
+            else if (state === 'paused') { big = 'Paused'; small = 'Press P to resume'; }
+            else if (state === 'gameOver') { big = banner; small = `${kaito.wins} – ${ryn.wins}   ·   Press Enter for a rematch`; }
+            if (!big) return;
+            if (state !== 'intro' && state !== 'roundEnd') {
+                ctx.fillStyle = 'rgba(11,19,43,0.6)';
+                ctx.fillRect(0, 64, W, H - 64);
+            }
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 54px "Segoe UI", sans-serif';
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+            ctx.strokeText(big, W / 2, 230);
+            ctx.fillStyle = '#ffd166';
+            ctx.fillText(big, W / 2, 230);
+            if (small) {
+                ctx.font = '20px "Segoe UI", sans-serif';
+                ctx.fillStyle = '#f7fafc';
+                ctx.fillText(small, W / 2, 272);
             }
         }
 
-        function checkEnd() {
-            if (naruto.hp <= 0 || sasuke.hp <= 0) {
-                running = false;
-                naruto.alive = naruto.hp > 0;
-                sasuke.alive = sasuke.hp > 0;
-                const winner = naruto.hp > sasuke.hp ? 'Naruto' : 'Sasuke';
-                log(`${winner} wins! Press Start to play again.`);
-            }
-        }
-
-        function loop() {
-            ctx.clearRect(0, 0, WIDTH, canvas.height);
+        function render() {
+            ctx.save();
+            if (shake) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
             drawBackground();
-            handleInput();
-            aiLogic();
-            physics(naruto); physics(sasuke);
-            naruto.facing = naruto.x < sasuke.x ? 1 : -1;
-            drawFighter(naruto); drawFighter(sasuke);
+            drawFighter(kaito);
+            drawFighter(ryn);
             drawProjectiles();
-            requestAnimationFrame(loop);
+            drawEffects();
+            ctx.restore();
+            drawHUD();
+            drawOverlay();
+        }
+
+        // ---------- Main loop (fixed 60 Hz simulation) ----------
+        const STEP = 1000 / 60;
+        let last = performance.now(), acc = 0;
+        function frame(now) {
+            acc += Math.min(now - last, 250);
+            last = now;
+            while (acc >= STEP) { update(); acc -= STEP; }
+            render();
+            requestAnimationFrame(frame);
+        }
+
+        // ---------- Input ----------
+        const HOLD_KEYS = {
+            a: 'left', arrowleft: 'left',
+            d: 'right', arrowright: 'right',
+            w: 'jump', arrowup: 'jump',
+            s: 'block', arrowdown: 'block',
+        };
+        const TAP_KEYS = { j: 'punch', k: 'shoot', l: 'special' };
+
+        function startOrRestart() {
+            if (state === 'menu' || state === 'gameOver') newMatch();
+        }
+        function togglePause() {
+            if (state === 'paused') { setState(pausedFrom.state, pausedFrom.timer); pausedFrom = null; }
+            else if (state === 'fight' || state === 'intro') { pausedFrom = { state, timer: stateTimer }; setState('paused'); }
+            document.getElementById('pauseBtn').textContent = state === 'paused' ? 'Resume' : 'Pause';
         }
 
         document.addEventListener('keydown', (e) => {
-            keys[e.key.toLowerCase()] = true;
-            if (e.key.toLowerCase() === 'j') attack(naruto, sasuke, 'punch');
-            if (e.key.toLowerCase() === 'k') attack(naruto, sasuke, 'kunai');
+            const k = e.key.toLowerCase();
+            if (HOLD_KEYS[k] || TAP_KEYS[k] || k === ' ') e.preventDefault();
+            if (HOLD_KEYS[k]) held[HOLD_KEYS[k]] = true;
+            if (e.repeat) return;
+            if (TAP_KEYS[k] && state === 'fight') queued.push(TAP_KEYS[k]);
+            if (k === 'enter') startOrRestart();
+            if (k === 'p' || k === 'escape') togglePause();
         });
-        document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
-        document.getElementById('startBtn').addEventListener('click', resetGame);
+        document.addEventListener('keyup', (e) => {
+            const k = e.key.toLowerCase();
+            if (HOLD_KEYS[k]) held[HOLD_KEYS[k]] = false;
+        });
+        window.addEventListener('blur', () => {
+            for (const k in held) held[k] = false;
+            if (state === 'fight') togglePause();
+        });
 
-        resetGame();
-        loop();
+        document.querySelectorAll('#touch [data-hold]').forEach(btn => {
+            const name = btn.dataset.hold;
+            const on = (e) => { e.preventDefault(); initAudio(); held[name] = true; };
+            const off = (e) => { e.preventDefault(); held[name] = false; };
+            btn.addEventListener('pointerdown', on);
+            btn.addEventListener('pointerup', off);
+            btn.addEventListener('pointerleave', off);
+            btn.addEventListener('pointercancel', off);
+        });
+        document.querySelectorAll('#touch [data-tap]').forEach(btn => {
+            btn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                initAudio();
+                if (state === 'fight') queued.push(btn.dataset.tap);
+                else startOrRestart();
+            });
+        });
+        canvas.addEventListener('pointerdown', () => { initAudio(); startOrRestart(); });
+
+        document.getElementById('startBtn').addEventListener('click', (e) => { e.target.blur(); newMatch(); });
+        document.getElementById('pauseBtn').addEventListener('click', (e) => { e.target.blur(); togglePause(); });
+        document.getElementById('muteBtn').addEventListener('click', (e) => {
+            e.target.blur();
+            muted = !muted;
+            e.target.textContent = `Sound: ${muted ? 'off' : 'on'}`;
+        });
+        difficultyEl.addEventListener('change', () => difficultyEl.blur());
+
+        // ---------- Boot ----------
+        kaito = createFighter({ name: 'Kaito', x: 180, color: '#ffb703', scarf: '#e63946' });
+        ryn = createFighter({ name: 'Ryn', x: W - 180, color: '#6c7cff', scarf: '#e0e1dd', ai: true });
+        log('Press Enter or Start match to begin.');
+
+        // Small hook for automated testing.
+        window.__game = { get state() { return state; }, get kaito() { return kaito; }, get ryn() { return ryn; }, get projectiles() { return projectiles; }, newMatch };
+
+        requestAnimationFrame(frame);
+    })();
     </script>
 </body>
 </html>
