@@ -354,14 +354,15 @@
   }
   Game.resize = function () { cam.sized = false; resize(); };
 
-  var fitBox = null;
-  // Fit to what the player must reach: walkable tops (all mechanism values), handles and the beacon, plus headroom for Wick.
-  function computeFitBox() {
-    var minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
-    function add(x, y, z, ex, ey) {
+  var fitBox = null, fullBox = null;
+  // walk box: what the player must reach (walkable tops over all mechanism values, handles, beacon, Wick's headroom).
+  // full box: every block and decor item, so crowns and domes are fitted when there is room.
+  function computeBoxes() {
+    var W = { minX: 1e9, maxX: -1e9, minY: 1e9, maxY: -1e9 }, F = { minX: 1e9, maxX: -1e9, minY: 1e9, maxY: -1e9 };
+    function add(B, x, y, z, ex, ey) {
       var sx = (x - z) / SQ2, sy = (-x + 2 * y - z) / SQ6;
-      if (sx - ex < minX) minX = sx - ex; if (sx + ex > maxX) maxX = sx + ex;
-      if (sy - ey < minY) minY = sy - ey; if (sy + ey > maxY) maxY = sy + ey;
+      if (sx - ex < B.minX) B.minX = sx - ex; if (sx + ex > B.maxX) B.maxX = sx + ex;
+      if (sy - ey < B.minY) B.minY = sy - ey; if (sy + ey > B.maxY) B.maxY = sy + ey;
     }
     var out = [0, 0, 0];
     Object.keys(Game.groups).forEach(function (id) {
@@ -369,48 +370,54 @@
       var vals = g.kind === "static" ? [0] : g.values;
       vals.forEach(function (v) {
         g.blocks.forEach(function (b) {
+          var c = b.cell;
+          mechPointArr(g, v, c[0] + 0.5, c[1] + 0.5, c[2] + 0.5, out); add(F, out[0], out[1], out[2], 0.7071, 0.8165);
           if (b.kind === "veil" || b.walk === false) return;
-          var c = b.cell, top = b.kind === "stair" ? 0.5 : 1;
+          var top = b.kind === "stair" ? 0.5 : 1;
           mechPointArr(g, v, c[0] + 0.5, c[1] + top, c[2] + 0.5, out);
-          add(out[0], out[1], out[2], 0.7071, 0.41); add(out[0], out[1] + 0.9, out[2], 0.3, 0.1); // tile diamond + Wick's head
+          add(W, out[0], out[1], out[2], 0.7071, 0.41); add(W, out[0], out[1] + 0.9, out[2], 0.3, 0.1);
         });
-        if (g.handle) { mechPointArr(g, v, g.handle.ref[0], g.handle.ref[1], g.handle.ref[2], out); if (g.handle.on !== "self") { out[0] = g.handle.ref[0]; out[1] = g.handle.ref[1]; out[2] = g.handle.ref[2]; } add(out[0], out[1], out[2], 0.45, 0.45); }
+        if (g.handle) { mechPointArr(g, v, g.handle.ref[0], g.handle.ref[1], g.handle.ref[2], out); if (g.handle.on !== "self") { out[0] = g.handle.ref[0]; out[1] = g.handle.ref[1]; out[2] = g.handle.ref[2]; } add(W, out[0], out[1], out[2], 0.45, 0.45); add(F, out[0], out[1], out[2], 0.45, 0.45); }
       });
     });
     (Game.level.decor || []).forEach(function (d) {
-      if (d.type !== "beacon") return;
-      var gr = Game.groups[d.group || "base"] || Game.groups.base, v = gr.kind !== "static" ? gr.values[0] : 0, at = d.at;
+      var gr = Game.groups[d.group || "base"] || Game.groups.base, v = gr.kind !== "static" ? gr.values[0] : 0, at = itemAt(d);
       mechPointArr(gr, v, at[0] + 0.5, at[1] + 0.5, at[2] + 0.5, out);
-      add(out[0], out[1] + 1.2, out[2], 0.6, 1.0);
+      var tall = d.type === "beacon" || d.type === "dome" || d.type === "finial" || d.type === "streetlamp" || d.type === "tree" ? 1.6 : 0.6;
+      add(F, out[0], out[1], out[2], 0.5, 0.5 + tall * 0.5);
+      if (d.type === "beacon") add(W, out[0], out[1] + 1.2, out[2], 0.6, 1.0);
     });
-    if (minX > maxX) { minX = -3; maxX = 3; minY = -3; maxY = 3; }
-    return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
+    [W, F].forEach(function (B) { if (B.minX > B.maxX) { B.minX = -3; B.maxX = 3; B.minY = -3; B.maxY = 3; } });
+    return { walk: W, full: F };
   }
-
-  var MIN_TILE_PX = 34;
+  function minTilePx() {
+    var coarse = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches);
+    return (coarse || Math.min(cam.w, cam.h) < 600) ? 34 : 22; // touch targets need 34 px; a desktop mouse can go smaller
+  }
+  function viewFor(L) { var v = L.view; if (!v) return null; if (cam.a < 1 && v.portrait) return v.portrait; return v; }
   function fitCamera() {
     if (!Game.level || !fitBox) { cam.H = 14; cam.base = 14; positionCamera(); return; }
-    var L = Game.level, ins = Game.insets, bw = fitBox.maxX - fitBox.minX, bh = fitBox.maxY - fitBox.minY;
-    var top = ins.top, bot = ins.bottom, side = ins.side;
+    var L = Game.level, ins = Game.insets, top = ins.top, bot = ins.bottom, side = ins.side;
     var availW = Math.max(60, cam.w - 2 * side), availH = Math.max(60, cam.h - top - bot);
-    var s = Math.max(bw * 1.1 / availW, bh * 1.1 / availH); // world units per px
-    var Hfit = Math.max(s * cam.h, 6), H = Hfit;
-    var Hmax = cam.h * SQ2 / MIN_TILE_PX; // a tile diamond (1.414 units wide) must be at least MIN_TILE_PX px wide
+    var Hmax = cam.h * SQ2 / minTilePx(); // a tile diamond (1.414 units wide) must be at least minTilePx px wide
+    function Hof(B) { return Math.max(Math.max((B.maxX - B.minX) * 1.1 / availW, (B.maxY - B.minY) * 1.1 / availH) * cam.h, 6); }
+    var B = fullBox, H = Hof(fullBox);
     cam.canPan = false;
-    if (H > Hmax) { H = Hmax; cam.canPan = true; }
-    var upp = H / cam.h, boxcx = (fitBox.minX + fitBox.maxX) / 2, boxcy = (fitBox.minY + fitBox.maxY) / 2;
+    if (H > Hmax) { B = fitBox; H = Hof(fitBox); if (H > Hmax) { H = Hmax; cam.canPan = true; } } // else keep crowns in view; keel bleeds off the bottom
+    var upp = H / cam.h, bw = B.maxX - B.minX, bh = B.maxY - B.minY, boxcx = (B.minX + B.maxX) / 2, boxcy = (B.minY + B.maxY) / 2;
     var cx = boxcx, cy = boxcy + (top - bot) / 2 * upp;
     cam.panLim = { x0: 0, x1: 0, y0: 0, y1: 0 };
     if (cam.canPan) {
       var uhw = availW / 2 * upp, uhh = availH / 2 * upp;
-      if (bw > 2 * uhw) { cam.panLim.x0 = fitBox.minX + uhw - boxcx; cam.panLim.x1 = fitBox.maxX - uhw - boxcx; }
-      if (bh > 2 * uhh) { cam.panLim.y0 = fitBox.minY + uhh - boxcy; cam.panLim.y1 = fitBox.maxY - uhh - boxcy; }
+      if (bw > 2 * uhw) { cam.panLim.x0 = B.minX + uhw - boxcx; cam.panLim.x1 = B.maxX - uhw - boxcx; }
+      if (bh > 2 * uhh) { cam.panLim.y0 = B.minY + uhh - boxcy; cam.panLim.y1 = B.maxY - uhh - boxcy; }
     }
-    if (L.view && L.view.center) {
-      var c = L.view.center; toSXY(c[0], c[1], c[2], _sxy); cx = _sxy.x; cy = _sxy.y;
-      var vh = L.view.height || 14;
-      H = vh * Math.max(1, (16 / 9) / cam.a); cam.canPan = false;
-    }
+    var v = viewFor(L);
+    if (v && v.center) { // level.view: height is the VISIBLE world height
+      toSXY(v.center[0], v.center[1], v.center[2], _sxy); cx = _sxy.x; cy = _sxy.y;
+      if (v.height > 0) H = v.height;
+      cam.canPan = false;
+    } else if (v && v.height > 0) { H = v.height; cam.canPan = false; }
     if (cam.title) { if (cam.a < 1) cy += 1.5; else cx -= 0.14 * H * cam.a; } // title: clear the wordmark (portrait) / sit right of centre (landscape)
     cam.base = H; cam.cx0 = cx; cam.cy0 = cy; cam.upp = H / cam.h;
     clampPan();
@@ -520,6 +527,12 @@
   function normVal(g, v) { return g.kind === "rotor" ? ((Math.round(v) % 360) + 360) % 360 : Math.round(v * 1000) / 1000; }
 
   // ------------------------------------------------------------------ level loading
+  // decor items normally have `at`; strut/chain place themselves from `from`/`to`
+  function itemAt(it) {
+    if (it.at) return it.at;
+    if (it.from && it.to) return [(it.from[0] + it.to[0]) / 2, (it.from[1] + it.to[1]) / 2, (it.from[2] + it.to[2]) / 2];
+    return it.from || it.to || [0, 0, 0];
+  }
   function hashStr(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
   function expandBlocks(gd) {
@@ -563,7 +576,7 @@
   function decorWorldPos(entry, target) {
     var it = entry.item, f = FACES[it.face || "+y"] || FACES["+y"], v = target || new THREE.Vector3();
     var node = entry.node;
-    v.set(it.at[0] + 0.5 + f[0] * 0.5, it.at[1] + 0.5 + f[1] * 0.5, it.at[2] + 0.5 + f[2] * 0.5);
+    var ia = itemAt(it); v.set(ia[0] + 0.5 + f[0] * 0.5, ia[1] + 0.5 + f[1] * 0.5, ia[2] + 0.5 + f[2] * 0.5);
     if (entry.beacon) {
       if (!entry.bb) { entry.object3D.updateWorldMatrix(true, true); entry.bb = new THREE.Box3().setFromObject(entry.object3D); }
       // beacon flame: centre of the decor's box, taken in reference space at load
@@ -609,7 +622,7 @@
     var BGU = THREE.BufferGeometryUtils, byGroup = {}, inv = new THREE.Matrix4(), rel = new THREE.Matrix4();
     Game.decor.forEach(function (e) {
       if (e.handleOf) return; // handles animate with the mechanism; keep as they are
-      var item = e.item, ctx = { theme: theme, quality: Game.quality, seed: hashStr(def.id + ":" + item.type + ":" + item.at.join(",")) };
+      var item = e.item, ctx = { theme: theme, quality: Game.quality, seed: hashStr(def.id + ":" + item.type + ":" + itemAt(item).join(",")) };
       var list = meshesOf(e.object3D); if (!list.length) return;
       var dyn = probeDynamic(item, ctx, list.length); if (!dyn) return;
       var g = Game.groups[e.group]; g.contentNode.updateMatrixWorld(true);
@@ -710,7 +723,7 @@
     });
     // decor
     function buildDecor(item, g, extra) {
-      var ctx = { theme: theme, quality: Game.quality, seed: hashStr(def.id + ":" + item.type + ":" + item.at.join(",")) };
+      var ctx = { theme: theme, quality: Game.quality, seed: hashStr(def.id + ":" + item.type + ":" + itemAt(item).join(",")) };
       var obj = null;
       if (mods.decor) obj = safe(function () { return Decor.build(item, ctx); }, "Decor.build " + item.type);
       if (!obj) obj = safe(function () { return fallbackDecor(item); }, "fallbackDecor");
@@ -757,7 +770,7 @@
       var bb = new THREE.Box3().setFromObject(e.object3D), c = bb.getCenter(new THREE.Vector3());
       var inv = e.node.worldToLocal(c.clone());
       // fall back to a point above the cell if the box is empty
-      if (!isFinite(inv.x) || bb.isEmpty()) inv.set(e.item.at[0] + 0.5, e.item.at[1] + 1.2, e.item.at[2] + 0.5);
+      if (!isFinite(inv.x) || bb.isEmpty()) inv.set(itemAt(e.item)[0] + 0.5, itemAt(e.item)[1] + 1.2, itemAt(e.item)[2] + 0.5);
       e.flame = [inv.x, inv.y, inv.z];
     });
     w.plates.forEach(function (p) {
@@ -808,7 +821,7 @@
       safe(function () { var b = w.bounds(); World.fit({ min: b.min, max: [b.max[0] - 1, b.max[1] - 1, b.max[2] - 1] }); }, "World.fit");
     }
     fitFallbackLights(w.bounds());
-    fitBox = computeFitBox();
+    var bx = computeBoxes(); fitBox = bx.walk; fullBox = bx.full;
     cam.zoomK = (Game.reducedMotion || TEST) ? 1 : 1.14; cam.introT = 0; cam.panX = 0; cam.panY = 0; queuedWalk = null; panDrag = null;
     fitCamera();
 

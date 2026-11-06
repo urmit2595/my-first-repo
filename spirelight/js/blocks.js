@@ -185,7 +185,7 @@
   }
   Blocks.init = function (three, rend) {
     THREE = three || window.THREE; renderer = rend || null;
-    texCache = {}; matCache = {}; windowMats = [];
+    texCache = {}; matCache = {}; windowMats = []; veilMats = [];
     if (!Blocks.basePath) {
       let base = "assets/tex/";
       try {
@@ -206,9 +206,14 @@
     return Promise.all(jobs).then(() => { Blocks.ready = true; Blocks.textures = texCache; }, () => { Blocks.ready = true; });
   };
 
+  let veilMats = [];
   function getMat(key, low) {
     const ck = key + (low ? "_L" : "");
     if (matCache[ck]) return matCache[ck];
+    if (key === "veilRim") {
+      const rm = new THREE.MeshBasicMaterial({ color: 0xa8d0ff, side: THREE.BackSide, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false });
+      rm.name = "blocks:veilRim"; veilMats.push(rm); return (matCache[ck] = rm);
+    }
     const d = MAT[key] || MAT.sandstone;
     const p = { roughness: d.rough, metalness: d.metal, vertexColors: !d.emissive };
     const map = d.canvas ? texCache[d.canvas] : texCache[d.tex];
@@ -231,6 +236,8 @@
     try {
       const k = Blocks.windowGlow * (0.95 + 0.05 * Math.sin(t * 1.7) + 0.02 * Math.sin(t * 5.3));
       for (const m of windowMats) m.emissiveIntensity = 1.5 * k;
+      const vp = 0.2 + 0.07 * Math.sin(t * 1.1) + 0.03 * Math.sin(t * 2.7 + 1);
+      for (const m of veilMats) m.opacity = vp;
     } catch (e) { /* ignore */ }
   };
   // Call with scene.environment (or null). When World provides one, Blocks stops overriding it.
@@ -671,19 +678,24 @@
   Builder.prototype.column = function (blk) {
     const c = this.cell, tint = this.tint = tintFor(this, "column", 0), cx = c[0] + 0.5, cz = c[2] + 0.5, y = c[1];
     this.styleBody = "marble";
-    const below = this.occ(c[0], c[1] - 1, c[2]) && (this.map.get(c[0] + "," + (c[1] - 1) + "," + c[2]) || {}).style === "column";
+    const veil = blk.kind === "veil";
+    const below = !veil && this.occ(c[0], c[1] - 1, c[2]) && (this.map.get(c[0] + "," + (c[1] - 1) + "," + c[2]) || {}).style === "column";
     const above = this.occ(c[0], c[1] + 1, c[2]) && (this.map.get(c[0] + "," + (c[1] + 1) + "," + c[2]) || {}).style === "column";
     const seg = this.low ? 24 : 48, fl = this.low ? 0 : 10, fd = this.low ? 0 : 0.07;
     const F = [1, 1, 0, 1, 1, 1], M = Array(6).fill("marble"), warm = [tint[0] * 1.02, tint[1] * 0.96, tint[2] * 0.9];
     const full = (y0, y1, ins, bev, tn) => this.box([c[0] + ins, y + y0, c[2] + ins], [c[0] + 1 - ins, y + y1, c[2] + 1 - ins], bev, M, [1, 1, y0 === 0 ? 1 : 0, 1, 1, 1], 7, { tint: tn || tint, aoOff: true });
-    if (!below) { full(0, 0.07, 0.04, 0.015, warm); this.cyl(cx, cz, y + 0.07, y + 0.16, 0.45, 0.40, seg, 0, 0, "marble", warm, true, false, 0.85); }
-    const sy0 = below ? 0 : 0.16, sy1 = above ? 1 : 0.8;
+    if (veil) { // floating pillar: dark neck / shadow gap at the base, no plinth
+      this.cyl(cx, cz, y + 0.0, y + 0.07, 0.27, 0.27, seg, 0, 0, "iron", [0.14, 0.12, 0.17], true, false, 1);
+      this.cyl(cx, cz, y + 0.07, y + 0.14, 0.4, 0.38, seg, 0, 0, "marble", warm, true, true, 0.85);
+    } else if (!below) { full(0, 0.07, 0.04, 0.015, warm); this.cyl(cx, cz, y + 0.07, y + 0.16, 0.45, 0.40, seg, 0, 0, "marble", warm, true, false, 0.85); }
+    const sy0 = veil ? 0.14 : below ? 0 : 0.16, sy1 = above ? 1 : 0.8;
     this.cyl(cx, cz, y + sy0, y + sy1, 0.37, 0.36, seg, fl, fd, "marble", tint, false, false, below ? 1 : 0.8);
     if (!above) {
       this.cyl(cx, cz, y + 0.8, y + 0.86, 0.4, 0.4, seg, 0, 0, "marble", warm, true, false, 1);
       this.cyl(cx, cz, y + 0.86, y + 0.93, 0.37, 0.46, seg, 0, 0, "marble", warm, false, false, 1);
-      full(0.93, 1.0, 0.04, 0.015, warm);
+      full(0.93, 1.0, veil ? 0.0 : 0.04, 0.015, warm); // veil capital overhangs to the cell edge
     }
+    if (veil && !this.low) this.cyl(cx, cz, y + 0.14, y + 0.8, 0.395, 0.385, seg, 0, 0, "veilRim", [1, 1, 1], false, false, 1);
   };
 
   // ---- hedge -----------------------------------------------------------------------------------------------------------------------------------------
@@ -696,11 +708,12 @@
   }
   Builder.prototype.isHedge = function (x, y, z) { const b = this.map.get(x + "," + y + "," + z); return !!b && b.style === "hedge"; };
   // Adjacent hedge cells share smooth, un-rounded joins and one continuous lumpy noise field: a single leafy mass.
-  Builder.prototype.hedge = function (blk) {
+  Builder.prototype.hedge = function (blk, rimPass) {
+    const veil = blk.kind === "veil", vs = veil && !rimPass ? 0.94 : 1;
     const c = this.cell, N = this.low ? 4 : 10, R = 0.2, inner = 0.5 - R;
     const j = this.h(0, 70) - 0.5, tint = this.tint = [1 + j * 0.05, 1 + j * 0.04, 1 + j * 0.05];
     this.styleBody = "hedge";
-    const b = this.buf("hedge"), sd = this.seed + 77;
+    const b = this.buf(rimPass ? "veilRim" : "hedge"), sd = this.seed + 77;
     const nbr = [[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0], [0, 0, -1], [0, 0, 1]];
     const hasN = nbr.map(d => this.isHedge(c[0] + d[0], c[1] + d[1], c[2] + d[2]));
     for (let fi = 0; fi < 6; fi++) {
@@ -718,6 +731,7 @@
         const n1 = vnoise(W[0] * 5.3, W[1] * 5.3, W[2] * 5.3, sd), n2 = vnoise(W[0] * 11.7 + 9, W[1] * 11.7, W[2] * 11.7, sd + 1);
         const lump = (n1 - 0.5) * 0.13 + (n2 - 0.5) * 0.06 + 0.02;
         W[0] += n[0] * lump; W[1] += n[1] * lump; W[2] += n[2] * lump;
+        if (vs !== 1) { W[0] = c[0] + 0.5 + (W[0] - c[0] - 0.5) * vs; W[2] = c[2] + 0.5 + (W[2] - c[2] - 0.5) * vs; W[1] = c[1] + 0.06 + (W[1] - c[1]) * 0.94 * vs; }
         const col = this.color(a, s, W, tint), crev = 0.62 + 0.62 * Math.max(0, Math.min(1, (n1 * 0.65 + n2 * 0.35) * 1.15 - 0.05));
         const uvp = a === 1 ? [W[0], W[2]] : a === 0 ? [W[2], W[1]] : [W[0], W[1]];
         b.pos.push(W[0], W[1], W[2]); b.nor.push(n[0], n[1], n[2]);
@@ -745,8 +759,8 @@
       g.setIndex(bf.idx);
       const m = new THREE.Mesh(g, getMat(k, low));
       m.name = "blocks:" + k;
-      const decal = k === "decal" || k === "grime";
-      m.castShadow = !decal && k !== "window"; m.receiveShadow = true;
+      const decal = k === "decal" || k === "grime" || k === "veilRim";
+      m.castShadow = !decal && k !== "window"; m.receiveShadow = !(k === "veilRim");
       if (decal) { m.userData.cutout = true; m.renderOrder = 1; }
       root.add(m);
     }
@@ -770,7 +784,7 @@
         try {
           if (blk.kind === "stair" || blk.up && blk.kind !== "veil") S.stair(bb);
           else if (bb.style === "column") S.column(bb);
-          else if (bb.style === "hedge") S.hedge(bb);
+          else if (bb.style === "hedge") { S.hedge(bb); if (bb.kind === "veil" && !S.low) S.hedge(bb, true); }
           else S.cube(bb);
         } catch (e) { console.warn("[blocks] block failed", blk.cell, e); }
       }
