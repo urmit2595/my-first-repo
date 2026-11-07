@@ -5640,3 +5640,132 @@ a2-sim-second.log
 a2-sim-third.log
 a2-sim.js
 
+exec
+/bin/bash -lc "node -e \"console.log(require.resolve('three'))\"; ls js; sed -n '140,155p' index.html; sed -n '145,210p' js/finale.js; ls /tmp/*three*" in /home/user/my-first-repo/squad-surge
+ exited 2 in 0ms:
+node:internal/modules/cjs/loader:1433
+  throw err;
+  ^
+
+Error: Cannot find module 'three'
+Require stack:
+- /home/user/my-first-repo/squad-surge/[eval]
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1430:15)
+    at Function.resolve (node:internal/modules/helpers:157:19)
+    at [eval]:1:21
+    at runScriptInThisContext (node:internal/vm:209:10)
+    at node:internal/process/execution:446:12
+    at [eval]-wrapper:6:24
+    at runScriptInContext (node:internal/process/execution:444:60)
+    at evalFunction (node:internal/process/execution:279:30)
+    at evalTypeScript (node:internal/process/execution:291:3)
+    at node:internal/main/eval_string:74:3 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ '/home/user/my-first-repo/squad-surge/[eval]' ]
+}
+
+Node.js v22.23.4
+finale.js
+juice.js
+meta.js
+objects3d.js
+powerups.js
+scenery.js
+  <div class="weapon-tag" id="weaponTag" hidden><img id="weaponImg" src="assets/w-pistol.png" alt=""><span id="weaponName">PISTOL</span></div>
+
+  <div class="belt" id="belt" hidden>
+    <button class="belt-slot empty" id="belt0" data-slot="0" aria-label="Empty slot 1"><img alt="" hidden><small>1 / Q</small></button>
+    <button class="belt-slot empty" id="belt1" data-slot="1" aria-label="Empty slot 2"><img alt="" hidden><small>2 / E</small></button>
+    <button class="surge-button" id="surgeButton" hidden>SURGE READY</button>
+    <div class="swap-chip" id="swapChip" hidden><img id="swapIcon" alt=""> SWAP? <small>tap a slot</small></div>
+  </div>
+  <div class="home" id="home">
+    <div class="logo" id="logo"><img id="logoImg" src="assets/ui/logo.webp" alt="Squad Surge" hidden><b>SQUAD</b><b>SURGE</b></div>
+    <div>
+      <div class="hint"><div class="pill">HOLD &amp; DRAG <span class="arrows"><i>◀</i><i>▶</i></span></div><div class="line"></div>
+        <svg class="hand" viewBox="0 0 24 24" fill="#fff" stroke="#0d1630" stroke-width="1.2"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10h.5V8.5a1.5 1.5 0 0 1 3 0V10h.5v-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.6 14a1.5 1.5 0 0 1 2.4-1.8L9 14z"/></svg></div>
+      <button class="btn go playbtn stroke" id="playBtn">PLAY</button>
+    </div>
+  </div>
+    C.bus.emit("bonusWall", { index: w.i, mult: w.mult, cost: w.cost });
+    if (last) { C.slowMo(0.35, 0.5, true); C.bus.emit("explosion", { x: 0, z: w.z, radius: 6 }); r.final = true; }
+    r.phase = "pause"; r.t = 0;
+  }
+
+  function onTick(e) {
+    const r = run; if (!r || C.state !== "bonus") return;
+    const L = r.L, dt = e.dt * r.speed;
+    r.elapsed += e.dt;
+    L.targetX = 0; L.sx += (0 - L.sx) * Math.min(1, dt * 6);
+    // shards (game time)
+    for (let i = r.shards.length - 1; i >= 0; i--) {
+      const s = r.shards[i]; s.t += dt;
+      for (const p of s.list) { p.vy -= 16 * dt; p.m.position.x += p.vx * dt; p.m.position.y = Math.max(0.05, p.m.position.y + p.vy * dt); p.m.position.z -= p.vz * dt * 0.35; p.m.rotation.x += p.rx * dt; p.m.rotation.y += p.ry * dt; }
+      s.mat.opacity = Math.max(0, 0.9 * (1 - s.t / 1.1));
+      if (s.t > 1.1) { for (const p of s.list) C.track.remove(p.m); r.shards.splice(i, 1); }
+    }
+    for (const w of r.walls) if (!w.broken) { const a = 0.55 + 0.1 * Math.sin(r.elapsed * 5 + w.i); w.haloM.opacity = a; }
+    const w = r.walls[r.idx];
+    if (r.phase === "charge") {
+      const target = stopZ(w);
+      L.sz = Math.max(target, L.sz - RUN_SPEED * dt);
+      if (L.sz <= target + 0.01) {
+        if (L.soldiers.length >= w.cost) breakWall(w);
+        else { r.phase = "fail"; r.t = 0; C.sfx("bad"); C.vibe(40); C.floatText(0, 3.4, w.z, "NEED " + w.cost, "#ff6a5a"); }
+      }
+    } else if (r.phase === "pause") {
+      r.t += dt;
+      if (r.t >= STOP_T) {
+        r.idx++;
+        if (r.final || r.idx >= r.walls.length) { r.phase = "celebrate"; r.t = 0; } else r.phase = "charge";
+      }
+    } else if (r.phase === "fail") {
+      r.t += dt;
+      w.shake = 1 - r.t / FAIL_T;
+      w.body.position.x = Math.sin(r.t * 60) * 0.18 * Math.max(0, w.shake);
+      w.panelM.emissiveIntensity = 1.1 + Math.random() * 0.8 * Math.max(0, w.shake);
+      L.shake = Math.max(L.shake, 0.18);
+      if (r.t >= FAIL_T) { r.phase = "celebrate"; r.t = 0; }
+    } else if (r.phase === "celebrate") {
+      if (r.t === 0 && r.lastBroken >= 0 && !r.final) { /* ran out before the end */ }
+      if (r.t === 0 && r.lastBroken < 0) C.floatText(0, 3.4, L.sz - 3, "x1", "#ffffff");
+      r.t += dt;
+      if (r.t >= CELEBRATE_T) finish();
+    }
+  }
+
+  function onFrame(e) {
+    const r = run; if (!r || e.state !== "bonus") return;
+    r.camK += (1 - r.camK) * Math.min(1, (e.realDt || e.dt || 0.016) * 3);
+    e.camera.position.y += 2.2 * r.camK; e.camera.position.z += 3.2 * r.camK;
+    e.look.z -= 3 * r.camK;
+    e.camera.lookAt(e.look);
+  }
+
+  function finish() {
+    const r = run; if (!r) return;
+    const mult = r.mult, C0 = C;
+    C0.bus.emit("bonusEnd", { mult });
+    cleanup();
+    C0.finishLevel(mult);
+  }
+
+  function cleanup() {
+    const r = run; run = null;
+    if (!r) return;
+ls: cannot access '/tmp/*three*': No such file or directory
+
+exec
+/bin/bash -lc "rg --files /tmp /home/user /usr/local/lib/node_modules -g '*three*' -g '*r128*' -g 'AGENTS.md' 2>/dev/null" in /home/user/my-first-repo/squad-surge
+ exited 2 in 2052ms:
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.module.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.module.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/three-0.128.0.tgz
+
+exec
+/bin/bash -lc 'cp index.html /tmp/e1-baseline.html; cp js/objects3d.js /tmp/e1-objects-baseline.js; cp js/powerups.js /tmp/e1-powerups-baseline.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:

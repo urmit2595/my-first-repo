@@ -953,3 +953,6 @@ design/briefs/tactics-A2.log:2011:s=s.replace('  await new Promise(resolve => se
 design/briefs/tactics-A.log:5206:H.setState('boss');H.L.boss.z=H.L.sz-20;H.useSurge();assert.equal(H.ctx.surgeReady,false);assert.equal(H.L.tactics.surgePerfect,1);assert(events.some(e=>e[0]==='powerupUse'&&e[1].type==='surge'&&e[1].perfect));
 design/briefs/tactics-A.log:5284:  assert(events.some(e => e[0] === '"'tacticsCoach' && e[1].kind === first.counter));
 
+codex
+The generator’s opening boosts and jackpots would overwhelm the campaign’s difficulty curve. I’m using modest starting squads, limited gains, and recovery missions between pressure spikes. I’ll also document the event format and distinguish static balance checks from win-rate targets that need the campaign bot.
+
