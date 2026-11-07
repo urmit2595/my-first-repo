@@ -526,7 +526,7 @@ function usePowerup(slot) {
   bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
   window.Powerups?.activate(type); return true;
 }
-function threatLossLeft(t) { return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }
+function threatLossLeft(t) { if (t.countered) return 0; return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }
 function announceThreat(t) {
   t.announced = true; Obj3D.threatSign(t);
   bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
@@ -536,15 +536,18 @@ function liveThreat(t) {
   t.startSquad = L.soldiers.length;
   t.lossCap = Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));
   if (t.kind === "swarm") {
-    const count = clamp(Math.round(t.startSquad * 0.3), 12 + 3 * L.level, 90);
+    const count = Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3)));
     for (let i = 0; i < count; i++) {
       const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
+      e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6);
+      e.dmg = Math.max(e.dmg, Math.ceil(t.startSquad * 0.015));
+      e.sp *= 1.5;
       e.threat = t; L.enemies.push(e); t.actors.push(e);
     }
   } else if (t.kind === "barricade") {
-    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, 70 + L.level * 8, { threat: t }));
+    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, Math.max(70 + L.level * 8, t.startSquad * 25), { threat: t }));
   } else if (t.kind === "mortars") {
-    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z, 22 + L.level * 4, { threat: t }));
+    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z - 32, Math.max(22 + L.level * 4, t.startSquad * 8), { threat: t }));
   }
   bus.emit("threatLive", { id: t.id, kind: t.kind }); coachCounter(); updateBeltHUD();
 }
@@ -577,7 +580,7 @@ function updateTactics(dt) {
     if (t.shellT > 0) {
       t.shellT -= dt;
       const u = Math.min(1, 1 - t.shellT / 0.65);
-      t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.z + (t.targetZ - t.z) * u);
+      t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.fromZ + (t.targetZ - t.fromZ) * u);
       if (t.shellT <= 0) {
         t.vis.shell.visible = t.vis.ring.visible = false;
         if (L.shieldT <= 0 && Math.abs(L.sx - t.targetX) < 2.8) {
@@ -592,7 +595,7 @@ function updateTactics(dt) {
     if (t.shotT <= 0 && t.age < 5.3) {
       let tower = null; for (const o of t.actors) if (o.alive) { tower = o; break; }
       if (tower) {
-        t.shotT = 0.7; t.shellT = 0.65; t.fromX = tower.x; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.65;
+        t.shotT = 0.7; t.shellT = 0.65; t.fromX = tower.x; t.fromZ = tower.z; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.65;
         t.vis.ring.position.set(t.targetX, 0.09, t.targetZ); t.vis.ring.visible = t.vis.shell.visible = true;
       }
     }
@@ -638,7 +641,7 @@ function generateLevel(level, opts = {}) {
   const gates = [], solids = [], enemies = [];
   const threats = [];
   if (level >= 2) {
-    const count = level >= 6 ? 3 : 2, kinds = level >= 4 ? ["swarm", "barricade", "mortars"] : level >= 3 ? ["swarm", "barricade"] : ["swarm"];
+    const count = level >= 7 ? 4 : level >= 4 ? 3 : 2, kinds = level >= 4 ? ["swarm", "barricade", "mortars"] : level >= 3 ? ["swarm", "barricade"] : ["swarm"];
     for (let i = 0; i < count; i++) {
       const kind = i === 0 && level <= 4 ? kinds[kinds.length - 1] : kinds[(i + level) % kinds.length];
       threats.push({ id: `road-${i}`, kind, counter: THREAT_COUNTER[kind], z: -100 - i * (length - 165) / (count - 1), announced: false, live: false, done: false, countered: false, lost: 0, actors: [], age: 0, shotT: 0, shellT: 0, gap: rj() < 0.5 ? -1 : 1, teaching: i === 0 && level <= 4 });
@@ -674,7 +677,9 @@ function generateLevel(level, opts = {}) {
         const tool = level >= 3 && threatIndex === 1;
         const jackpot = !tool && ((needJackpot && !jackpots) || rj() < jackChance);
         if (jackpot) jackpots++;
-        gates.push(makeGate(supplyZ + (tool ? 0 : 14), jackpot ? ["+", 40 + 8 * d, { jackpot: true }] : ["+", 10 + d * 2], tool ? ["tool", nextThreat.counter] : ["+", 12 + d * 2]));
+        // Build the squad before the threat sequence; later supply drops still arrive just in time.
+        const gateZ = level >= 4 ? -40 - threatIndex * 8 : supplyZ + (tool ? 0 : 14);
+        gates.push(makeGate(gateZ, jackpot ? ["+", 40 + 8 * d, { jackpot: true }] : ["+", 10 + d * 2], tool ? ["tool", nextThreat.counter] : ["+", 12 + d * 2]));
         nextThreat.tool = tool;
         z = nextThreat.z - 37; threatIndex++; continue;
       }
@@ -1151,6 +1156,8 @@ function breakSolid(o, earned) {
   if (o.weapon) { if (o.weapon > L.weapon) setWeapon(o.weapon); floatText(o.x, 2.6, o.z, WEAPONS[L.weapon].name + "!", "#ffe066"); sfx("win"); vibe(60); }
 }
 function hitEnemy(e, dmg) {
+  // Dense swarms resist ordinary fire; the matching airstrike removes that resistance.
+  if (e.threat && e.threat.kind === "swarm" && !e.threat.countered) dmg *= 0.2;
   e.hp -= dmg; e.flash = 0.07; bus.emit("enemyHit", { e });
   if (e.hp <= 0) {
     e.state = "dying"; e.dieT = 0; bus.emit("enemyDie", { e }); onKill(e);
@@ -1198,7 +1205,7 @@ function renderLevels() {
 function win() {
   if (state !== "boss" && state !== "bonus") return;
   const n = L.bossSoldiers || L.soldiers.length, kept = Math.min(1, n / Math.max(1, L.peakSquad));
-  const keptPct = Math.round(kept * 100), stars = n >= 30 + L.level * 10 && kept >= 0.65 ? 3 : n >= 10 + L.level * 3 && kept >= 0.35 ? 2 : 1;
+  const keptPct = Math.floor(kept * 100), stars = n >= 30 + L.level * 10 && kept >= 0.65 ? 3 : n >= 10 + L.level * 3 && kept >= 0.35 ? 2 : 1;
   const normal = L.mode === "normal", total = Math.round(L.score * (L.mult || 1));
   const newBest = normal && n > (save.bestSquad[L.level] || 0), bestScore = normal ? save.bestScore[L.level] || 0 : 0, newBestScore = normal && total > bestScore;
   if (normal) {
