@@ -148,7 +148,15 @@ window.Powerups = (() => {
   }
   function onGenerate(ev) {
     L = ev.L; reset(); S.plan = []; S.barrels = [];
-    planAirdrops(ev.rng, ev.level, ev.length); planBarrels(ev.rng, ev.level, ev.length);
+    if (ev.level === 1) planAirdrops(ev.rng, ev.level, ev.length);
+    else for (let i = 0; i < L.threats.length; i++) {
+      const t = L.threats[i]; if (t.tool) continue;
+      // Alternating fork drops: the second icon is a different tool, never a disguised copy.
+      const fork = i === 0 ? ev.level % 2 === 0 : ev.level % 2 !== 0;
+      const alternatives = ["airstrike", "giant", "shield"].filter(k => k !== t.counter);
+      S.plan.push({ x: fork ? -3.3 : 0, z: t.z + 43, lead: 35, powerup: t.counter, other: fork ? alternatives[Math.floor(ev.rng() * 2)] : null, guaranteed: t.teaching, fired: false, o: null });
+    }
+    planBarrels(ev.rng, ev.level, ev.length);
   }
 
   // ---------------------------------------------------------------- airdrop sequence
@@ -159,7 +167,8 @@ window.Powerups = (() => {
   }
   function landDrop(d) {
     const p = d.p; d.landed = true; d.ct = 0;
-    const o = C.spawnSolid("airdrop", p.x, p.z, 12 + 4 * L.level, { powerup: p.powerup }); p.o = o;
+    const o = C.spawnSolid("airdrop", p.x, p.z, 8 + 2 * L.level, { powerup: p.powerup }); p.o = o;
+    if (p.other) p.otherO = C.spawnSolid("airdrop", 3.3, p.z, 8 + 2 * L.level, { powerup: p.other });
     chuteM.geometry = chuteGeoCanopy; chuteM.scale.set(CH_W, CH_H * 0.7, 1);
     L.fx.push({ x: p.x, y: 0.5, z: p.z + 0.5, f: 4, t: 0, dur: 0.3, size: 3 }); ring(p.x, p.z, 0.6, 3.4, 0.45, 0xd9c7a0, false, 0.7);
     if (!C.save.seenAirdrop) { C.save.seenAirdrop = true; try { C.persist(); } catch (e) {} addLabel(o, "SHOOT IT!", "#ffe066", 5.1); }
@@ -187,7 +196,11 @@ window.Powerups = (() => {
     if (type !== "jackpot") C.floatText(x, 3.3, z, NAMES[type], type === "shield" ? "#7fe0ff" : type === "giant" ? "#ffb347" : "#ff8a5a");
     if (type === "shield") { S.shieldDur = 6; C.setShield(6); ring(x, z, 1, 7, 0.6, 0x5ad8ff, true, 0.9); }
     else if (type === "giant") { S.giantDur = 6; C.setGiant(6); S.giantRingT = 0; L.shake = Math.max(L.shake, 0.25); }
-    else if (type === "airstrike") startStrike();
+    else if (type === "airstrike") {
+      // Boss damage is exactly 18%; road bombs below cannot add accidental boss splash.
+      if (C.state === "boss") { C.damageArea(L.sx, L.sz - 8, 22, 100 + 8 * L.level, { skipBoss: true }); C.damageBoss(L.boss.maxHp * 0.18); }
+      startStrike();
+    }
     else if (type === "jackpot") {
       C.addSoldiers(20 + 10 * L.level); C.floatText(x, 3.2, z, "JACKPOT!", "#ffd84a");
       ring(x, z, 1, 9, 0.7, 0xffd84a, true, 1); ring(x, z, 0.5, 6, 0.55, 0xfff1a8, true, 1);
@@ -195,7 +208,7 @@ window.Powerups = (() => {
     }
   }
   function startStrike() {
-    const st = { t: 0, zs: L.sz, bombs: [], jetDone: false };
+    const st = { t: 0, zs: L.sz, bombs: [], jetDone: false, threat: C.threat, boss: C.state === "boss" };
     for (let i = 0; i < 8; i++) st.bombs.push({ rt: 0.55 + 1.2 * i / 7, ahead: 10 + 35 * i / 7 + (Math.random() - 0.5) * 3, x: (i % 2 ? 1 : -1) * (0.8 + Math.random() * 3.4), z: 0, rel: false, done: false, mesh: S.bombs[i] });
     S.strike = st; C.sfx("boom", 2); L.shake = Math.max(L.shake, 0.12);
   }
@@ -213,7 +226,12 @@ window.Powerups = (() => {
       const u = Math.min(1, (st.t - b.rt) / 0.32); b.mesh.position.set(b.x, 14 * (1 - u * u) + 0.4, b.z - 4 * (1 - u)); b.mesh.rotation.x = -0.35 * (1 - u); b.mesh.scale.set(1.3, 1.6, 1.3);
       if (u >= 1) {
         b.done = true; b.mesh.visible = false;
-        C.damageArea(b.x, b.z, 4, 40 + 8 * L.level);
+        if (st.threat && st.threat.kind === "swarm") {
+          for (const e of st.threat.actors) if (e.hp > 0) { b.x = e.x; b.z = e.z; break; }
+        }
+        // Keep explosions away from the boss hit box; clear nearby adds with a separate
+        // damageArea option so the boss always takes exactly the promised fraction.
+        C.damageArea(b.x, b.z, st.threat && st.threat.kind === "swarm" ? 10 : 4, 40 + 8 * L.level, { skipBoss: true });
         L.fx.push({ x: b.x, y: 0.7, z: b.z, f: 9, t: 0, dur: 0.5, size: 8.5 }, { x: b.x + 1.2, y: 1.6, z: b.z - 0.8, f: 9, t: -0.06, dur: 0.45, size: 5.5 }, { x: b.x - 1.4, y: 0.9, z: b.z + 0.6, f: 4, t: 0, dur: 0.3, size: 4 });
         ring(b.x, b.z, 1, 6.5, 0.45, 0xffa040, true, 0.9); C.sfx("boom", 0.9 + Math.random() * 0.3); L.shake = Math.max(L.shake, 0.2);
       }
@@ -230,7 +248,7 @@ window.Powerups = (() => {
   }
   function onSolidBreak(ev) {
     const o = ev.o; if (!o || o._pu) return;
-    if (o.kind === "airdrop") { o._pu = true; removeLabelsFor(o); if (ev.earned) usePower(o.powerup || "shield"); }
+    if (o.kind === "airdrop") { o._pu = true; removeLabelsFor(o); if (ev.earned) C.collectPowerup(o.powerup || "shield"); }
     else if (o.kind === "barrel") { o._pu = true; removeLabelsFor(o); explodeBarrel(o); }
   }
 
@@ -286,7 +304,13 @@ window.Powerups = (() => {
         if (L.sz <= p.z + p.lead + C.SPEED * (L.speedMul || 1) * (TR + TF)) { startDrop(p); break; }
       }
     }
-    updateDrop(ev.dt); updateStrike(ev.dt); updateRings(ev.dt); updateSquad(ev.dt); updateLabels();
+    updateDrop(ev.dt);
+    // Teaching supplies are guaranteed even if the player steers past the crate.
+    // Both the ordinary shot/contact path and this fallback use _pu to award once.
+    for (const p of S.plan) if (p.guaranteed && p.o && !p.o._pu && L.sz <= p.z + 4) {
+      C.damageArea(p.o.x, p.o.z, 0.01, p.o.hp, { skipBoss: true });
+    }
+    updateStrike(ev.dt); updateRings(ev.dt); updateSquad(ev.dt); updateLabels();
   }
   function onFrame(ev) { // billboards face the camera
     if (!ready) return; const q = ev.camera.quaternion;
@@ -304,5 +328,5 @@ window.Powerups = (() => {
     b.on("state", ev => { if (ev.to === "home" || ev.to === "levels") hideSquadFx(); });
   }
   // test hooks: Powerups.force("shield" | "airstrike" | "giant" | "jackpot")
-  return { setup, force: type => { if (C && C.L) { L = C.L; usePower(type); } } };
+  return { setup, activate: type => { if (C && C.L) { L = C.L; usePower(type); } }, force: type => { if (C && C.L) { L = C.L; usePower(type); } } };
 })();

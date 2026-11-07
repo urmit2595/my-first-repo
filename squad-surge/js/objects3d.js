@@ -320,6 +320,7 @@ window.Obj3D = (() => {
         for (const m of [hs.spk1, hs.spk2, hs.shine]) { m.renderOrder = 4; body.add(m); }
         hm.scale.set(PW * 1.4, PH * 1.45, 1); hs.haloK = 1.5;
       }
+      if (h.powerup) { hs.tool = toolIcon(h.powerup, 2.25); hs.tool.position.set(0, 0, 0.3); body.add(hs.tool); L.mesh.visible = false; }
       h.vis = hs; HALVES.push(hs);
     }
   }
@@ -367,6 +368,15 @@ window.Obj3D = (() => {
   }
 
   // ---------------------------------------------------------------- solids
+  const PICON = {};
+  function powerIcon(type) {
+    if (PICON[type]) return PICON[type];
+    const t = new THREE.TextureLoader().load(`assets/ui/icons/pu-${type}.webp`);
+    t.encoding = LIN ? THREE.sRGBEncoding : THREE.LinearEncoding; TEXS.push(t);
+    const m = new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false, fog: false });
+    MATS.push(m); return (PICON[type] = m);
+  }
+  function toolIcon(type, size) { const m = new THREE.Sprite(powerIcon(type)); m.scale.set(size, size, 1); m.renderOrder = 6; return m; }
   const WICON = {};
   function weaponIcon(idx) {
     if (WICON[idx]) return WICON[idx];
@@ -397,12 +407,23 @@ window.Obj3D = (() => {
       part(v, r, G.latches, M.steel, 0, 0, 0, false, false);
       return { y: 2.35, w: 2.8, pill: true };
     },
-    airdrop(v, r) {
+    barricade(v, r) {
+      const wall = part(v, r, G.blue, M.steel, 0, 1.7, -0.65); wall.scale.set(3.6 / 2.1, 3.4 / 2.1, 1);
+      const band = part(v, r, G.crate, M.hazard, 0, 1.8, 0.08, false); band.scale.set(3.55 / 2.3, 0.22, 0.1);
+      return { y: 4.1, w: 2.8, pill: true };
+    },
+    mortar(v, r) {
+      const base = part(v, r, G.blue, M.caseBase, 0, 1.1, -0.4); base.scale.set(0.75, 1.05, 0.8);
+      const tube = part(v, r, G.barrel, M.steel, 0, 2.3, -0.4); tube.scale.set(0.65, 1.15, 0.65); tube.rotation.x = 0.5;
+      return { y: 4.6, w: 2.4, pill: true };
+    },
+    airdrop(v, r, o) {
       part(v, r, G.supply, M.supply, 0, 0, -0.7);
       const st = new THREE.Mesh(G.plane, M.star); st.scale.set(0.74, 0.74, 1); st.position.set(0, 0.76, 0.012); r.add(st);
       const dm = new THREE.Mesh(G.dome, M.beacon); dm.position.set(0, 1.87, -0.7); r.add(dm);
       const gl = new THREE.Mesh(G.plane, M.beaconGlow); gl.scale.set(1.9, 1.9, 1); gl.position.set(0, 2.05, -0.3); gl.renderOrder = 4; r.add(gl);
-      return { y: 3.15, w: 2.8, pill: true };
+      const icon = toolIcon(o.powerup || "shield", 2); icon.position.set(0, 4.3, 0); r.add(icon);
+      return { y: 2.65, w: 2.3, pill: true };
     },
     barrel(v, r) {
       const z = -0.45;
@@ -486,6 +507,24 @@ window.Obj3D = (() => {
     }
   }
 
+  // Holo warnings and mortar markers are owned by track; all unique materials/labels
+  // use the existing per-level disposal lists. Icon textures and geometry are shared.
+  function threatSign(t) {
+    ensure();
+    const sign = new THREE.Group(); sign.position.set(0, 4.7, t.z); C.track.add(sign);
+    const plateM = mat("MeshBasicMaterial", { color: 0x1467a0, transparent: true, opacity: 0.72, depthWrite: false, toneMapped: false }, true);
+    const plate = new THREE.Mesh(G.panel, plateM); plate.scale.set(1.3, 0.65, 0.3); sign.add(plate);
+    const lab = newLabel(512, 128, 5.4, 7); lab.mesh.scale.set(5.4, 2.7, 1); lab.mesh.position.set(-0.45, 0.1, 0.3);
+    C.drawLabel(lab.lab, "! " + t.kind.toUpperCase(), "#ffe066", 0.7); sign.add(lab.mesh);
+    const icon = toolIcon(t.counter, 1.6); icon.position.set(2.6, 0, 0.4); sign.add(icon);
+    const post = new THREE.Mesh(G.chunk, M.beaconGlow); post.scale.set(0.14, 4.7, 0.14); post.position.set(-3.1, -2.35, 0); sign.add(post);
+    if (!G.target) G.target = new THREE.RingBufferGeometry(2.45, 2.8, 40).rotateX(-Math.PI / 2);
+    const ringM = mat("MeshBasicMaterial", { color: 0xff3628, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }, true);
+    const ring = new THREE.Mesh(G.target, ringM), shell = new THREE.Mesh(G.chunk, M.barrel);
+    shell.scale.set(0.4, 0.7, 0.4); ring.visible = shell.visible = false; ring.renderOrder = 4;
+    C.track.add(ring); C.track.add(shell); t.vis = { sign, ring, shell };
+  }
+
   // ---------------------------------------------------------------- lifecycle
   function setup(ctx) {
     C = ctx;
@@ -500,6 +539,7 @@ window.Obj3D = (() => {
     for (const c of t.children.slice()) if (c !== dgroup) t.remove(c);
     for (const m of LMATS) m.dispose(); for (const x of LTEX) x.dispose(); for (const m of LEVELMATS) m.dispose();
     LMATS.length = LTEX.length = LEVELMATS.length = HALVES.length = SOLIDS.length = GATES.length = 0;
+    for (const k in WICON) WICON[k].meshes.length = 0;
     for (const p of POOL) { p.active = false; p.me.visible = false; }
   }
   function update(dt) {
@@ -522,5 +562,5 @@ window.Obj3D = (() => {
     }
   }
 
-  return { setup, clear, gate, gateHalf, gateUsed, solid, solidLabel, solidHit, solidBreak, update };
+  return { setup, clear, threatSign, gate, gateHalf, gateUsed, solid, solidLabel, solidHit, solidBreak, update };
 })();

@@ -422,6 +422,7 @@ const CSS = `
 .mt{display:grid;gap:6px;margin:4px 0 2px;text-align:center}
 .mt-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 .mt-r{display:flex;justify-content:space-between;align-items:center;padding:3px 9px;border-radius:9px;background:#142048;font:14px 'Lilita One',sans-serif;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+.mt-r.mt-tactics{grid-column:1/-1;flex-wrap:wrap;gap:3px 8px}.mt-tactics b{font-size:12px}
 .mt-r.on{opacity:1;transform:none}.mt-r span{color:#9fb6f0;font-size:12px}
 .mt-total{display:flex;align-items:center;justify-content:center;gap:10px;opacity:0;transition:opacity .2s;position:relative;min-height:44px}
 .mt-total.on{opacity:1}
@@ -629,7 +630,7 @@ function buildResults(d, x) {
   if (d.mult > 1) add("FINALE", d.mult, v => "x" + (Math.round(v * 10) / 10));
   add("TACTICS", run.perfect, () => `${run.perfect} PERFECT · +${run.bankBonus.toFixed(1)}× banked · ${run.wasted} wasted`);
   const hasTotal = x.total != null;
-  let html = `<div class="mt-grid">` + rows.map((r, i) => `<div class="mt-r" data-i="${i}"><span>${r.lab}</span><b>${r.fmtFn ? r.fmtFn(r.val) : fmt(r.val)}</b></div>`).join("") + `</div>`;
+  let html = `<div class="mt-grid">` + rows.map((r, i) => `<div class="mt-r${r.lab === "TACTICS" ? " mt-tactics" : ""}" data-i="${i}"><span>${r.lab}</span><b>${r.fmtFn ? r.fmtFn(r.val) : fmt(r.val)}</b></div>`).join("") + `</div>`;
   if (run.perfect >= 2 && run.wasted === 0) html += '<div class="mt-hint" style="color:#ffd84a">★ TACTICIAN</div>';
   if (hasTotal) html += `<div class="mt-total" id="mtTotal"><span class="lb">SCORE</span><span class="num" id="mtNum">0</span><span class="mt-best" id="mtBest">NEW BEST!</span><span class="mt-spark" id="mtSpark"></span></div>`;
   const n = d.n || 0, lv = d.level || (ctx.L && ctx.L.level) || 1, t3 = 30 + 10 * lv, t2 = 10 + 3 * lv;
@@ -758,9 +759,14 @@ function rememberThreat(d) {
   if (!kind) return null;
   const key = d.id != null ? d.id : kind;
   let t = run.threats.get(key);
-  if (!t) { t = { kind, counter: COUNTERS[kind], matched: false, heldAtHit: false, lost: 0, ended: false }; run.threats.set(key, t); }
+  if (!t) { t = { kind, counter: COUNTERS[kind], matched: false, credited: false, live: false, heldAtHit: false, lost: 0, ended: false }; run.threats.set(key, t); }
   run.liveThreat = t;
   return t;
+}
+function creditCounter(t) {
+  if (t && t.ended && t.countered && t.matched && !t.credited) {
+    t.credited = true; feed("tCounter_" + t.kind, 1);
+  }
 }
 function finishTactics(won) {
   if (run.tacticsFinished) return;
@@ -814,8 +820,11 @@ function wire() {
     if (d.misused) run.misused++;
     if (d.type === "surge") run.ready = false;
     if (d.slot === 0 || d.slot === 1) run.belt[d.slot] = null;
-    const t = run.liveThreat;
-    if (t && d.perfect && d.type === t.counter && (!d.threatKind || threatKind(d.threatKind) === t.kind)) t.matched = true;
+    let t = run.liveThreat;
+    // Effects may synchronously end their threat before powerupUse is emitted.
+    if (!t && d.threatKind) for (const candidate of run.threats.values())
+      if (candidate.kind === threatKind(d.threatKind)) t = candidate;
+    if (t && d.perfect && d.type === t.counter && (!d.threatKind || threatKind(d.threatKind) === t.kind)) { t.matched = true; creditCounter(t); }
     persist(); checkTrophies();
   });
   on("bank", d => {
@@ -826,7 +835,7 @@ function wire() {
     S().banked += run.banked; feed("tBank", run.banked); persist();
   });
   on("threat", rememberThreat);
-  on("threatLive", rememberThreat);
+  on("threatLive", d => { const t = rememberThreat(d); if (t) t.live = true; });
   on("threatEnd", d => {
     const kind = threatKind(d.kind), key = d.id != null ? d.id : kind;
     let t = run.threats.get(key);
@@ -837,7 +846,7 @@ function wire() {
     if (d.countered) {
       S().threatsCountered++;
       // PERFECT SURGE alone is not proof that the named matching tool cleared a threat.
-      if (t.matched) feed("tCounter_" + t.kind, 1);
+      creditCounter(t);
     }
     if (run.liveThreat === t) run.liveThreat = null;
     persist(); checkTrophies();
@@ -856,7 +865,7 @@ function wire() {
   on("soldiersLost", d => {
     const lost = d.n || 1; run.lost += lost;
     const t = run.liveThreat;
-    if (t && !t.ended) { t.lost += lost; if (currentBelt().includes(t.counter)) t.heldAtHit = true; }
+    if (t && t.live && !t.ended) { t.lost += lost; if (currentBelt().includes(t.counter)) t.heldAtHit = true; }
   });
   on("surge", d => { if (d.on) { S().surges++; feed("surge", 1); } });
   on("comboEnd", d => { if (d.count) { S().maxCombo = Math.max(S().maxCombo, d.count); feed("combo", d.count); } });

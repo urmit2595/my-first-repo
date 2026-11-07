@@ -2719,3 +2719,111 @@ PY
 node --check js/juice.js
 node --check js/meta.js" in /home/user/my-first-repo/squad-surge
  succeeded in 0ms:
+exec
+/bin/bash -lc "rg -n 'data-slot|beltSlot|belt[01]|powerupUse|threatEnd|swapOffer|tacticsCoach|surgeReady' index.html; rg -n 'mt-r|mt-grid' js/meta.js; rg --files tools | head -20; rg --files -g '*playwright*' -g package.json -g '*test*'" in /home/user/my-first-repo/squad-surge
+ exited 1 in 0ms:
+423:.mt-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+424:.mt-r{display:flex;justify-content:space-between;align-items:center;padding:3px 9px;border-radius:9px;background:#142048;font:14px 'Lilita One',sans-serif;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+425:.mt-r.on{opacity:1;transform:none}.mt-r span{color:#9fb6f0;font-size:12px}
+632:  let html = `<div class="mt-grid">` + rows.map((r, i) => `<div class="mt-r" data-i="${i}"><span>${r.lab}</span><b>${r.fmtFn ? r.fmtFn(r.val) : fmt(r.val)}</b></div>`).join("") + `</div>`;
+666:  const rEls = [...wrap.querySelectorAll(".mt-r")], totEl = q("#mtTotal", wrap), numEl = q("#mtNum", wrap), bestEl = q("#mtBest", wrap);
+tools/codex_image.py
+tools/kit_tools.py
+tools/shot.js
+tools/check_kits.py
+tools/codex_code.sh
+tools/recut_sprites.py
+tools/webpify.py
+
+codex
+The feedback overlays, results tally, strategic tips, seven tactics missions, and three trophies are implemented. I also fixed the save-default merge so older saves receive the new counters. Both syntax checks pass; I’m now checking event handling and storage failure behavior. Run A’s belt markup hasn’t appeared yet, so coach marks retry the slot lookup for up to four seconds.
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/meta.js';s=open(p).read();s=s.replace('.mt-r.on{opacity:1;', '.mt-r.mt-tactics{grid-column:1/-1;flex-wrap:wrap;gap:3px 8px}.mt-tactics b{font-size:12px}\\n.mt-r.on{opacity:1;')
+s=s.replace('<div class=\"mt-r\" data-i=\""'${i}">'"','<div class=\"mt-r"'${r.lab === "TACTICS" ? " mt-tactics" : ""}" data-i="${i}">'"')
+s=s.replace('matched: false, heldAtHit:', 'matched: false, credited: false, live: false, heldAtHit:')
+s=s.replace('function finishTactics(won) {','''function creditCounter(t) {
+  if (t && t.ended && t.countered && t.matched && "'!t.credited) {
+    t.credited = true; feed("tCounter_" + t.kind, 1);
+  }
+}
+function finishTactics(won) {'"''')
+s=s.replace('''    const t = run.liveThreat;
+    if (t && d.perfect && d.type === t.counter && ("'!d.threatKind || threatKind(d.threatKind) === t.kind)) t.matched = true;'"''','''    let t = run.liveThreat;
+    // Effects may synchronously end their threat before powerupUse is emitted.
+    if ("'!t && d.threatKind) for (const candidate of run.threats.values())
+      if (candidate.kind === threatKind(d.threatKind)) t = candidate;
+    if (t && d.perfect && d.type === t.counter && (!d.threatKind || threatKind(d.threatKind) === t.kind)) { t.matched = true; creditCounter(t); }'"''')
+s=s.replace('  on(\"threatLive\", rememberThreat);','  on(\"threatLive\", d => { const t = rememberThreat(d); if (t) t.live = true; });')
+s=s.replace('if (t.matched) feed(\"tCounter_\" + t.kind, 1);','creditCounter(t);')
+s=s.replace('if (t && "'!t.ended) { t.lost += lost;'"', 'if (t && t.live && "'!t.ended) { t.lost += lost;'"')
+open(p,'w').write(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "node <<'JS'
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+let saved = JSON.stringify({ stats: { kills: 17 }, missions: [], daily: { wins: 2 } });
+const handlers = {}, sandbox = { window: {}, console, setTimeout: () => 0, clearTimeout() {}, addEventListener() {}, document: { querySelector: () => null }, localStorage: { getItem: () => saved, setItem: (_, v) => { saved = v; } } };
+let source = fs.readFileSync('js/meta.js', 'utf8');
+source = source.replace('window.Meta = {', "'`window.test = { init(c) { ctx=c; bus=c.bus; $=()=>null; M=load(); newRun(); wire(); }, state:()=>M, run:()=>run, finish:finishTactics, tip:tacticsTip, pool:POOL, trophies:TROPHIES, persist }; window.Meta = {`);
+vm.runInNewContext(source, sandbox);
+const t = sandbox.window.test;
+const ctx = { save: { unlocked: 3 }, L: {}, bus: { on: (n, f) => { (handlers[n] ||= []).push(f); } } };
+const emit = (n,d) => (handlers[n] || []).forEach(f => f(d));
+t.init(ctx);
+assert.equal(t.state().stats.kills,17); assert.equal(t.state().stats.perfect,0);
+assert.equal(t.state().daily.streak,0);
+const mission = id => ({ id, uid:id, target:99, prog:0 });
+t.state().missions = ['"'tPerfect','tSwarm','tBank'].map(mission);
+emit('threat',{id:1,kind:'swarm',counter:'airstrike'});
+emit('threatLive',{id:1,kind:'swarm'});
+emit('threatEnd',{id:1,kind:'swarm',countered:true,lost:0});
+emit('powerupUse',{type:'airstrike',slot:0,perfect:true,threatKind:'swarm'});
+emit('threatEnd',{id:1,kind:'swarm',countered:true});
+assert.equal(t.state().stats.threatsCountered,1);
+assert.equal(t.state().missions[1].prog,1);
+emit('powerupUse',{type:'surge',perfect:true});
+emit('bank',{count:2,bonus:1}); emit('bank',{count:2,bonus:1});
+t.finish(true);t.finish(true);
+assert.equal(t.state().stats.perfect,2);assert.equal(t.state().stats.banked,2);
+assert.equal(t.state().stats.bankLevels,1);assert.equal(t.state().stats.cleanWins,1);
+assert.equal(t.state().missions[0].prog,2);
+emit('levelStart',{});
+emit('belt',{slots:['shield',null]});
+emit('threat',{id:2,kind:'mortars',counter:'shield'});emit('threatLive',{id:2,kind:'mortars'});
+emit('soldiersLost',{n:3});emit('threatEnd',{id:2,kind:'mortars',lost:3,countered:false});
+assert.match(t.tip(),/You had a SHIELD when the mortars hit/);
+emit('powerupUse',{type:'giant',wasted:true}); t.finish(false);
+assert.equal(t.state().stats.wasted,1); assert.equal(t.state().stats.cleanWins,1);
+assert(t.pool.filter(p=>p.id.startsWith('t') && p.id"'!=='"'').length >= 6);
+sandbox.localStorage.setItem = () => { throw Error('blocked'); }; t.persist();
+console.log('PASS: legacy save migration, counters, event ordering, deduplication, mission progress, loss tip, blocked storage');
+JS
+node --check js/juice.js
+node --check js/meta.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+PASS: legacy save migration, counters, event ordering, deduplication, mission progress, loss tip, blocked storage
+
+codex
+Updated only `js/juice.js` and `js/meta.js`:
+
+- Added callouts, threat banners, swap countdown, and coach marks.
+- Added TACTICS results, TACTICIAN badge, loss tips, seven missions, three trophies, and saved totals.
+- Left sound with `index.html`, its existing owner.
+
+Uses: `powerupUse`, `belt`, `threat`, `threatLive`, `threatEnd`, `swapOffer`, `swapDone`, `swapExpired`, `surgeReady`, `surge`, `bank`, `tacticsCoach`, and existing lifecycle events.
+
+Both syntax checks and targeted meta regression checks passed. Visual integration awaits run A’s markup.
+tokens used
+47,994
+Updated only `js/juice.js` and `js/meta.js`:
+
+- Added callouts, threat banners, swap countdown, and coach marks.
+- Added TACTICS results, TACTICIAN badge, loss tips, seven missions, three trophies, and saved totals.
+- Left sound with `index.html`, its existing owner.
+
+Uses: `powerupUse`, `belt`, `threat`, `threatLive`, `threatEnd`, `swapOffer`, `swapDone`, `swapExpired`, `surgeReady`, `surge`, `bank`, `tacticsCoach`, and existing lifecycle events.
+
+Both syntax checks and targeted meta regression checks passed. Visual integration awaits run A’s markup.
+codex exit 0

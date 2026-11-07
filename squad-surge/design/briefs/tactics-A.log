@@ -4290,3 +4290,1019 @@ assets/ui/icons/pu-jackpot.webp
 assets/ui/icons/pu-shield.webp
 assets/ui/icons/pu-airstrike.webp
 
+exec
+/bin/bash -lc "cat > /tmp/tactics-core.py <<'PY'
+from pathlib import Path
+p=Path('index.html'); s=p.read_text()
+def rep(a,b):
+ global s
+ assert a in s,a[:100]
+ s=s.replace(a,b,1)
+rep('/* Home */', '''/* Tactics controls */
+.belt{position:absolute;inset:0;z-index:5;pointer-events:none}
+.belt-slot{position:absolute;bottom:calc(18px + env(safe-area-inset-bottom));width:70px;height:70px;border-radius:50%;border:3px solid #77c7ff;background:radial-gradient(#2859a0,#14213d);box-shadow:0 5px 0 #0d1630;pointer-events:auto;color:#fff;transition:box-shadow .6s,border-color .6s}
+.belt-slot:first-child{left:max(16px,env(safe-area-inset-left))}.belt-slot:nth-child(2){right:max(16px,env(safe-area-inset-right))}
+.belt-slot img{width:52px;height:52px;object-fit:contain}.belt-slot.empty:after{content:'+';font:30px Nunito;opacity:.25}
+.belt-slot small{position:absolute;bottom:-9px;left:20px;background:#0d1630;border-radius:8px;padding:1px 5px}
+.belt-slot.counter{border-color:#ffe066;box-shadow:0 0 0 4px #ffcb3c66,0 0 24px #ffd84aaa,0 5px 0 #0d1630}
+.belt-slot.active{animation:beltpulse .7s ease-in-out infinite}
+@keyframes beltpulse{50%{filter:brightness(1.5);transform:scale(1.06)}}
+.surge-button{position:absolute;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:112px;min-height:55px;border-radius:28px;background:linear-gradient(#fff07a,#ffb300);border:3px solid #0d1630;color:#14213d;pointer-events:auto;font-size:17px;box-shadow:0 4px 0 #875100}
+.swap-chip{position:absolute;bottom:calc(102px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:5px 12px;border:2px solid #ffe066;border-radius:16px;background:#14213dee;font:16px 'Lilita One';white-space:nowrap}
+.swap-chip img{width:32px;height:32px;vertical-align:middle;object-fit:contain}
+.weapon-tag{bottom:calc(100px + env(safe-area-inset-bottom));font-size:11px;max-width:45%}
+.count .surge{pointer-events:auto;cursor:pointer;height:14px;top:calc(100% + 3px);border:3px solid #0d1630}
+.count.ready .surge{box-shadow:0 0 12px #ffd84a}
+@media(prefers-reduced-motion:reduce){.belt-slot.active{animation:none}}
+/* Home */''')
+rep('  <div class=\"home\" id=\"home\">','''  <div class=\"belt\" id=\"belt\" hidden>
+    <button class=\"belt-slot empty\" id=\"belt0\" data-slot=\"0\" aria-label=\"Empty slot 1\"><img alt=\"\" hidden><small>1 / Q</small></button>
+    <button class=\"belt-slot empty\" id=\"belt1\" data-slot=\"1\" aria-label=\"Empty slot 2\"><img alt=\"\" hidden><small>2 / E</small></button>
+    <button class=\"surge-button\" id=\"surgeButton\" hidden>SURGE READY</button>
+    <div class=\"swap-chip\" id=\"swapChip\" hidden><img id=\"swapIcon\" alt=\"\"> SWAP? <small>tap a slot</small></div>
+  </div>
+  <div class=\"home\" id=\"home\">''')
+rep('save.unlocked = Math.max', 'save.tacticsPerfect = Math.max(0, Number(save.tacticsPerfect) || 0);\\nsave.tacticsCounters = save.tacticsCounters && typeof save.tacticsCounters === \"object\" ? save.tacticsCounters : {};\\nsave.unlocked = Math.max')
+rep('  // Surge Update seams', '''  get belt() { return L.belt; }, usePowerup: slot => usePowerup(slot), collectPowerup: type => collectPowerup(type),
+  get tactics() { return L.tactics; }, get threat() { return L.threat; }, get surgeReady() { return "'!!L.surgeReady; },
+  useSurge: () => useSurge(), damageBoss: n => damageBoss(n),
+  // Surge Update seams'"''')
+rep('const isGood = h => h.op', 'const isGood = h => h.powerup ? true : h.op')
+rep('const gateText = h => h.op', 'const gateText = h => h.powerup ? \"\" : h.op')
+rep('jackpot: "'!!(spec[2] && spec[2].jackpot)'"', 'jackpot: "'!!(spec[2] && spec[2].jackpot), powerup: spec[0] === "tool" ? spec[1] : null'"')
+rep('airdrop: 1.2, barrel: 0.8 };','airdrop: 1.2, barrel: 0.8, barricade: 1.8, mortar: 0.8 };')
+rep('  const etype = theme.enemy, d = level;', '''  const threats = [];
+  if (level >= 2) {
+    const count = level >= 6 ? 3 : 2, kinds = level >= 4 ? [\"swarm\", \"barricade\", \"mortars\"] : level >= 3 ? [\"swarm\", \"barricade\"] : [\"swarm\"];
+    for (let i = 0; i < count; i++) {
+      const kind = i === 0 && level <= 4 ? kinds[kinds.length - 1] : kinds[(i + level) % kinds.length];
+      threats.push({ id: "'`road-${i}`, kind, counter: THREAT_COUNTER[kind], z: -100 - i * (length - 165) / (count - 1), announced: false, live: false, done: false, countered: false, lost: 0, actors: [], age: 0, shotT: 0, shellT: 0, gap: rj() < 0.5 ? -1 : 1, teaching: i === 0 && level <= 4 });
+    }
+  }
+  let threatIndex = 0;
+  const etype = theme.enemy, d = level;'"''')
+rep('      const seg = pool[Math.floor(r() * pool.length)];','''      const nextThreat = threats[threatIndex];
+      // Reserve the whole encounter corridor, including a supply approach and a recovery gap.
+      // It replaces ordinary obstacles/hordes rather than stacking damage on top of them.
+      if (nextThreat && z <= nextThreat.z + 78) {
+        const supplyZ = nextThreat.z + 43;
+        const tool = level >= 3 && threatIndex === 1;
+        gates.push(makeGate(supplyZ + (tool ? 0 : 14), [\"+\", 10 + d * 2], tool ? [\"tool\", nextThreat.counter] : [\"+\", 12 + d * 2]));
+        nextThreat.tool = tool;
+        z = nextThreat.z - 37; threatIndex++; continue;
+      }
+      const seg = pool[Math.floor(r() * pool.length)];''')
+rep('  return { level, theme, length, gates, solids, enemies, expectedKills:', '  return { level, theme, length, gates, solids, enemies, threats, expectedKills:')
+rep('    score: 0, kills:', '''    belt: [null, null], beltFx: [null, null], beltFxUntil: [0, 0], swap: null, coach: null,
+    tactics: { perfect: 0, used: 0, wasted: 0, misused: 0, banked: 0, surgePerfect: 0 }, threat: null, surgeReady: false, bankBonus: 0, bankLocked: false,
+    score: 0, kills:''')
+rep('  addSoldiers(mod === \"lone\" ? 1 : START_SQUAD);','''  time.scale = time.target = 1; time.slowT = time.stopT = 0; time.lastSlow = time.lastStop = -99;
+  addSoldiers(mod === \"lone\" ? 1 : START_SQUAD);
+  beltChanged();''')
+rep('  show(\"home\", s === \"home\");','  show(\"belt\", s === \"play\" || s === \"boss\");\\n  show(\"home\", s === \"home\");')
+rep('let dragging = false, lastX = 0;', '''let dragging = false, lastX = 0, dragId = null;
+const beltButtons = ["'$("belt0"), $("belt1")];
+const controlButtons = [beltButtons[0], beltButtons[1], $("surgeButton"), $("surgeBar")];
+function overControl(e) {
+  for (const el of controlButtons) {
+    if (el.hidden || el.closest("[hidden]")) continue;
+    const r = el.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return true;
+  }
+  return false;
+}
+for (const el of controlButtons) {
+  el.addEventListener("pointerdown", e => e.stopPropagation());
+  el.addEventListener("pointerup", e => e.stopPropagation());
+}
+beltButtons.forEach((el, i) => el.onclick = e => { e.stopPropagation(); usePowerup(i); });
+$("surgeButton").onclick = $("surgeBar").onclick = e => { e.stopPropagation(); useSurge(); };
+$("surgeBar").setAttribute("role", "button"); $("surgeBar").setAttribute("aria-label", "Activate SURGE when ready");
+$("surgeBar").tabIndex = 0;
+$("surgeBar").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); useSurge(); } };'"''')
+rep('if (e.target.closest(\"button,.panel\")) return;', 'if (e.target.closest(\"button,.panel,#surgeBar\") || overControl(e)) return;')
+rep('dragging = true; lastX = e.clientX;', 'dragging = true; dragId = e.pointerId; lastX = e.clientX;')
+rep('  if ("'!dragging || !L) return;'"', '  if ("'!dragging || !L || e.pointerId !== dragId) return;'"\\n  if (overControl(e)) { lastX = e.clientX; return; }')
+rep('  keys[e.key] = true;', '''  keys[e.key] = true;
+  if ((state === \"play\" || state === \"boss\") && "'!e.repeat) {
+    const k = e.key.toLowerCase();
+    if (k === "1" || k === "q") { e.preventDefault(); usePowerup(0); }
+    if (k === "2" || k === "e") { e.preventDefault(); usePowerup(1); }
+    if (e.code === "Space") { e.preventDefault(); useSurge(); }
+  }'"''')
+rep('return (1 / 0.3) * WEAPONS[L.weapon].rate * L.rateMult;', 'return (1 / 0.3) * WEAPONS[L.weapon].rate * L.rateMult * (L.surgeT > 0 ? 2 : 1);')
+rep('if (L.surgeT > 0 || L.surges >= SURGES_PER_LEVEL) return;', 'if (L.surgeReady || L.surgeT > 0 || L.surges >= SURGES_PER_LEVEL) return;')
+rep('  if (L.surge >= 1) { L.surgeT = SURGE_TIME; L.surges++; bus.emit(\"surge\", { on: true }); sfx(\"win\"); vibe(60); floatText(L.sx, 3.2, L.sz, \"SURGE"'!", "#ffd84a"); }'"', '''  if (L.surge >= 1) { L.surgeReady = true; bus.emit(\"surgeReady\", {}); updateBeltHUD(); }
+}
+function useSurge() {
+  if ("'!L || !L.surgeReady || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+  L.surgeReady = false; L.surgeT = SURGE_TIME; L.surges++;
+  const perfect = !!L.threat || state === "boss";
+  if (perfect) { L.tactics.surgePerfect++; rewardPerfect("surge", false); }
+  bus.emit("surge", { on: true, perfect });
+  sfx("win"); vibe(60); updateBeltHUD(); return true;'"''')
+rep('function finishLevel(mult) { L.mult = Math.max(1, mult || 1); win(); }', 'function finishLevel(mult) { if (state "'!== "bonus" && state !== "boss") return; L.finaleMult = Math.max(1, mult || 1); L.mult = L.finaleMult + L.bankBonus; win(); }'"')
+rep('  else win();\\n}', '  else finishLevel(1);\\n}')
+rep('      setShield(0); setGiant(0); // power-ups never carry into the boss fight: the slam dodge stays real', '      if (L.threat) endThreat(L.threat); // belt effects carry into the boss fight')
+rep('if (L.idleT > 3) L.surge', 'if ("'!L.surgeReady && L.idleT > 3) L.surge'"')
+rep('  for (const m of [100, 250, 500])', '  updateTactics(dt);\\n  for (const m of [100, 250, 500])')
+rep('    const after = h.op === \"x\" ? Math.round(before * h.v) : before + h.v;', '    const after = h.powerup ? before : h.op === \"x\" ? Math.round(before * h.v) : before + h.v;\\n    if (h.powerup) collectPowerup(h.powerup);')
+rep('    const guarded = L.shieldT > 0 || L.giantT > 0, lose = guarded ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);', '''    const guarded = L.shieldT > 0 || L.giantT > 0;
+    let lose = guarded || o.kind === \"airdrop\" ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);
+    if (o.threat) lose = Math.min(lose, threatLossLeft(o.threat));''')
+rep('    breakSolid(o, L.giantT > 0);', '    if (o.threat) o.threat.lost += lose;\\n    breakSolid(o, L.giantT > 0 || o.kind === \"airdrop\");')
+rep('b0.hp -= b.dmg * (b.splash ? 1.2 : 1);', 'b0.hp -= b.dmg * (b.splash ? 1.2 : 1) * (L.giantT > 0 ? 2 : 1);')
+rep('      if ("'!guarded) killSoldiers(e.dmg, e.x);'"', '''      if ("'!guarded) {
+        const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
+        killSoldiers(loss, e.x); if (e.threat) e.threat.lost += loss;
+      }'"''')
+rep('    if (e.state === \"idle\" && e.z > L.sz - 48)', '    if (e.state === \"idle\" && e.z > L.sz - 48)') # intentional anchor verification
+rep('      bus.emit(\"bossSlam\", { boss: b0, killed: k });', '      bus.emit(\"bossSlam\", { boss: b0, killed: k });\\n      if (L.threat && L.threat.kind === \"slam\") { L.threat.lost += k; endThreat(L.threat); }')
+rep('function bossDown() {\\n', '''function damageBoss(n) {
+  if (state "'!== "boss" || L.boss.hp <= 0) return;
+  L.boss.hp -= n; L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
+}
+function bossDown() {
+  if (L.bankLocked) return;
+  if (L.threat) endThreat(L.threat);
+  L.bankLocked = true;
+  const count = (L.belt[0] ? 1 : 0) + (L.belt[1] ? 1 : 0);
+  L.tactics.banked = count; L.bankBonus = count * 0.5;
+  bus.emit("bank", { count, bonus: L.bankBonus });
+  L.swap = null; L.belt[0] = L.belt[1] = null; beltChanged();
+'"''')
+rep('bus.emit(\"win\", { stars,', 'bus.emit(\"win\", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars,')
+rep('  sfx(\"bad\"); vibe(200); setState(\"lose\");', '  if (L.threat) endThreat(L.threat);\\n  L.belt[0] = L.belt[1] = null; L.swap = null; beltChanged();\\n  sfx(\"bad\"); vibe(200); setState(\"lose\");')
+rep('bus.emit(\"lose\", { pct,', 'bus.emit(\"lose\", { tactics: { ...L.tactics }, pct,')
+rep('  "'$("surgeFill").style.width'"', '  updateBeltHUD();\\n  "'$("surgeFill").style.width'"')
+p.write_text(s)
+PY
+python /tmp/tactics-core.py" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "rg -n 'tacticsCoach|threatKind|surgePerfect|belt[01]|swapOffer|tacticsPerfect' js/juice.js js/meta.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+js/juice.js:127:    on("swapOffer", (d = {}) => {
+js/juice.js:136:    on("tacticsCoach", (d = {}) => {
+js/meta.js:755:const threatKind = k => String(k || "").toLowerCase() === "mortar" ? "mortars" : String(k || "").toLowerCase();
+js/meta.js:758:  const kind = threatKind(d.kind);
+js/meta.js:825:    if (!t && d.threatKind) for (const candidate of run.threats.values())
+js/meta.js:826:      if (candidate.kind === threatKind(d.threatKind)) t = candidate;
+js/meta.js:827:    if (t && d.perfect && d.type === t.counter && (!d.threatKind || threatKind(d.threatKind) === t.kind)) { t.matched = true; creditCounter(t); }
+js/meta.js:840:    const kind = threatKind(d.kind), key = d.id != null ? d.id : kind;
+
+codex
+I’ve added the belt controls, manual SURGE activation, and banking. Threat corridors will replace portions of ordinary encounters, with supply pickups on the approach; that should give players time to choose a counter without adding another encounter on top.
+
+exec
+/bin/bash -lc "cat > /tmp/tactics-functions.txt <<'EOF'
+// ---------- tactics: belt, learning, encounter lifecycle ----------
+const THREAT_COUNTER = { swarm: \"airstrike\", barricade: \"giant\", mortars: \"shield\", slam: \"shield\" };
+function updateBeltHUD() {
+  if ("'!L || !L.belt) return;
+  for (let i = 0; i < 2; i++) {
+    const b = beltButtons[i], type = L.belt[i], fx = L.beltFxUntil[i] > L.time ? L.beltFx[i] : null, icon = type || fx;
+    if (b.dataset.icon !== (icon || "")) {
+      b.dataset.icon = icon || ""; const img = b.firstElementChild; img.hidden = !icon;
+      if (icon) img.src = `assets/ui/icons/pu-${icon}.webp`;
+    }
+    b.dataset.type = type || "";
+    b.classList.toggle("empty", !icon); b.classList.toggle("active", !!fx);
+    b.classList.toggle("counter", !!type && !!L.threat && L.threat.counter === type && save.tacticsPerfect < 3);
+    b.setAttribute("aria-label", L.swap ? `Swap ${L.swap.type} into slot ${i + 1}` : type ? `Use ${type}, slot ${i + 1}` : `Empty slot ${i + 1}`);
+  }
+  $("surgeButton").hidden = !L.surgeReady || L.bankLocked;
+  $("count").classList.toggle("ready", L.surgeReady);
+  $("swapChip").hidden = !L.swap;
+  if (L.swap && $("swapIcon").dataset.type !== L.swap.type) {
+    $("swapIcon").dataset.type = L.swap.type; $("swapIcon").src = `assets/ui/icons/pu-${L.swap.type}.webp`;
+  }
+}
+function beltChanged() { bus.emit("belt", { slots: L.belt.slice() }); updateBeltHUD(); }
+function expireSwap() {
+  if (!L.swap) return;
+  const type = L.swap.type; L.swap = null;
+  addSoldiers(8); floatText(L.sx, 2.5, L.sz, "+8", "#7fd0ff");
+  bus.emit("swapExpired", { type }); updateBeltHUD();
+}
+function collectPowerup(type) {
+  if (!L || L.bankLocked || !["shield", "airstrike", "giant", "jackpot"].includes(type)) return false;
+  if (type === "jackpot") { window.Powerups?.activate(type); return true; }
+  const slot = L.belt.indexOf(null);
+  if (slot < 0) {
+    // A second pickup settles the earlier offer first, so no supplies silently disappear.
+    expireSwap(); L.swap = { type, until: L.time + 3 };
+    bus.emit("swapOffer", { type, until: L.swap.until }); updateBeltHUD(); return true;
+  }
+  L.belt[slot] = type; beltChanged(); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+}
+function coachCounter() {
+  if (!L || L.coach || (state !== "play" && state !== "boss")) return;
+  for (const t of L.threats) {
+    if (!t.teaching || t.done || t.coached || (save.tacticsCounters[t.counter] || 0) >= 2) continue;
+    const slot = L.belt.indexOf(t.counter); if (slot < 0) continue;
+    t.coached = true; L.coach = t.id;
+    // kind is the power-up being taught (airstrike/giant/shield), slot is zero-based.
+    bus.emit("tacticsCoach", { kind: t.counter, slot }); return;
+  }
+}
+function rewardPerfect(type, slow = true) {
+  L.tactics.perfect++; save.tacticsPerfect++;
+  if (type !== "surge") save.tacticsCounters[type] = (save.tacticsCounters[type] || 0) + 1;
+  ctx.addScore(300 * L.level, { raw: true, reason: "perfect" });
+  const before = L.combo; L.combo += 10; L.comboT = COMBO_WINDOW; L.bestCombo = Math.max(L.bestCombo, L.combo);
+  for (const t of COMBO_TIERS) if (before < t[0] && L.combo >= t[0]) bus.emit("combo", { count: L.combo, tier: COMBO_TIERS.length - COMBO_TIERS.indexOf(t), name: t[2], mult: t[1] });
+  if (slow) slowMo(0.4, 0.35); persist();
+}
+function hasPowerTarget(type) {
+  if (type === "shield") {
+    if (L.threat || (state === "boss" && L.boss.hp > 0)) return true;
+    for (const t of L.threats) if (!t.done && L.sz - t.z >= 0 && L.sz - t.z < 24 + SPEED * L.speedMul * 4) return true;
+    for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z <= L.sz + 5 && L.sz - e.z < 4 * (SPEED * L.speedMul + e.sp)) return true;
+    return false;
+  }
+  if (state === "boss" && L.boss.hp > 0) return true;
+  const range = type === "giant" ? SPEED * L.speedMul * 6 : 60;
+  for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z < L.sz + 5 && e.z > L.sz - range) return true;
+  for (const o of L.solids) if (o.alive && o.z < L.sz + 2 && o.z > L.sz - range) return true;
+  return false;
+}
+function usePowerup(slot) {
+  if (!L || (slot !== 0 && slot !== 1) || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+  if (L.swap && L.time >= L.swap.until) expireSwap();
+  if (L.swap) {
+    const type = L.swap.type; L.swap = null; L.belt[slot] = type; beltChanged();
+    bus.emit("swapDone", { type, slot }); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+  }
+  const type = L.belt[slot]; if (!type) return false;
+  const threat = L.threat, perfect = !!threat && threat.counter === type, misused = !!threat && !perfect, wasted = !threat && !hasPowerTarget(type);
+  L.belt[slot] = null; L.beltFx[slot] = type; L.beltFxUntil[slot] = L.time + (type === "airstrike" ? 2.5 : 6);
+  L.tactics.used++; if (wasted) L.tactics.wasted++; if (misused) L.tactics.misused++;
+  if (perfect) { threat.countered = true; rewardPerfect(type); }
+  beltChanged();
+  bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
+  window.Powerups?.activate(type); return true;
+}
+function threatLossLeft(t) { return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - 3)); }
+function announceThreat(t) {
+  t.announced = true; Obj3D.threatSign(t);
+  bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
+}
+function liveThreat(t) {
+  t.live = true; L.threat = t;
+  t.lossCap = Math.min(t.kind === "swarm" ? 12 : 10, Math.ceil(L.soldiers.length * 0.24));
+  if (t.kind === "swarm") {
+    const count = Math.round(1.8 * (6 + L.level * 3));
+    for (let i = 0; i < count; i++) {
+      const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
+      e.threat = t; L.enemies.push(e); t.actors.push(e);
+    }
+  } else if (t.kind === "barricade") {
+    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, 70 + L.level * 8, { threat: t }));
+  } else if (t.kind === "mortars") {
+    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z, 22 + L.level * 4, { threat: t }));
+  }
+  bus.emit("threatLive", { id: t.id, kind: t.kind }); coachCounter(); updateBeltHUD();
+}
+function endThreat(t) {
+  if (!t || t.done) return;
+  t.done = true; t.live = false;
+  if (t.vis) { t.vis.sign.visible = t.vis.ring.visible = t.vis.shell.visible = false; }
+  if (L.threat === t) L.threat = null;
+  if (L.coach === t.id) L.coach = null;
+  bus.emit("threatEnd", { id: t.id, kind: t.kind, countered: t.countered, lost: t.lost }); updateBeltHUD();
+}
+function updateTactics(dt) {
+  if (L.swap && L.time >= L.swap.until) expireSwap();
+  coachCounter();
+  if (L.bankLocked) return;
+  if (state === "boss" && !L.threat && L.boss.hp > 0) {
+    const t = { id: `slam-${L.slamId = (L.slamId || 0) + 1}`, kind: "slam", counter: "shield", z: L.boss.z, actors: [], age: 0, lost: 0, countered: false };
+    announceThreat(t); liveThreat(t);
+  }
+  if (state === "play") for (const t of L.threats) {
+    if (t.done) continue;
+    const d = L.sz - t.z;
+    if (!t.announced && d <= 24 + 2.5 * SPEED * L.speedMul) announceThreat(t);
+    if (!t.live && d <= 24 && !L.threat) liveThreat(t);
+  }
+  const t = L.threat; if (!t || t.kind === "slam") return;
+  t.age += dt;
+  if (t.kind === "barricade" && L.giantT > 0 && L.sz - t.z < 12) for (const o of t.actors) if (o.alive) breakSolid(o, true);
+  if (t.kind === "mortars") {
+    if (t.shellT > 0) {
+      t.shellT -= dt;
+      const u = Math.min(1, 1 - t.shellT / 0.85);
+      t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.z + (t.targetZ - t.z) * u);
+      if (t.shellT <= 0) {
+        t.vis.shell.visible = t.vis.ring.visible = false;
+        if (L.shieldT <= 0 && Math.abs(L.sx - t.targetX) < 2.8) {
+          const loss = Math.min(2 + L.level % 3, threatLossLeft(t));
+          killSoldiers(loss, t.targetX, true); t.lost += loss;
+        }
+        bus.emit("explosion", { x: t.targetX, z: t.targetZ, radius: 2.8 });
+        L.fx.push({ x: t.targetX, y: 0.3, z: t.targetZ, f: 9, t: 0, dur: 0.4, size: 4 });
+      }
+    }
+    t.shotT -= dt;
+    if (t.shotT <= 0 && t.age < 5.1) {
+      let tower = null; for (const o of t.actors) if (o.alive) { tower = o; break; }
+      if (tower) {
+        t.shotT = 1.6; t.shellT = 0.85; t.fromX = tower.x; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.85;
+        t.vis.ring.position.set(t.targetX, 0.09, t.targetZ); t.vis.ring.visible = t.vis.shell.visible = true;
+      }
+    }
+  }
+  let alive = false;
+  for (const a of t.actors) if (t.kind === "swarm" ? a.hp > 0 && a.state !== "dead" && a.state !== "dying" : a.alive) { alive = true; break; }
+  if ((!alive && !(t.shellT > 0)) || t.age >= 6 || (t.kind === "barricade" && L.sz < t.z - 2)) endThreat(t);
+}
+
+EOF
+python - <<'"'PY'
+from pathlib import Path
+p=Path('index.html'); s=p.read_text(); marker='// ---------- level generation ----------'; s=s.replace(marker,Path('/tmp/tactics-functions.txt').read_text()+marker); p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat > /tmp/tactics-visuals.py <<'PY'
+from pathlib import Path
+p=Path('js/objects3d.js'); s=p.read_text()
+def rep(a,b):
+ global s
+ assert a in s,a[:80]
+ s=s.replace(a,b,1)
+rep('  const WICON = {};', '''  const PICON = {};
+  function powerIcon(type) {
+    if (PICON[type]) return PICON[type];
+    const t = new THREE.TextureLoader().load("'`assets/ui/icons/pu-${type}.webp`);
+    t.encoding = LIN ? THREE.sRGBEncoding : THREE.LinearEncoding; TEXS.push(t);
+    const m = new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false, fog: false });
+    MATS.push(m); return (PICON[type] = m);
+  }
+  function toolIcon(type, size) { const m = new THREE.Sprite(powerIcon(type)); m.scale.set(size, size, 1); m.renderOrder = 6; return m; }
+  const WICON = {};'"''')
+rep('      h.vis = hs; HALVES.push(hs);', '''      if (h.powerup) { hs.tool = toolIcon(h.powerup, 2.25); hs.tool.position.set(0, 0, 0.3); body.add(hs.tool); L.mesh.visible = false; }
+      h.vis = hs; HALVES.push(hs);''')
+rep('    airdrop(v, r) {', '''    barricade(v, r) {
+      const wall = part(v, r, G.blue, M.steel, 0, 1.7, -0.65); wall.scale.set(3.6 / 2.1, 3.4 / 2.1, 1);
+      const band = part(v, r, G.crate, M.hazard, 0, 1.8, 0.08, false); band.scale.set(3.55 / 2.3, 0.22, 0.1);
+      return { y: 4.1, w: 2.8, pill: true };
+    },
+    mortar(v, r) {
+      const base = part(v, r, G.blue, M.caseBase, 0, 1.1, -0.4); base.scale.set(0.75, 1.05, 0.8);
+      const tube = part(v, r, G.barrel, M.steel, 0, 2.3, -0.4); tube.scale.set(0.65, 1.15, 0.65); tube.rotation.x = 0.5;
+      return { y: 4.6, w: 2.4, pill: true };
+    },
+    airdrop(v, r, o) {''')
+rep('      return { y: 3.15, w: 2.8, pill: true };', '''      const icon = toolIcon(o.powerup || \"shield\", 2); icon.position.set(0, 4.3, 0); r.add(icon);
+      return { y: 2.65, w: 2.3, pill: true };''')
+rep('  // ---------------------------------------------------------------- lifecycle', '''  // Holo warnings and mortar markers are owned by track; all unique materials/labels
+  // use the existing per-level disposal lists. Icon textures and geometry are shared.
+  function threatSign(t) {
+    ensure();
+    const sign = new THREE.Group(); sign.position.set(0, 4.7, t.z); C.track.add(sign);
+    const plateM = mat(\"MeshBasicMaterial\", { color: 0x1467a0, transparent: true, opacity: 0.72, depthWrite: false, toneMapped: false }, true);
+    const plate = new THREE.Mesh(G.panel, plateM); plate.scale.set(1.3, 0.65, 0.3); sign.add(plate);
+    const lab = newLabel(512, 128, 5.4, 7); lab.mesh.scale.set(5.4, 2.7, 1); lab.mesh.position.set(-0.45, 0.1, 0.3);
+    C.drawLabel(lab.lab, \""'! " + t.kind.toUpperCase(), "#ffe066", 0.7); sign.add(lab.mesh);
+    const icon = toolIcon(t.counter, 1.6); icon.position.set(2.6, 0, 0.4); sign.add(icon);
+    const post = new THREE.Mesh(G.chunk, M.beaconGlow); post.scale.set(0.14, 4.7, 0.14); post.position.set(-3.1, -2.35, 0); sign.add(post);
+    if (!G.target) G.target = new THREE.RingBufferGeometry(2.45, 2.8, 40).rotateX(-Math.PI / 2);
+    const ringM = mat("MeshBasicMaterial", { color: 0xff3628, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }, true);
+    const ring = new THREE.Mesh(G.target, ringM), shell = new THREE.Mesh(G.chunk, M.barrel);
+    shell.scale.set(0.4, 0.7, 0.4); ring.visible = shell.visible = false; ring.renderOrder = 4;
+    C.track.add(ring); C.track.add(shell); t.vis = { sign, ring, shell };
+  }
+
+  // ---------------------------------------------------------------- lifecycle'"''')
+rep('    for (const p of POOL) { p.active = false;', '    for (const k in WICON) WICON[k].meshes.length = 0;\\n    for (const p of POOL) { p.active = false;')
+rep('return { setup, clear, gate,', 'return { setup, clear, threatSign, gate,')
+p.write_text(s)
+PY
+python /tmp/tactics-visuals.py
+cat > /tmp/tactics-powerups.py <<'PY'
+from pathlib import Path
+p=Path('js/powerups.js'); s=p.read_text()
+def rep(a,b):
+ global s
+ assert a in s,a[:80]
+ s=s.replace(a,b,1)
+rep('    planAirdrops(ev.rng, ev.level, ev.length); planBarrels(ev.rng, ev.level, ev.length);', '''    if (ev.level === 1) planAirdrops(ev.rng, ev.level, ev.length);
+    else for (let i = 0; i < L.threats.length; i++) {
+      const t = L.threats[i]; if (t.tool) continue;
+      // Alternating fork drops: the second icon is a different tool, never a disguised copy.
+      const fork = (i + ev.level) % 2 === 0;
+      const alternatives = [\"airstrike\", \"giant\", \"shield\"].filter(k => k "'!== t.counter);
+      S.plan.push({ x: fork ? -3.3 : 0, z: t.z + 43, lead: 35, powerup: t.counter, other: fork ? alternatives[Math.floor(ev.rng() * 2)] : null, guaranteed: t.teaching, fired: false, o: null });
+    }
+    planBarrels(ev.rng, ev.level, ev.length);'"''')
+rep('const o = C.spawnSolid(\"airdrop\", p.x, p.z, 12 + 4 * L.level, { powerup: p.powerup }); p.o = o;', '''const o = C.spawnSolid(\"airdrop\", p.x, p.z, 8 + 2 * L.level, { powerup: p.powerup }); p.o = o;
+    if (p.other) p.otherO = C.spawnSolid(\"airdrop\", 3.3, p.z, 8 + 2 * L.level, { powerup: p.other });''')
+rep('    else if (type === \"airstrike\") startStrike();', '''    else if (type === \"airstrike\") {
+      // Boss damage is exactly 18%; road bombs below cannot add accidental boss splash.
+      if (C.state === \"boss\") C.damageBoss(L.boss.maxHp * 0.18);
+      startStrike();
+    }''')
+rep('    const st = { t: 0, zs: L.sz, bombs: [], jetDone: false };', '    const st = { t: 0, zs: L.sz, bombs: [], jetDone: false, threat: C.threat, boss: C.state === \"boss\" };')
+rep('        C.damageArea(b.x, b.z, 4, 40 + 8 * L.level);', '''        if (st.threat && st.threat.kind === \"swarm\") {
+          for (const e of st.threat.actors) if (e.hp > 0) { b.x = e.x; b.z = e.z; break; }
+        }
+        // Keep explosions away from the boss hit box; clear nearby adds with a separate
+        // damageArea option so the boss always takes exactly the promised fraction.
+        C.damageArea(b.x, b.z, st.threat && st.threat.kind === \"swarm\" ? 10 : 4, 40 + 8 * L.level, { skipBoss: true });''')
+rep('if (ev.earned) usePower(o.powerup || \"shield\");', 'if (ev.earned) C.collectPowerup(o.powerup || \"shield\");')
+rep('    updateDrop(ev.dt); updateStrike(ev.dt);', '''    updateDrop(ev.dt);
+    // Teaching supplies are guaranteed even if the player steers past the crate.
+    // Both the ordinary shot/contact path and this fallback use _pu to award once.
+    for (const p of S.plan) if (p.guaranteed && p.o && "'!p.o._pu && L.sz <= p.z + 4) {
+      p.o._pu = true; p.o.alive = false; window.Obj3D.solidBreak(p.o); removeLabelsFor(p.o);
+      C.collectPowerup(p.powerup);
+    }
+    updateStrike(ev.dt);'"''')
+rep('  return { setup, force:', '  return { setup, activate: type => { if (C && C.L) { L = C.L; usePower(type); } }, force:')
+p.write_text(s)
+# Optional area flags keep all existing callers compatible.
+p=Path('index.html'); s=p.read_text().replace('function damageArea(x, z, radius, dmg) {','function damageArea(x, z, radius, dmg, opts = {}) {').replace('const b = L.boss; if (state === \"boss\" && b.hp > 0', 'const b = L.boss; if ("'!opts.skipBoss && state === "boss" && b.hp > 0'"'); p.write_text(s)
+PY
+python /tmp/tactics-powerups.py" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "sed -n '105,155p' js/juice.js; sed -n '795,860p' js/meta.js; sed -n '237,250p' js/objects3d.js; rg -n 'powerup|surge' js/juice.js | head -30; node --check js/powerups.js; node --check js/objects3d.js; python - <<'PY'
+import re
+from pathlib import Path
+s=Path('index.html').read_text()
+for i,m in enumerate(re.finditer(r'<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)</script>', s)):
+ if m.group(1).strip(): Path('/tmp/squad-inline-'+str(i)+'.js').write_text(m.group(1))
+PY
+for f in /tmp/squad-inline-*.js; do node --check \""'$f"; done' in /home/user/my-first-repo/squad-surge
+ succeeded in 94ms:
+    }
+    const threatChip = chip("jt-threat"), swapChip = chip("jt-swap"), coachChip = chip("jt-coach"), wasteChip = chip("jt-waste");
+    const counters = { swarm: "airstrike", barricade: "giant", mortars: "shield", mortar: "shield", boss: "shield", slam: "shield" };
+    const toolType = t => ["airstrike", "shield", "giant", "surge"].includes(t) ? t : null;
+    const toolIcon = t => toolType(t) ? `<img alt="" src="assets/ui/icons/${t === "surge" ? "surge" : "pu-" + t}.webp">` : "";
+    let threatId = null, readyShown = false, coachTimer = 0, coachRetry = 0, swapTimer = 0, wasteTimer = 0;
+    function slotButton(slot) {
+      if (slot !== 0 && slot !== 1) return null;
+      return game.querySelector('[data-slot="' + slot + '"]') || $("beltSlot" + slot) || $("belt" + slot) || $("powerup" + slot);
+    }
+    function clearCoach() { clearTimeout(coachTimer); clearTimeout(coachRetry); coachChip.hidden = true; }
+    function clearSwap() { clearTimeout(swapTimer); swapChip.hidden = true; }
+    function clearTactics() {
+      clearCoach(); clearSwap(); clearTimeout(wasteTimer); wasteChip.hidden = threatChip.hidden = true;
+      threatId = null; readyShown = false;
+    }
+    on("threat", (d = {}) => {
+      const kind = String(d.kind || "").toLowerCase(), counter = toolType(d.counter) || counters[kind];
+      const label = kind === "swarm" ? "SWARM AHEAD" : kind === "barricade" ? "BARRICADE" : kind === "mortars" || kind === "mortar" ? "MORTARS" : "BOSS SLAM";
+      threatId = d.id; threatChip.innerHTML = toolIcon(counter) + "⚠ " + label; threatChip.hidden = false;
+    });
+    on("threatEnd", (d = {}) => { if (d.id == null || threatId == null || d.id === threatId) { threatChip.hidden = true; threatId = null; } });
+    on("swapOffer", (d = {}) => {
+      clearSwap();
+      swapChip.innerHTML = toolIcon(d.type) + 'SWAP?<svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12"/></svg>';
+      swapChip.setAttribute("aria-label", "Swap power-up? Three seconds to choose a slot"); swapChip.hidden = false;
+      const ring = swapChip.querySelector("circle");
+      if (ring.animate) ring.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: 76 }], { duration: 3000, fill: "forwards" });
+      swapTimer = setTimeout(clearSwap, 3000);
+    });
+    on("swapDone", clearSwap); on("swapExpired", clearSwap);
+    on("tacticsCoach", (d = {}) => {
+      clearCoach();
+      const kind = String(d.kind || "").toLowerCase(), type = toolType(kind) || counters[kind];
+      if (!type || (d.slot !== 0 && d.slot !== 1)) return;
+      const expires = Date.now() + 4000;
+      const place = safe(() => {
+        if (Date.now() >= expires) return;
+        const button = slotButton(d.slot);
+        if (!button || !button.getBoundingClientRect().width) { coachRetry = setTimeout(place, 100); return; }
+        const r = button.getBoundingClientRect(), g = game.getBoundingClientRect();
+        const target = r.left + r.width / 2 - g.left, center = clamp(target, Math.min(115, g.width / 2), Math.max(g.width - 115, g.width / 2));
+        coachChip.innerHTML = "Tap to " + (type === "airstrike" ? "call an AIRSTRIKE!" : type === "giant" ? "go GIANT!" : "activate " + type.toUpperCase() + "!") + "<span>👇</span>";
+        coachChip.style.left = center + "px"; coachChip.style.bottom = (g.bottom - r.top + 38) + "px";
+        coachChip.style.setProperty("--finger", (110 + target - center) + "px"); coachChip.hidden = false;
+      });
+      place(); coachTimer = setTimeout(clearCoach, 4000);
+    });
+    on("powerupUse", (d = {}) => {
+      clearCoach();
+      const type = toolType(d.type);
+/* ---------------- run tracking ---------------- */
+function newRun() {
+  run = { perfect: 0, wasted: 0, misused: 0, banked: 0, bankBonus: 0, bankSeen: false, tacticsFinished: false, ready: false, belt: [null, null], threats: new Map(), liveThreat: null, kills: 0, lost: 0, combo: 0, done: [], snap: M.missions.map(m => ({ uid: m.uid, prog: m.prog })), cTick: 0 };
+}
+function wire() {
+  const on = (n, f) => bus.on(n, d => tryF(() => f(d || {})));
+  on("levelStart", () => {
+    newRun();
+    const L = ctx.L;
+    if (L && L.mode === "daily" && active()) { M.daily.played[dayIndex()] = 1; feed("daily", 0); }
+  });
+  on("state", d => {
+    if (d.to === "home") { ensureMissions(); closeStale(); }
+    if (d.to === "levels") decorateLevels();
+    if (d.to === "play" && d.from === "home") run.snap = M.missions.map(m => ({ uid: m.uid, prog: m.prog }));
+    if (d.to !== "lose") { const lm = $("loseModal"); lm && lm.classList.remove("mm-on"); }
+    if (d.to !== "win") cleanupResults();
+    refreshHome();
+  });
+  on("belt", d => { if (Array.isArray(d.slots)) run.belt = d.slots.slice(0, 2); });
+  on("surgeReady", () => { run.ready = true; });
+  on("powerupUse", d => {
+    if (run.tacticsFinished) return;
+    if (d.perfect) { run.perfect++; S().perfect++; if (d.type === "surge") feed("tSurge", 1); }
+    if (d.wasted) { run.wasted++; S().wasted++; }
+    if (d.misused) run.misused++;
+    if (d.type === "surge") run.ready = false;
+    if (d.slot === 0 || d.slot === 1) run.belt[d.slot] = null;
+    let t = run.liveThreat;
+    // Effects may synchronously end their threat before powerupUse is emitted.
+    if (!t && d.threatKind) for (const candidate of run.threats.values())
+      if (candidate.kind === threatKind(d.threatKind)) t = candidate;
+    if (t && d.perfect && d.type === t.counter && (!d.threatKind || threatKind(d.threatKind) === t.kind)) { t.matched = true; creditCounter(t); }
+    persist(); checkTrophies();
+  });
+  on("bank", d => {
+    if (run.bankSeen || run.tacticsFinished) return;
+    run.bankSeen = true;
+    run.banked = Number.isFinite(d.count) ? Math.max(0, Math.floor(d.count)) : 0;
+    run.bankBonus = Number.isFinite(d.bonus) ? Math.max(0, d.bonus) : run.banked * .5;
+    S().banked += run.banked; feed("tBank", run.banked); persist();
+  });
+  on("threat", rememberThreat);
+  on("threatLive", d => { const t = rememberThreat(d); if (t) t.live = true; });
+  on("threatEnd", d => {
+    const kind = threatKind(d.kind), key = d.id != null ? d.id : kind;
+    let t = run.threats.get(key);
+    if (!t) t = rememberThreat(d);
+    if (!t || t.ended || run.tacticsFinished) return;
+    t.ended = true; t.countered = !!d.countered;
+    t.lost = Math.max(t.lost, Number.isFinite(d.lost) ? d.lost : 0);
+    if (d.countered) {
+      S().threatsCountered++;
+      // PERFECT SURGE alone is not proof that the named matching tool cleared a threat.
+      creditCounter(t);
+    }
+    if (run.liveThreat === t) run.liveThreat = null;
+    persist(); checkTrophies();
+  });
+  on("enemyDie", d => {
+    run.kills++; S().kills++; feed("kill", 1);
+    if (d.e && d.e.type === "brute") feed("brute", 1);
+    feed("runkills", run.kills);
+  });
+  on("gatePass", d => {
+    if (d.after > d.before) { S().gates++; feed("gate", 1); }
+    G.barrel = (() => {
+      const p = [[0.001, 0.02], [0.52, 0.02], [0.6, 0.05], [0.6, 0.13], [0.56, 0.17], [0.62, 0.22], [0.69, 0.27], [0.7, 0.31], [0.65, 0.35], [0.66, 0.45], [0.68, 0.8], [0.68, 1.05], [0.66, 1.15], [0.65, 1.2], [0.7, 1.26], [0.7, 1.3], [0.65, 1.35], [0.6, 1.4], [0.6, 1.47], [0.52, 1.5], [0.46, 1.46], [0.001, 1.46]].map(([x, y]) => new THREE.Vector2(x, y));
+      return new THREE.LatheBufferGeometry(p, 28);
+    })();
+    G.band = new THREE.CylinderBufferGeometry(0.695, 0.695, 0.42, 36, 1, true);
+    G.bung = merge([{ g: new THREE.CylinderBufferGeometry(0.13, 0.13, 0.08, 12), x: 0.26, y: 1.5, z: -0.12 }, { g: new THREE.CylinderBufferGeometry(0.075, 0.075, 0.1, 10), x: -0.24, y: 1.5, z: 0.14 }]);
+
+    // ---- materials
+    if (!fbEnv) fbEnv = buildEnv();
+    M.post = mat("MeshStandardMaterial", { color: 0xd9e2ee, metalness: 1, roughness: 0.05, envMapIntensity: 2.5 }); M.post.envMap = fbEnv; M.post.userData.keepEnv = true;
+    M.blue = mat("MeshPhysicalMaterial", { color: 0x1c5cf0, roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.12, emissive: 0x000000, envMapIntensity: 1 });
+    M.yellow = mat("MeshPhysicalMaterial", { color: 0xffb400, roughness: 0.26, metalness: 0.15, clearcoat: 1, clearcoatRoughness: 0.1, emissive: 0x5a3300, emissiveIntensity: 0.25, envMapIntensity: 1.1 });
+    M.wood = mat("MeshStandardMaterial", { color: 0xffffff, map: X.wood, roughness: 0.7, metalness: 0 });
+    M.steel = mat("MeshStandardMaterial", { color: 0x9aa3b0, metalness: 0.9, roughness: 0.3 });
+20:    let trauma = 0, pullback = 0, surgeKick = 0;
+21:    let surgeOn = false, shieldOn = false, giantOn = false, meterHot = false;
+67:#surgeBar.juice-hot{box-shadow:0 0 12px 3px #ffd54a;animation:juice-meter .65s ease-in-out infinite alternate}
+70: #count.surging .surge i{animation:none}
+108:    const toolType = t => ["airstrike", "shield", "giant", "surge"].includes(t) ? t : null;
+109:    const toolIcon = t => toolType(t) ? `<img alt="" src="assets/ui/icons/${t === "surge" ? "surge" : "pu-" + t}.webp">` : "";
+113:      return game.querySelector('[data-slot="' + slot + '"]') || $("beltSlot" + slot) || $("belt" + slot) || $("powerup" + slot);
+153:    on("powerupUse", (d = {}) => {
+163:      if (type === "surge") readyShown = false;
+169:    on("surgeReady", () => { if (!readyShown) { readyShown = true; enqueue("SURGE READY!", { color: "#ffd84a", icon: "surge" }); } });
+170:    on("surge", d => { if (d && d.on) readyShown = false; });
+239:      trauma = pullback = surgeKick = flash = 0;
+240:      surgeOn = shieldOn = giantOn = false;
+243:      meterHot = false; if ($("surgeBar")) $("surgeBar").classList.remove("juice-hot");
+257:      const targets = [surgeOn ? 1 : 0, surgeOn && !reduced ? .65 : 0, shieldOn ? .065 : 0, giantOn ? .065 : 0, flash];
+263:      const hot = active && !surgeOn && L && L.surge > .8;
+264:      if (!!hot !== meterHot) { meterHot = !!hot; if ($("surgeBar")) $("surgeBar").classList.toggle("juice-hot", meterHot); }
+399:    on("surge", ({ on }) => {
+400:      surgeOn = !!on;
+401:      if (on) { if (!reduced) surgeKick = .8; enqueue("SURGE!", { icon: "surge", color: "#ffd84a", size: 10 }); }
+406:    on("powerup", ({ type }) => {
+418:    on("bonusStart", () => { bossActive = false; enqueue("SURGE FINALE!", { icon: "surge", color: "#ffd84a" }); });
+464:      surgeKick = Math.max(0, surgeKick - delta);
+489:        camera.fov += 6 * Math.pow(surgeKick / .8, 3);
+501:      intro = 1.1; shake = 0; kick = 0; bossBlend = 0; trauma = pullback = surgeKick = 0;
+
+exec
+/bin/bash -lc "sed -n '88,108p' js/juice.js; ls /tmp | head; rg --files /tmp /home/user/my-first-repo -g '*three*.js' -g '*playwright*' -g '*balance*' -g '*bot*.js' 2>/dev/null | head -40" in /home/user/my-first-repo/squad-surge
+ succeeded in 527ms:
+#game .jt-chip img{width:30px;height:30px;vertical-align:middle;object-fit:contain;margin-right:6px}
+#game .jt-threat{top:110px;left:50%;transform:translateX(-50%);white-space:nowrap}
+#game .jt-swap{bottom:calc(100px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);white-space:nowrap}
+#game .jt-swap svg{width:30px;height:30px;vertical-align:middle;margin-left:6px;transform:rotate(-90deg)}
+#game .jt-swap circle{fill:none;stroke:#ffd84a;stroke-width:3;stroke-dasharray:76;stroke-dashoffset:0}
+#game .jt-coach{width:220px;transform:translateX(-50%)}
+#game .jt-coach span{position:absolute;top:100%;font-size:32px;left:var(--finger,50%);transform:translateX(-50%);animation:jt-point .6s ease-in-out infinite alternate}
+#game .jt-waste{font-size:13px;color:#b6bdc8;border-color:#707887;transform:translate(-50%,-100%)}
+#game .jt-ring{position:absolute;inset:-18px;border:4px solid #ffd84a;border-radius:50%;pointer-events:none;animation:jt-burst .65s ease-out forwards}
+@keyframes jt-point{to{margin-top:8px;filter:drop-shadow(0 0 7px #ffd84a)}}
+@keyframes jt-burst{from{transform:scale(.5);opacity:1}to{transform:scale(1.5);opacity:0}}
+@media(prefers-reduced-motion:reduce){#game .jt-coach span{animation:none}#game .jt-ring{animation:juice-fade .65s forwards}}
+`;
+    document.head.appendChild(tacticsStyle);
+    function chip(cls) {
+      const el = document.createElement("div"); el.className = "jt-chip " + cls;
+      el.hidden = true; el.setAttribute("role", "status"); game.appendChild(el); return el;
+    }
+    const threatChip = chip("jt-threat"), swapChip = chip("jt-swap"), coachChip = chip("jt-coach"), wasteChip = chip("jt-waste");
+    const counters = { swarm: "airstrike", barricade: "giant", mortars: "shield", mortar: "shield", boss: "shield", slam: "shield" };
+    const toolType = t => ["airstrike", "shield", "giant", "surge"].includes(t) ? t : null;
+c1.png
+c2.png
+c3.png
+c4.png
+cc-socks
+chime.bak
+chk.js
+claude-0
+claude-append-system-prompt.txt
+claude-code-1034348734.diag.log
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.module.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/bal/bot2-l7.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/bal/bot2.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/bal/bot-casual.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/bal/bot2-log.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/bot.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.module.js
+
+exec
+/bin/bash -lc "cat /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/bal/bot-casual.js; cat /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/bal/bot2.js; node -e 'for (const p of [\"playwright\",\"three\"]) try { console.log(p,require.resolve(p)); } catch {}'" in /home/user/my-first-repo/squad-surge
+ succeeded in 129ms:
+// Fast balance bot: no drawing (renderer.render stubbed), time x4. Steers to the better gate, dodges the slam ring.
+// usage: node bot2.js normal 1-8 | node bot2.js daily
+const http = require("http"), fs = require("fs"), path = require("path");
+const { chromium } = require("playwright");
+const ROOT = "/home/user/my-first-repo/squad-surge";
+const THREE_LOCAL = "/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js";
+const T = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".woff2": "font/woff2" };
+const server = http.createServer((q, r) => { const u = decodeURIComponent(q.url.split("?")[0]); const f = path.join(ROOT, u === "/" ? "index.html" : u); if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); return r.end(); } r.writeHead(200, { "content-type": T[path.extname(f)] || "application/octet-stream" }); fs.createReadStream(f).pipe(r); });
+const mode = process.argv[2] || "normal";
+const cases = mode === "daily"
+  ? ["arsenal", "horde", "brutes", "jackpot", "swift", "lone"].map((m, i) => ({ level: 2 + (i * 7) % 11, opts: { mode: "daily", modifier: m, seed: 300 + i } }))
+  : (process.argv[3] || "6,7,7,7,8").split(",").map(l => ({ level: +l, opts: {} }));
+(async () => {
+  await new Promise(r => server.listen(0, "127.0.0.1", r));
+  const br = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"] });
+  const p = await br.newPage({ viewport: { width: 270, height: 480 } });
+  const errs = []; p.on("pageerror", e => errs.push(e.message));
+  await p.route("**/three.min.js", r => r.fulfill({ path: THREE_LOCAL, contentType: "application/javascript" }));
+  await p.addInitScript(() => {
+    localStorage.setItem("squad-surge-v1", JSON.stringify({ level: 1, unlocked: 99, sound: false, vibe: false }));
+    const real = performance.now.bind(performance); performance.now = () => real() * 4;
+    // casual player: right gate 60% of the time (decided once per gate), wanders otherwise, dodges half the slams
+    const choice = new Map(); let wander = 0, dodge = null;
+    setInterval(() => {
+      const g = window.__game; if (!g || !g.L) return; const L = g.L;
+      if (g.state === "boss") { const b = L.boss; if (b.slamT < 1.4) dodge = null; else if (dodge === null) dodge = Math.random() < 0.5; L.targetX = b.slamT > 1.5 && dodge ? (b.x > 0 ? -5 : 5) : Math.sin(L.time * 0.8) * 2; return; }
+      let best = null;
+      for (const gt of L.gates) { if (gt.used || gt.z > L.sz || gt.z < L.sz - 30) continue;
+        if (!choice.has(gt)) { const n = L.soldiers.length, val = h => h.op === "x" ? n * h.v : n + h.v, good = gt.halves.reduce((a, h) => val(h) > val(a) ? h : a); choice.set(gt, Math.random() < 0.6 ? good.x : gt.halves.find(h => h !== good).x); }
+        best = choice.get(gt); break; }
+      wander += 0.03; L.targetX = best ?? Math.sin(wander * 0.9) * 4;
+    }, 30);
+  });
+  await p.goto(`http://127.0.0.1:${server.address().port}/index.html?hq`);
+  await p.waitForFunction(() => window.__game && __game.state === "home", null, { timeout: 60000 });
+  await p.evaluate(() => { __game.ctx.renderer.render = () => {}; });
+  for (const c of cases) {
+    await p.evaluate(c => __game.goLevel(c.level, "play", c.opts), c);
+    await p.waitForFunction(() => ["win", "lose"].includes(__game.state), null, { timeout: 300000, polling: 250 });
+    const r = await p.evaluate(() => { const L = __game.L; return { lv: L.level, mod: L.modifier || "-", r: __game.state, squad: L.bossSoldiers || L.soldiers.length, score: L.score, mult: L.mult, kills: L.kills, bestCombo: L.bestCombo, surges: L.surges, at: __game.state === "lose" ? (L.sz <= -L.length ? "boss " + Math.round(L.boss.hp / L.boss.maxHp * 100) + "%" : Math.floor(L.reached * 100) + "%") : "" }; });
+    console.log(JSON.stringify(r));
+  }
+  if (errs.length) console.log("ERRORS", errs);
+  await br.close(); server.close();
+})().catch(e => { console.error("FAIL", e.message); server.close(); process.exit(1); });
+// Fast balance bot: no drawing (renderer.render stubbed), time x4. Steers to the better gate, dodges the slam ring.
+// usage: node bot2.js normal 1-8 | node bot2.js daily
+const http = require("http"), fs = require("fs"), path = require("path");
+const { chromium } = require("playwright");
+const ROOT = "/home/user/my-first-repo/squad-surge";
+const THREE_LOCAL = "/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js";
+const T = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".woff2": "font/woff2" };
+const server = http.createServer((q, r) => { const u = decodeURIComponent(q.url.split("?")[0]); const f = path.join(ROOT, u === "/" ? "index.html" : u); if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); return r.end(); } r.writeHead(200, { "content-type": T[path.extname(f)] || "application/octet-stream" }); fs.createReadStream(f).pipe(r); });
+const mode = process.argv[2] || "normal";
+const cases = mode === "daily"
+  ? ["arsenal", "horde", "brutes", "jackpot", "swift", "lone"].map((m, i) => ({ level: 2 + (i * 7) % 11, opts: { mode: "daily", modifier: m, seed: 300 + i } }))
+  : (() => { const [a, b] = (process.argv[3] || "1-8").split("-").map(Number); return Array.from({ length: b - a + 1 }, (_, i) => ({ level: a + i, opts: {} })); })();
+(async () => {
+  await new Promise(r => server.listen(0, "127.0.0.1", r));
+  const br = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"] });
+  const p = await br.newPage({ viewport: { width: 270, height: 480 } });
+  const errs = []; p.on("pageerror", e => errs.push(e.message));
+  await p.route("**/three.min.js", r => r.fulfill({ path: THREE_LOCAL, contentType: "application/javascript" }));
+  await p.addInitScript(() => {
+    localStorage.setItem("squad-surge-v1", JSON.stringify({ level: 1, unlocked: 99, sound: false, vibe: false }));
+    const real = performance.now.bind(performance); performance.now = () => real() * 4;
+    setInterval(() => {
+      const g = window.__game; if (!g || !g.L) return; const L = g.L;
+      if (g.state === "boss") { const b = L.boss; L.targetX = b.slamT > 1.5 ? (b.x > 0 ? -5 : 5) : 0; return; }
+      let best = null;
+      for (const gt of L.gates) { if (gt.used || gt.z > L.sz || gt.z < L.sz - 30) continue; const n = L.soldiers.length, val = h => h.op === "x" ? n * h.v : n + h.v; best = gt.halves.reduce((a, h) => val(h) > val(a) ? h : a).x; break; }
+      L.targetX = best ?? 0;
+    }, 30);
+  });
+  await p.goto(`http://127.0.0.1:${server.address().port}/index.html?hq`);
+  await p.waitForFunction(() => window.__game && __game.state === "home", null, { timeout: 60000 });
+  await p.evaluate(() => { __game.ctx.renderer.render = () => {}; });
+  for (const c of cases) {
+    await p.evaluate(c => __game.goLevel(c.level, "play", c.opts), c);
+    await p.waitForFunction(() => ["win", "lose"].includes(__game.state), null, { timeout: 300000, polling: 250 });
+    const r = await p.evaluate(() => { const L = __game.L; return { lv: L.level, mod: L.modifier || "-", r: __game.state, squad: L.bossSoldiers || L.soldiers.length, score: L.score, mult: L.mult, kills: L.kills, bestCombo: L.bestCombo, surges: L.surges, at: __game.state === "lose" ? (L.sz <= -L.length ? "boss " + Math.round(L.boss.hp / L.boss.maxHp * 100) + "%" : Math.floor(L.reached * 100) + "%") : "" }; });
+    console.log(JSON.stringify(r));
+  }
+  if (errs.length) console.log("ERRORS", errs);
+  await br.close(); server.close();
+})().catch(e => { console.error("FAIL", e.message); server.close(); process.exit(1); });
+playwright /opt/node-tools/node_modules/playwright/index.js
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html'); s=p.read_text().replace('  "'$("swapChip").hidden = !L.swap;'"', '  "'$("swapChip").hidden = !L.swap || !!gameEl.querySelector(".jt-swap");'"')
+s=s.replace('  if (perfect) { L.tactics.surgePerfect++; rewardPerfect(\"surge\", false); }\\n  bus.emit(\"surge\",', '  L.tactics.used++;\\n  if (perfect) { L.tactics.surgePerfect++; rewardPerfect(\"surge\", false); }\\n  bus.emit(\"powerupUse\", { type: \"surge\", slot: null, perfect, misused: false, wasted: false, threatKind: L.threat ? L.threat.kind : null });\\n  bus.emit(\"surge\",')
+p.write_text(s)
+p=Path('js/powerups.js'); s=p.read_text().replace('if (C.state === \"boss\") C.damageBoss(L.boss.maxHp * 0.18);','if (C.state === \"boss\") { C.damageArea(L.sx, L.sz - 8, 22, 100 + 8 * L.level, { skipBoss: true }); C.damageBoss(L.boss.maxHp * 0.18); }'); p.write_text(s)
+PY
+cat > tools/bot-tactics.js <<'EOF'
+#"'!/usr/bin/env node
+"use strict";
+// Real browser balance run. No gameplay shortcuts: all policies share the same steering.
+// node tools/bot-tactics.js [--runs 3] [--levels 1-8] [--steering casual|perfect]
+//                         [--policies never,smart,random] [--three /path/three.min.js]
+// THREE_LOCAL can provide offline three.js r128. Otherwise use the game'"'s CDN.
+// Outputs each result as JSON, then a wins/attempts table. A timeout is an error, not a loss.
+const http = require(\"http\"), fs = require(\"fs\"), path = require(\"path\");
+const { chromium } = require(\"playwright\");
+const ROOT = path.resolve(__dirname, \"..\");
+const args = {};
+for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].replace(/"'^--/, "")] = process.argv[i + 1];
+const runs = Math.max(1, Number(args.runs || 1)), policies = (args.policies || "never,smart,random").split(",");
+const range = args.levels || "1-8";
+const levels = range.includes("-") ? (() => { const [a, b] = range.split("-").map(Number); return Array.from({ length: b - a + 1 }, (_, i) => a + i); })() : range.split(",").map(Number);
+const steering = args.steering || "casual";
+if (!policies.every(p => ["never", "smart", "random"].includes(p)) || !["casual", "perfect"].includes(steering)) throw new Error("Invalid policy or steering");
+const local = args.three || process.env.THREE_LOCAL;
+if (local && !fs.existsSync(local)) throw new Error(`Missing THREE_LOCAL: ${local}`);
+const TYPES = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".woff2": "font/woff2" };
+const server = http.createServer((req, res) => {
+  let name;
+  try { name = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { res.writeHead(400); return res.end(); }
+  const file = path.resolve(ROOT, "." + (name === "/" ? "/index.html" : name));
+  if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream" }); fs.createReadStream(file).pipe(res);
+});
+let browser;
+(async () => {
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"], ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
+  const results = [];
+  for (let attempt = 0; attempt < runs; attempt++) for (const level of levels) for (const policy of policies) {
+    // Fresh context isolates saves, jackpot pity, coach counts and mission state per policy.
+    const context = await browser.newContext({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 1 });
+    const page = await context.newPage(), errors = [];
+    page.on("pageerror", e => errors.push(e.message));
+    page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+    if (local) await page.route("**/three.min.js", r => r.fulfill({ path: path.resolve(local), contentType: "application/javascript" }));
+    await page.addInitScript(({ seed }) => {
+      localStorage.setItem("squad-surge-v1", JSON.stringify({ level: 1, unlocked: 99, sound: false, vibe: false }));
+      let r = seed >>> 0;
+      Math.random = () => (r = (Math.imul(r, 1664525) + 1013904223) >>> 0) / 4294967296;
+      const now = performance.now.bind(performance), raf = requestAnimationFrame.bind(window);
+      performance.now = () => now() * 4;
+      // RAF timestamps must use the same clock as performance.now; otherwise x4 has no effect.
+      window.requestAnimationFrame = cb => raf(t => cb(t * 4));
+    }, { seed: level * 997 + attempt * 193 + 17 });
+    try {
+      await page.goto(`http://127.0.0.1:${server.address().port}/index.html?hq`);
+      await page.waitForFunction(() => window.__game && __game.state === "home", null, { timeout: 60000 });
+      await page.evaluate(async ({ level, policy, steering, seed }) => {
+        const g = window.__game, C = g.ctx;
+        C.renderer.render = () => {};
+        await g.goLevel(level, "play");
+        let steerSeed = seed, actionSeed = seed ''^ 0xaffe, nextDecision = 0, nextAction = 1, dodge = null, lastSlam = 0;
+        const choices = new Map(), counts = { threats: 0, ends: 0, got: 0, uses: 0, perfect: 0, maxLive: 0 }, live = new Set();
+        const sr = () => (steerSeed = (Math.imul(steerSeed, 1664525) + 1013904223) >>> 0) / 4294967296;
+        const ar = () => (actionSeed = (Math.imul(actionSeed, 1664525) + 1013904223) >>> 0) / 4294967296;
+        C.bus.on("threatLive", t => { counts.threats++; live.add(t.id); counts.maxLive = Math.max(counts.maxLive, live.size); });
+        C.bus.on("threatEnd", t => { counts.ends++; live.delete(t.id); });
+        C.bus.on("powerupGot", () => counts.got++);
+        C.bus.on("powerupUse", e => { counts.uses++; if (e.perfect) counts.perfect++; });
+        window.__tacticsCounts = counts;
+        C.bus.on("tick", () => {
+          const L = g.L;
+          if (g.state !== "play" && g.state !== "boss") return;
+          if (L.time < nextDecision) return; nextDecision = L.time + 0.12;
+          // Equal steering for all three policies, with independent RNG from power-up decisions.
+          if (g.state === "boss") {
+            if (L.boss.slamT < lastSlam) dodge = null; lastSlam = L.boss.slamT;
+            if (dodge === null) dodge = steering === "perfect" || sr() < 0.5;
+            L.targetX = L.boss.slamT > 1.5 && dodge ? (L.boss.x > 0 ? -5 : 5) : Math.sin(L.time * 0.8) * 1.5;
+          } else {
+            let gate = null;
+            for (const q of L.gates) if (!q.used && q.z < L.sz && q.z > L.sz - 32 && (!gate || q.z > gate.z)) gate = q;
+            if (gate) {
+              if (!choices.has(gate)) {
+                const value = h => h.powerup ? L.soldiers.length + 8 : h.op === "x" ? L.soldiers.length * h.v : L.soldiers.length + h.v;
+                const good = value(gate.halves[0]) >= value(gate.halves[1]) ? 0 : 1;
+                choices.set(gate, steering === "perfect" || sr() < 0.6 ? good : 1 - good);
+              }
+              L.targetX = gate.halves[choices.get(gate)].x;
+            } else L.targetX = steering === "perfect" ? 0 : Math.sin(L.time * 0.65) * 3;
+          }
+          if (policy === "smart") {
+            const t = C.threat;
+            if (t) {
+              if (L.swap && L.swap.type === t.counter) C.usePowerup(C.belt[0] === t.counter ? 1 : 0);
+              if (!L.swap) { const slot = C.belt.indexOf(t.counter); if (slot >= 0) C.usePowerup(slot); }
+            }
+            if (g.state === "boss" && C.surgeReady) C.useSurge();
+          } else if (policy === "random" && L.time >= nextAction) {
+            nextAction = L.time + 0.8 + ar() * 2;
+            C.usePowerup(ar() < 0.5 ? 0 : 1);
+            if (C.surgeReady && ar() < 0.5) C.useSurge();
+          }
+        });
+      }, { level, policy, steering, seed: level * 173 + attempt * 697 + 11 });
+      await page.waitForFunction(() => ["win", "lose"].includes(__game.state), null, { timeout: 180000, polling: 200 });
+      const result = await page.evaluate(() => {
+        const { L, state, ctx } = __game;
+        return { result: state, squad: L.bossSoldiers || L.soldiers.length, progress: Math.round(L.reached * 100), bossPct: Math.max(0, Math.round(L.boss.hp / L.boss.maxHp * 100)), score: Math.round(L.score * L.mult), mult: L.mult, tactics: { ...ctx.tactics }, events: window.__tacticsCounts };
+      });
+      if (result.events.maxLive > 1) errors.push("Overlapping live threats");
+      if (policy === "never" && result.events.uses) errors.push("Never policy activated a power-up");
+      const row = { level, policy, attempt: attempt + 1, steering, ...result, errors };
+      results.push(row); console.log(JSON.stringify(row));
+    } catch (error) {
+      const row = { level, policy, attempt: attempt + 1, result: "ERROR", error: error.message, errors };
+      results.push(row); console.error(JSON.stringify(row)); process.exitCode = 1;
+    } finally { await context.close(); }
+  }
+  console.log(`'"\\nWins / attempts ("'${steering} steering; errors reported separately)`);
+  console.table(levels.map(level => {
+    const row = { level };
+    for (const policy of policies) { const r = results.filter(x => x.level === level && x.policy === policy); row[policy] = `${r.filter(x => x.result === "win").length}/${r.length}` + (r.some(x => x.result === "ERROR" || x.errors.length) ? " ERROR" : ""); }
+    return row;
+  }));
+  if (results.some(r => r.errors.length)) process.exitCode = 1;
+})().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (browser) await browser.close(); server.close(); });
+EOF
+node --check tools/bot-tactics.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+codex
+The threat and counter paths are implemented. Road threats have loss caps, AIRSTRIKE deals exactly 18% boss damage, and GIANT doubles boss damage. I also checked run B’s event handlers and added `powerupUse` for SURGE so PERFECT SURGE feedback and missions can track it.
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html'); s=p.read_text()
+s=s.replace('const free = zz => "'!solids.some(o => Math.abs(o.z - zz) < 5) && !gates.some(g => Math.abs(g.z - zz) < 5);'"', 'const free = zz => "'!solids.some(o => Math.abs(o.z - zz) < 5) && !gates.some(g => Math.abs(g.z - zz) < 5) && !threats.some(t => Math.abs(t.z - zz) < 35);'"')
+s=s.replace('gates.push(makeGate(supplyZ + (tool ? 0 : 14), [\"+\", 10 + d * 2], tool ? [\"tool\", nextThreat.counter] : [\"+\", 12 + d * 2]));', '''const jackpot = "'!tool && ((needJackpot && !jackpots) || rj() < jackChance);
+        if (jackpot) jackpots++;
+        gates.push(makeGate(supplyZ + (tool ? 0 : 14), jackpot ? ["+", 40 + 8 * d, { jackpot: true }] : ["+", 10 + d * 2], tool ? ["tool", nextThreat.counter] : ["+", 12 + d * 2]));'"''')
+p.write_text(s)
+PY
+cat > /tmp/check-tactics.js <<'EOF'
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const THREE = require(process.env.THREE_LOCAL);
+THREE.TextureLoader.prototype.load = function(url, cb) { const t = new THREE.Texture(); if(cb) cb(t); return t; };
+const noop=()=>{};
+const elements = new Map();
+const paint = new Proxy({createLinearGradient:()=>({addColorStop:noop}),createRadialGradient:()=>({addColorStop:noop}),measureText:t=>({width:t.length*10})}, {get:(o,k)=>o[k]||noop});
+function el() { return {hidden:false,style:{},dataset:{},classList:{toggle:noop,add:noop,remove:noop},setAttribute:noop,appendChild:noop,remove:noop,addEventListener:noop,querySelector:()=>null,closest:()=>null,getBoundingClientRect:()=>({left:0,right:70,top:0,bottom:70}),getContext:()=>paint,clientWidth:390,clientHeight:780, firstElementChild:{hidden:true,src:''}}; }
+const document={getElementById:id=>{if("'!elements.has(id))elements.set(id,el());return elements.get(id);},createElement:el,addEventListener:noop};
+const Obj3D={setup:noop,clear:noop,gate:noop,gateHalf:noop,gateUsed:noop,solid:noop,solidLabel:noop,solidHit:noop,solidBreak:noop,update:noop,threatSign:t=>{t.vis={sign:new THREE.Group(),ring:new THREE.Mesh(),shell:new THREE.Mesh()};}};
+const sandbox={console,THREE,document,Obj3D,Scenery:{build:noop,preload:async()=>{},update:noop},localStorage:{getItem:()=>JSON.stringify({sound:false,vibe:false}),setItem:noop},performance:{now:()=>10000},location:{search:'"''},devicePixelRatio:1,matchMedia:()=>({matches:true}),navigator:{},setTimeout:noop,clearTimeout:noop,addEventListener:noop,requestAnimationFrame:noop};
+sandbox.window=sandbox;
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync('js/powerups.js','utf8'),sandbox);
+let src=fs.readFileSync('index.html','utf8').match(/<script>\\s*\"use strict\";([\\s\\S]*?)<\\/script>/)[1];
+src=src.slice(0,src.indexOf('// ---------- boot ----------'));
+src=src.replace('new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: \"high-performance\" })','({setPixelRatio(){},setSize(){},render(){},shadowMap:{enabled:false}})');
+vm.runInContext(src+'\\nwindow.H={ctx,startLevel,setState,step,fillSurge,updateTactics,collectPowerup,usePowerup,useSurge,liveThreat,announceThreat,endThreat,damageBoss,bossDown,finishLevel,breakSolid,fireRate,damage,get L(){return L},get state(){return state},save,bus}; Powerups.setup(ctx);',sandbox);
+const H=sandbox.H,events=[];for(const n of ['belt','powerupGot','swapOffer','swapDone','swapExpired','powerupUse','threat','threatLive','threatEnd','surgeReady','bank','win','tacticsCoach'])H.bus.on(n,d=>events.push([n,d]));
+function start(l=2){H.startLevel(l);H.setState('play');events.length=0;}
+start();H.collectPowerup('shield');H.collectPowerup('giant');assert.deepEqual(Array.from(H.ctx.belt),['shield','giant']);const before=H.L.soldiers.length;
+H.collectPowerup('airstrike');H.L.time+=3.1;H.updateTactics(.01);assert.equal(H.L.soldiers.length,before+8);assert.equal(H.ctx.belt[0],'shield');
+H.collectPowerup('airstrike');H.usePowerup(1);assert.equal(H.ctx.belt[1],'airstrike');assert.equal(H.ctx.tactics.used,0);
+H.L.threats=[];H.L.enemies=[];H.L.solids=[];H.usePowerup(1);assert.equal(H.ctx.tactics.wasted,1);assert.equal(H.ctx.belt[1],null);
+H.setState('paused');assert.equal(H.usePowerup(0),false);assert.equal(H.ctx.belt[0],'shield');H.setState('play');
+start();H.fillSurge(1);assert(H.ctx.surgeReady);const uses=H.L.surges;H.L.idleT=10;H.step(.05);assert.equal(H.L.surge,1);assert.equal(H.L.surges,uses);
+H.setState('boss');H.L.boss.z=H.L.sz-20;H.useSurge();assert.equal(H.ctx.surgeReady,false);assert.equal(H.L.tactics.surgePerfect,1);assert(events.some(e=>e[0]==='powerupUse'&&e[1].type==='surge'&&e[1].perfect));
+start(3);const t=H.L.threats[0];H.L.sz=t.z+24;H.updateTactics(.01);assert.equal(H.ctx.threat.kind,'barricade');H.collectPowerup('giant');const score=H.L.score;H.usePowerup(0);assert.equal(H.L.score-score,900);assert.equal(H.L.tactics.perfect,1);assert.equal(H.L.combo,10);H.L.sz=t.z+10;H.updateTactics(.01);assert(t.actors.every(o=>"'!o.alive));assert(t.done);
+start(4);const m=H.L.threats[0];H.ctx.addSoldiers(45);H.L.sz=m.z+24;H.updateTactics(.01);H.collectPowerup('"'shield');H.usePowerup(0);const protectedN=H.L.soldiers.length;for(let i=0;i<100;i++){H.L.sz-=.05*8.5;H.updateTactics(.05);}assert.equal(H.L.soldiers.length,protectedN);
+start(4);H.setState('boss');H.L.boss.z=H.L.sz-14;H.collectPowerup('airstrike');const hp=H.L.boss.hp;H.usePowerup(0);assert(Math.abs(H.L.boss.hp-hp*.82)<1e-7);
+start(3);H.collectPowerup('shield');H.collectPowerup('giant');H.setState('boss');H.damageBoss(H.L.boss.hp);assert.equal(H.L.bankBonus,1);assert.equal(H.ctx.tactics.banked,2);assert(H.ctx.belt.every(x=>x===null));H.finishLevel(3);assert.equal(H.L.mult,4);assert.equal(H.state,'win');H.finishLevel(3);assert.equal(H.L.mult,4);
+for(let level=2;level<=8;level++){start(level);assert.equal(H.L.threats.length,level>=6?3:2);assert.equal(H.L.gates.filter(g=>g.halves.some(h=>h.powerup)).length,level>=3?1:0);for(let i=1;i<H.L.threats.length;i++)assert(H.L.threats[i-1].z-H.L.threats[i].z>80);}
+console.log('PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.');
+// Pure simulation smoke: actual core and power-up module, stubbing only DOM/graphics.
+for(let level=1;level<=8;level++){start(level);for(let i=0;i<6000&&['play','boss'].includes(H.state);i++){const L=H.L;let target=0;for(const g of L.gates){if(g.used||g.z>L.sz||g.z<L.sz-30)continue;const val=h=>h.powerup?L.soldiers.length+8:h.op==='x'?L.soldiers.length*h.v:L.soldiers.length+h.v;target=val(g.halves[0])>val(g.halves[1])?g.halves[0].x:g.halves[1].x;break;}L.targetX=H.state==='boss'?(L.boss.slamT>1.5?(L.boss.x>0?-5:5):0):target;H.step(.05);}console.log(JSON.stringify({level,state:H.state,squad:H.L.bossSoldiers||H.L.soldiers.length,used:H.ctx.tactics.used,perfect:H.ctx.tactics.perfect}));assert.equal(H.state,'win');}
+EOF
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node /tmp/check-tactics.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 2981ms:
+PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.
+{"level":1,"state":"win","squad":183,"used":0,"perfect":0}
+{"level":2,"state":"win","squad":238,"used":0,"perfect":0}
+{"level":3,"state":"win","squad":225,"used":0,"perfect":0}
+{"level":4,"state":"win","squad":319,"used":0,"perfect":0}
+{"level":5,"state":"win","squad":344,"used":0,"perfect":0}
+{"level":6,"state":"win","squad":347,"used":0,"perfect":0}
+{"level":7,"state":"win","squad":600,"used":0,"perfect":0}
+{"level":8,"state":"win","squad":600,"used":0,"perfect":0}
+
+exec
+/bin/bash -lc "cp /tmp/check-tactics.js /tmp/check-tactics-visuals.js
+python - <<'PY'
+from pathlib import Path
+p=Path('/tmp/check-tactics-visuals.js'); s=p.read_text().replace('const t = new THREE.Texture(); if(cb) cb(t);', 'const t = new THREE.Texture({width:128,height:128}); if(cb) cb(t);')
+s=s.replace('vm.createContext(sandbox);', '''THREE.PMREMGenerator = class { fromScene() { return {texture:new THREE.Texture()}; } dispose() {} };
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync('js/objects3d.js','utf8'),sandbox);''')
+s=s.replace('Powerups.setup(ctx);', 'Obj3D.setup(ctx); Powerups.setup(ctx);');p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node /tmp/check-tactics-visuals.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 2600ms:
+PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.
+{"level":1,"state":"win","squad":183,"used":0,"perfect":0}
+{"level":2,"state":"win","squad":238,"used":0,"perfect":0}
+{"level":3,"state":"win","squad":224,"used":0,"perfect":0}
+{"level":4,"state":"win","squad":319,"used":0,"perfect":0}
+{"level":5,"state":"win","squad":346,"used":0,"perfect":0}
+{"level":6,"state":"win","squad":347,"used":0,"perfect":0}
+{"level":7,"state":"win","squad":600,"used":0,"perfect":0}
+{"level":8,"state":"win","squad":600,"used":0,"perfect":0}
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('js/powerups.js'); s=p.read_text().replace('const fork = (i + ev.level) % 2 === 0;', 'const fork = i === 0 ? ev.level % 2 === 0 : ev.level % 2 "'!== 0;'"')
+s=s.replace('      p.o._pu = true; p.o.alive = false; window.Obj3D.solidBreak(p.o); removeLabelsFor(p.o);\\n      C.collectPowerup(p.powerup);', '      C.damageArea(p.o.x, p.o.z, 0.01, p.o.hp, { skipBoss: true });')
+p.write_text(s)
+p=Path('index.html'); s=p.read_text().replace('"'!L.swap || !!gameEl.querySelector(".jt-swap")'"', '"'!L.swap || hud.externalSwap'"').replace('Scenery.setup(ctx); Obj3D.setup(ctx); Juice.setup(ctx);','Scenery.setup(ctx); Obj3D.setup(ctx); Juice.setup(ctx);\\n  hud.externalSwap = "'!!gameEl.querySelector(".jt-swap");'"');p.write_text(s)
+PY
+cp /tmp/check-tactics-visuals.js tools/check-tactics.js
+python - <<'PY'
+from pathlib import Path
+p=Path('tools/check-tactics.js'); s=p.read_text(); s='''#"'!/usr/bin/env node
+"use strict";
+// Browser-free behavioral checks using the real inline simulation, Powerups and Obj3D.
+// Stubs DOM, texture loading, PMREM and renderer only; does not validate pixels or GPU shaders.
+// Run from the repository root:
+//   THREE_LOCAL=/path/to/three-r128.min.js node tools/check-tactics.js
+// The Playwright bot remains the authoritative browser balance check.
+'"'''+s
+s=s.replace(\"const THREE = require(process.env.THREE_LOCAL);\", \"const THREE = require(process.env.THREE_LOCAL || 'three');\")
+a=s.index('const Obj3D={'); b=s.index('\\nconst sandbox=',a);s=s[:a]+s[b:];s=s.replace('console,THREE,document,Obj3D,Scenery:', 'console,THREE,document,Scenery:')
+s=s.replace(\"start();H.collectPowerup('shield');\", \"start();H.collectPowerup('shield');\",1)
+s=s.replace(\"for(let level=1;level<=8;level++){start(level);\", \"for(let level=1;level<=8;level++){start(level);\",1)
+s += '''
+// The three introductory supplies must be on the belt before their first encounter,
+// even if steering misses the crate. No button is pressed during this check.
+for (const level of [2, 3, 4]) {
+  start(level);
+  const first = H.L.threats[0];
+  for (let i = 0; i < 400 && "'!first.live && !first.done; i++) {
+    H.L.targetX = 4.5; H.step(.05);
+  }
+  assert(first.live || first.done);
+  assert(H.ctx.belt.includes(first.counter), `Level ${level} teaching counter missing`);
+  assert(events.some(e => e[0] === '"'tacticsCoach' && e[1].kind === first.counter));
+}
+// MISUSED gives no PERFECT score; repeat starts discard both offers and held SURGE.
+start(3); H.L.sz = H.L.threats[0].z + 24; H.updateTactics(.01);
+H.collectPowerup('shield'); const misuseScore = H.L.score; H.usePowerup(0);
+assert.equal(H.ctx.tactics.misused, 1); assert.equal(H.L.score, misuseScore);
+H.collectPowerup('shield'); H.collectPowerup('giant'); H.collectPowerup('airstrike'); H.fillSurge(1);
+start(3); assert.equal(H.L.swap, null); assert.equal(H.ctx.surgeReady, false); assert(H.ctx.belt.every(x => x === null));
+console.log('PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.');
+'''
+p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/check-tactics.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 2953ms:
+PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.
+{"level":1,"state":"win","squad":183,"used":0,"perfect":0}
+{"level":2,"state":"win","squad":238,"used":0,"perfect":0}
+{"level":3,"state":"win","squad":224,"used":0,"perfect":0}
+{"level":4,"state":"win","squad":320,"used":0,"perfect":0}
+{"level":5,"state":"win","squad":344,"used":0,"perfect":0}
+{"level":6,"state":"win","squad":339,"used":0,"perfect":0}
+{"level":7,"state":"win","squad":600,"used":0,"perfect":0}
+{"level":8,"state":"win","squad":600,"used":0,"perfect":0}
+PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.
+

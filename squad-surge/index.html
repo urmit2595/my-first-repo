@@ -56,6 +56,22 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 @keyframes rise{from{opacity:1;transform:translate(-50%,-50%) scale(.7)}25%{transform:translate(-50%,-90%) scale(1.15)}to{opacity:0;transform:translate(-50%,-180%) scale(1)}}
 .weapon-tag{position:absolute;left:12px;bottom:max(14px,env(safe-area-inset-bottom));z-index:4;display:flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;border-radius:12px;background:#0d1630cc;font:14px 'Lilita One',sans-serif}
 .weapon-tag img{height:22px}
+/* Tactics controls */
+.belt{position:absolute;inset:0;z-index:5;pointer-events:none}
+.belt-slot{position:absolute;bottom:calc(18px + env(safe-area-inset-bottom));width:70px;height:70px;border-radius:50%;border:3px solid #77c7ff;background:radial-gradient(#2859a0,#14213d);box-shadow:0 5px 0 #0d1630;pointer-events:auto;color:#fff;transition:box-shadow .6s,border-color .6s}
+.belt-slot:first-child{left:max(16px,env(safe-area-inset-left))}.belt-slot:nth-child(2){right:max(16px,env(safe-area-inset-right))}
+.belt-slot img{width:52px;height:52px;object-fit:contain}.belt-slot.empty:after{content:'+';font:30px Nunito;opacity:.25}
+.belt-slot small{position:absolute;bottom:-9px;left:20px;background:#0d1630;border-radius:8px;padding:1px 5px}
+.belt-slot.counter{border-color:#ffe066;box-shadow:0 0 0 4px #ffcb3c66,0 0 24px #ffd84aaa,0 5px 0 #0d1630}
+.belt-slot.active{animation:beltpulse .7s ease-in-out infinite}
+@keyframes beltpulse{50%{filter:brightness(1.5);transform:scale(1.06)}}
+.surge-button{position:absolute;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:112px;min-height:55px;border-radius:28px;background:linear-gradient(#fff07a,#ffb300);border:3px solid #0d1630;color:#14213d;pointer-events:auto;font-size:17px;box-shadow:0 4px 0 #875100}
+.swap-chip{position:absolute;bottom:calc(102px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:5px 12px;border:2px solid #ffe066;border-radius:16px;background:#14213dee;font:16px 'Lilita One';white-space:nowrap}
+.swap-chip img{width:32px;height:32px;vertical-align:middle;object-fit:contain}
+.weapon-tag{bottom:calc(100px + env(safe-area-inset-bottom));font-size:11px;max-width:45%}
+.count .surge{pointer-events:auto;cursor:pointer;height:14px;top:calc(100% + 3px);border:3px solid #0d1630}
+.count.ready .surge{box-shadow:0 0 12px #ffd84a}
+@media(prefers-reduced-motion:reduce){.belt-slot.active{animation:none}}
 /* Home */
 .home{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
 .home>*{pointer-events:auto}
@@ -123,6 +139,12 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
   <div class="bossbar" id="bossbar" hidden><div class="label stroke" id="bossLabel"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" stroke="#0d1630" stroke-width="1.6" d="M12 2C7 2 3.5 5.6 3.5 10.2c0 2.6 1.2 4.6 3 5.8V19a1 1 0 0 0 1 1h1.5v-2h2v2h2v-2h2v2h1.5a1 1 0 0 0 1-1v-3c1.8-1.2 3-3.2 3-5.8C20.5 5.6 17 2 12 2z"/><circle cx="8.7" cy="11" r="2.1" fill="#0d1630"/><circle cx="15.3" cy="11" r="2.1" fill="#0d1630"/></svg>OGRE WARLORD</div><div class="bar"><i id="bossFill"></i></div></div>
   <div class="weapon-tag" id="weaponTag" hidden><img id="weaponImg" src="assets/w-pistol.png" alt=""><span id="weaponName">PISTOL</span></div>
 
+  <div class="belt" id="belt" hidden>
+    <button class="belt-slot empty" id="belt0" data-slot="0" aria-label="Empty slot 1"><img alt="" hidden><small>1 / Q</small></button>
+    <button class="belt-slot empty" id="belt1" data-slot="1" aria-label="Empty slot 2"><img alt="" hidden><small>2 / E</small></button>
+    <button class="surge-button" id="surgeButton" hidden>SURGE READY</button>
+    <div class="swap-chip" id="swapChip" hidden><img id="swapIcon" alt=""> SWAP? <small>tap a slot</small></div>
+  </div>
   <div class="home" id="home">
     <div class="logo" id="logo"><img id="logoImg" src="assets/ui/logo.webp" alt="Squad Surge" hidden><b>SQUAD</b><b>SURGE</b></div>
     <div>
@@ -177,6 +199,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 const SAVE_KEY = "squad-surge-v1";
 const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
 Object.assign(save, { level: 1, unlocked: 1, best: {}, stars: {}, bestSquad: {}, bestScore: {}, skin: "classic", tracer: "gold", sound: true, vibe: true, ...save });
+save.tacticsPerfect = Math.max(0, Number(save.tacticsPerfect) || 0);
+save.tacticsCounters = save.tacticsCounters && typeof save.tacticsCounters === "object" ? save.tacticsCounters : {};
 save.unlocked = Math.max(save.unlocked, save.level);
 for (const k of ["coins", "gems", "up"]) delete save[k]; // drop old shop data from earlier builds
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
@@ -389,6 +413,9 @@ const ctx = {
   THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng,
   get WEAPONS() { return WEAPONS; }, get L() { return L; }, get state() { return state; }, get layers() { return layers; },
   sfx: (...a) => sfx(...a), vibe: ms => vibe(ms), floatText: (...a) => floatText(...a),
+  get belt() { return L.belt; }, usePowerup: slot => usePowerup(slot), collectPowerup: type => collectPowerup(type),
+  get tactics() { return L.tactics; }, get threat() { return L.threat; }, get surgeReady() { return !!L.surgeReady; },
+  useSurge: () => useSurge(), damageBoss: n => damageBoss(n),
   // Surge Update seams (design/engagement.md section 3)
   slowMo: (...a) => slowMo(...a), hitStop: s => hitStop(s), addScore: (p, o) => addScore(p, o),
   spawnSolid: (...a) => spawnSolid(...a), damageArea: (...a) => damageArea(...a),
@@ -412,17 +439,179 @@ const LEVEL_NAMES = ["OLD TOWN", "RED BRIDGE", "SALT PIER", "BROKEN BLOCKS", "DU
 function levelName(level) { const lap = Math.ceil(level / LEVEL_NAMES.length); return LEVEL_NAMES[(level - 1) % LEVEL_NAMES.length] + (lap > 1 ? ` ${lap}` : ""); }
 function themeFor(level) { return THEMES[(level - 1) % THEMES.length]; }
 
+// ---------- tactics: belt, learning, encounter lifecycle ----------
+const THREAT_COUNTER = { swarm: "airstrike", barricade: "giant", mortars: "shield", slam: "shield" };
+function updateBeltHUD() {
+  if (!L || !L.belt) return;
+  for (let i = 0; i < 2; i++) {
+    const b = beltButtons[i], type = L.belt[i], fx = L.beltFxUntil[i] > L.time ? L.beltFx[i] : null, icon = type || fx;
+    if (b.dataset.icon !== (icon || "")) {
+      b.dataset.icon = icon || ""; const img = b.firstElementChild; img.hidden = !icon;
+      if (icon) img.src = `assets/ui/icons/pu-${icon}.webp`;
+    }
+    b.dataset.type = type || "";
+    b.classList.toggle("empty", !icon); b.classList.toggle("active", !!fx);
+    b.classList.toggle("counter", !!type && !!L.threat && L.threat.counter === type && save.tacticsPerfect < 3);
+    b.setAttribute("aria-label", L.swap ? `Swap ${L.swap.type} into slot ${i + 1}` : type ? `Use ${type}, slot ${i + 1}` : `Empty slot ${i + 1}`);
+  }
+  $("surgeButton").hidden = !L.surgeReady || L.bankLocked;
+  $("count").classList.toggle("ready", L.surgeReady);
+  $("swapChip").hidden = !L.swap || hud.externalSwap;
+  if (L.swap && $("swapIcon").dataset.type !== L.swap.type) {
+    $("swapIcon").dataset.type = L.swap.type; $("swapIcon").src = `assets/ui/icons/pu-${L.swap.type}.webp`;
+  }
+}
+function beltChanged() { bus.emit("belt", { slots: L.belt.slice() }); updateBeltHUD(); }
+function expireSwap() {
+  if (!L.swap) return;
+  const type = L.swap.type; L.swap = null;
+  addSoldiers(8); floatText(L.sx, 2.5, L.sz, "+8", "#7fd0ff");
+  bus.emit("swapExpired", { type }); updateBeltHUD();
+}
+function collectPowerup(type) {
+  if (!L || L.bankLocked || !["shield", "airstrike", "giant", "jackpot"].includes(type)) return false;
+  if (type === "jackpot") { window.Powerups?.activate(type); return true; }
+  const slot = L.belt.indexOf(null);
+  if (slot < 0) {
+    // A second pickup settles the earlier offer first, so no supplies silently disappear.
+    expireSwap(); L.swap = { type, until: L.time + 3 };
+    bus.emit("swapOffer", { type, until: L.swap.until }); updateBeltHUD(); return true;
+  }
+  L.belt[slot] = type; beltChanged(); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+}
+function coachCounter() {
+  if (!L || L.coach || (state !== "play" && state !== "boss")) return;
+  for (const t of L.threats) {
+    if (!t.teaching || t.done || t.coached || (save.tacticsCounters[t.counter] || 0) >= 2) continue;
+    const slot = L.belt.indexOf(t.counter); if (slot < 0) continue;
+    t.coached = true; L.coach = t.id;
+    // kind is the power-up being taught (airstrike/giant/shield), slot is zero-based.
+    bus.emit("tacticsCoach", { kind: t.counter, slot }); return;
+  }
+}
+function rewardPerfect(type, slow = true) {
+  L.tactics.perfect++; save.tacticsPerfect++;
+  if (type !== "surge") save.tacticsCounters[type] = (save.tacticsCounters[type] || 0) + 1;
+  ctx.addScore(300 * L.level, { raw: true, reason: "perfect" });
+  const before = L.combo; L.combo += 10; L.comboT = COMBO_WINDOW; L.bestCombo = Math.max(L.bestCombo, L.combo);
+  for (const t of COMBO_TIERS) if (before < t[0] && L.combo >= t[0]) bus.emit("combo", { count: L.combo, tier: COMBO_TIERS.length - COMBO_TIERS.indexOf(t), name: t[2], mult: t[1] });
+  if (slow) slowMo(0.4, 0.35); persist();
+}
+function hasPowerTarget(type) {
+  if (type === "shield") {
+    if (L.threat || (state === "boss" && L.boss.hp > 0)) return true;
+    for (const t of L.threats) if (!t.done && L.sz - t.z >= 0 && L.sz - t.z < 24 + SPEED * L.speedMul * 4) return true;
+    for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z <= L.sz + 5 && L.sz - e.z < 4 * (SPEED * L.speedMul + e.sp)) return true;
+    return false;
+  }
+  if (state === "boss" && L.boss.hp > 0) return true;
+  const range = type === "giant" ? SPEED * L.speedMul * 6 : 60;
+  for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z < L.sz + 5 && e.z > L.sz - range) return true;
+  for (const o of L.solids) if (o.alive && o.z < L.sz + 2 && o.z > L.sz - range) return true;
+  return false;
+}
+function usePowerup(slot) {
+  if (!L || (slot !== 0 && slot !== 1) || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+  if (L.swap && L.time >= L.swap.until) expireSwap();
+  if (L.swap) {
+    const type = L.swap.type; L.swap = null; L.belt[slot] = type; beltChanged();
+    bus.emit("swapDone", { type, slot }); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+  }
+  const type = L.belt[slot]; if (!type) return false;
+  const threat = L.threat, perfect = !!threat && threat.counter === type, misused = !!threat && !perfect, wasted = !threat && !hasPowerTarget(type);
+  L.belt[slot] = null; L.beltFx[slot] = type; L.beltFxUntil[slot] = L.time + (type === "airstrike" ? 2.5 : 6);
+  L.tactics.used++; if (wasted) L.tactics.wasted++; if (misused) L.tactics.misused++;
+  if (perfect) { threat.countered = true; rewardPerfect(type); }
+  beltChanged();
+  bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
+  window.Powerups?.activate(type); return true;
+}
+function threatLossLeft(t) { return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - 3)); }
+function announceThreat(t) {
+  t.announced = true; Obj3D.threatSign(t);
+  bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
+}
+function liveThreat(t) {
+  t.live = true; L.threat = t;
+  t.lossCap = Math.min(t.kind === "swarm" ? 12 : 10, Math.ceil(L.soldiers.length * 0.24));
+  if (t.kind === "swarm") {
+    const count = Math.round(1.8 * (6 + L.level * 3));
+    for (let i = 0; i < count; i++) {
+      const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
+      e.threat = t; L.enemies.push(e); t.actors.push(e);
+    }
+  } else if (t.kind === "barricade") {
+    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, 70 + L.level * 8, { threat: t }));
+  } else if (t.kind === "mortars") {
+    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z, 22 + L.level * 4, { threat: t }));
+  }
+  bus.emit("threatLive", { id: t.id, kind: t.kind }); coachCounter(); updateBeltHUD();
+}
+function endThreat(t) {
+  if (!t || t.done) return;
+  t.done = true; t.live = false;
+  if (t.vis) { t.vis.sign.visible = t.vis.ring.visible = t.vis.shell.visible = false; }
+  if (L.threat === t) L.threat = null;
+  if (L.coach === t.id) L.coach = null;
+  bus.emit("threatEnd", { id: t.id, kind: t.kind, countered: t.countered, lost: t.lost }); updateBeltHUD();
+}
+function updateTactics(dt) {
+  if (L.swap && L.time >= L.swap.until) expireSwap();
+  coachCounter();
+  if (L.bankLocked) return;
+  if (state === "boss" && !L.threat && L.boss.hp > 0) {
+    const t = { id: `slam-${L.slamId = (L.slamId || 0) + 1}`, kind: "slam", counter: "shield", z: L.boss.z, actors: [], age: 0, lost: 0, countered: false };
+    announceThreat(t); liveThreat(t);
+  }
+  if (state === "play") for (const t of L.threats) {
+    if (t.done) continue;
+    const d = L.sz - t.z;
+    if (!t.announced && d <= 24 + 2.5 * SPEED * L.speedMul) announceThreat(t);
+    if (!t.live && d <= 24 && !L.threat) liveThreat(t);
+  }
+  const t = L.threat; if (!t || t.kind === "slam") return;
+  t.age += dt;
+  if (t.kind === "barricade" && L.giantT > 0 && L.sz - t.z < 12) for (const o of t.actors) if (o.alive) breakSolid(o, true);
+  if (t.kind === "mortars") {
+    if (t.shellT > 0) {
+      t.shellT -= dt;
+      const u = Math.min(1, 1 - t.shellT / 0.85);
+      t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.z + (t.targetZ - t.z) * u);
+      if (t.shellT <= 0) {
+        t.vis.shell.visible = t.vis.ring.visible = false;
+        if (L.shieldT <= 0 && Math.abs(L.sx - t.targetX) < 2.8) {
+          const loss = Math.min(2 + L.level % 3, threatLossLeft(t));
+          killSoldiers(loss, t.targetX, true); t.lost += loss;
+        }
+        bus.emit("explosion", { x: t.targetX, z: t.targetZ, radius: 2.8 });
+        L.fx.push({ x: t.targetX, y: 0.3, z: t.targetZ, f: 9, t: 0, dur: 0.4, size: 4 });
+      }
+    }
+    t.shotT -= dt;
+    if (t.shotT <= 0 && t.age < 5.1) {
+      let tower = null; for (const o of t.actors) if (o.alive) { tower = o; break; }
+      if (tower) {
+        t.shotT = 1.6; t.shellT = 0.85; t.fromX = tower.x; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.85;
+        t.vis.ring.position.set(t.targetX, 0.09, t.targetZ); t.vis.ring.visible = t.vis.shell.visible = true;
+      }
+    }
+  }
+  let alive = false;
+  for (const a of t.actors) if (t.kind === "swarm" ? a.hp > 0 && a.state !== "dead" && a.state !== "dying" : a.alive) { alive = true; break; }
+  if ((!alive && !(t.shellT > 0)) || t.age >= 6 || (t.kind === "barricade" && L.sz < t.z - 2)) endThreat(t);
+}
+
 // ---------- level generation ----------
-const isGood = h => h.op === "x" ? h.v >= 1 : h.v >= 0;
-const gateText = h => h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
+const isGood = h => h.powerup ? true : h.op === "x" ? h.v >= 1 : h.v >= 0;
+const gateText = h => h.powerup ? "" : h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
 function makeGate(z, left, right) {
   const gate = { kind: "gate", z, used: false, halves: [] };
-  for (const [s, spec] of [[-1, left], [1, right]]) gate.halves.push({ x: s * ROAD / 2, hw: ROAD / 2, op: spec[0], v: spec[1], side: s, jackpot: !!(spec[2] && spec[2].jackpot) });
+  for (const [s, spec] of [[-1, left], [1, right]]) gate.halves.push({ x: s * ROAD / 2, hw: ROAD / 2, op: spec[0], v: spec[1], side: s, jackpot: !!(spec[2] && spec[2].jackpot), powerup: spec[0] === "tool" ? spec[1] : null });
   Obj3D.gate(gate); refreshGate(gate); return gate;
 }
 function refreshGate(gate) { for (const h of gate.halves) Obj3D.gateHalf(gate, h, isGood(h), gateText(h)); }
 // solid shootable objects: blocks, crates, tyres, weapon cases, ammo boxes (hw = half-width for bullets and collisions)
-const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3, airdrop: 1.2, barrel: 0.8 };
+const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3, airdrop: 1.2, barrel: 0.8, barricade: 1.8, mortar: 0.8 };
 function makeSolid(kind, x, z, hp, extra = {}) {
   const o = { kind, x, z, hw: SOLID_HW[kind], hp, maxHp: hp, alive: true, ...extra };
   Obj3D.solid(o); labelSolid(o); return o;
@@ -446,6 +635,15 @@ function generateLevel(level, opts = {}) {
   const length = Math.min(200 + level * 35, 520);
   Obj3D.clear(); Scenery.build(theme, length);
   const gates = [], solids = [], enemies = [];
+  const threats = [];
+  if (level >= 2) {
+    const count = level >= 6 ? 3 : 2, kinds = level >= 4 ? ["swarm", "barricade", "mortars"] : level >= 3 ? ["swarm", "barricade"] : ["swarm"];
+    for (let i = 0; i < count; i++) {
+      const kind = i === 0 && level <= 4 ? kinds[kinds.length - 1] : kinds[(i + level) % kinds.length];
+      threats.push({ id: `road-${i}`, kind, counter: THREAT_COUNTER[kind], z: -100 - i * (length - 165) / (count - 1), announced: false, live: false, done: false, countered: false, lost: 0, actors: [], age: 0, shotT: 0, shellT: 0, gap: rj() < 0.5 ? -1 : 1, teaching: i === 0 && level <= 4 });
+    }
+  }
+  let threatIndex = 0;
   const etype = theme.enemy, d = level;
   const horde = (z, n, spread = 4.2, depth = 6) => {
     n = Math.round(n * hordeMul);
@@ -467,6 +665,18 @@ function generateLevel(level, opts = {}) {
     gates.push(makeGate(z, ["+", 4 + d], ["+", 8 + d])); z -= 26;
     const pool = ["gates", "horde", "lanes", "tyres", "gates", "case", "brutes", "horde", "ammo"];
     while (z > -length + 30) {
+      const nextThreat = threats[threatIndex];
+      // Reserve the whole encounter corridor, including a supply approach and a recovery gap.
+      // It replaces ordinary obstacles/hordes rather than stacking damage on top of them.
+      if (nextThreat && z <= nextThreat.z + 78) {
+        const supplyZ = nextThreat.z + 43;
+        const tool = level >= 3 && threatIndex === 1;
+        const jackpot = !tool && ((needJackpot && !jackpots) || rj() < jackChance);
+        if (jackpot) jackpots++;
+        gates.push(makeGate(supplyZ + (tool ? 0 : 14), jackpot ? ["+", 40 + 8 * d, { jackpot: true }] : ["+", 10 + d * 2], tool ? ["tool", nextThreat.counter] : ["+", 12 + d * 2]));
+        nextThreat.tool = tool;
+        z = nextThreat.z - 37; threatIndex++; continue;
+      }
       const seg = pool[Math.floor(r() * pool.length)];
       if (seg === "gates") {
         const good = [["+", 5 + Math.floor(r() * 5 * d)], ["x", 2], ["+", 10 + d * 3]], bad = [["+", -(2 + Math.floor(r() * 2 * d))], ["x", 1], ["+", -(5 + d)]];
@@ -499,13 +709,13 @@ function generateLevel(level, opts = {}) {
     }
   }
   if (level >= 3 && !solids.some(o => o.kind === "weaponCase")) { // guarantee a weapon upgrade on the way
-    const free = zz => !solids.some(o => Math.abs(o.z - zz) < 5) && !gates.some(g => Math.abs(g.z - zz) < 5);
+    const free = zz => !solids.some(o => Math.abs(o.z - zz) < 5) && !gates.some(g => Math.abs(g.z - zz) < 5) && !threats.some(t => Math.abs(t.z - zz) < 35);
     let zc = -length * 0.35; while (zc > -length * 0.8 && !free(zc)) zc -= 2;
     solids.push(makeSolid("weaponCase", (rj() < 0.5 ? -1 : 1) * 3.3, zc, 30 + d * 18, { weapon: 2 + Math.floor(rj() * (level >= 4 ? 3 : 2)) }));
   }
   const bossHp = Math.round(40 * Math.pow(level, 1.3) + 40);
   if (!seeded && level > 1) { save.jackDry = jackpots ? 0 : (save.jackDry || 0) + 1; persist(); }
-  return { level, theme, length, gates, solids, enemies, expectedKills: enemies.length, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
+  return { level, theme, length, gates, solids, enemies, threats, expectedKills: enemies.length, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
 }
 
 // ---------- squad ----------
@@ -548,9 +758,13 @@ function startLevel(level, opts = {}) {
   L = generateLevel(level, { ...opts, modifier: mod });
   Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, popSfx: 0, reached: 0, winT: 0,
     rateMult: mod === "swift" ? 1.25 : 1, speedMul: mod === "swift" ? 1.2 : 1, mode: opts.mode || "normal", modifier: mod, seed: opts.seed, scoreMult: mod ? MODIFIERS[mod].scoreMult : 1,
+    belt: [null, null], beltFx: [null, null], beltFxUntil: [0, 0], swap: null, coach: null,
+    tactics: { perfect: 0, used: 0, wasted: 0, misused: 0, banked: 0, surgePerfect: 0 }, threat: null, surgeReady: false, bankBonus: 0, bankLocked: false,
     score: 0, kills: 0, combo: 0, comboT: 0, bestCombo: 0, surge: 0, surgeT: 0, surges: 0, idleT: 0, shieldT: 0, giantT: 0, giantK: 1,
     bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
+  time.scale = time.target = 1; time.slowT = time.stopT = 0; time.lastSlow = time.lastStop = -99;
   addSoldiers(mod === "lone" ? 1 : START_SQUAD);
+  beltChanged();
   $("levelName").textContent = mod ? MODIFIERS[mod].name : levelName(level); $("levelNo").textContent = L.mode === "daily" ? "Daily Challenge" : `Level ${level}`;
   setWeapon(mod === "arsenal" ? 4 : 0);
   hud.score = 0; hud.best = L.mode === "normal" ? save.bestScore[level] || 0 : 0;
@@ -572,6 +786,7 @@ function show(id, on) { $(id).hidden = !on; }
 function setState(s) {
   const from = state; state = s;
   const playing = s === "play" || s === "boss" || s === "bonus";
+  show("belt", s === "play" || s === "boss");
   show("home", s === "home"); show("progress", playing || s === "paused"); show("pauseBtn", playing); show("settingsBtn", s === "home");
   show("weaponTag", s === "play" || s === "boss"); show("count", playing); show("scoreBox", playing || s === "paused");
   show("levelsBtn", s === "home"); show("levelsModal", s === "levels"); if (s === "levels") renderLevels();
@@ -580,15 +795,35 @@ function setState(s) {
 }
 
 // ---------- input ----------
-let dragging = false, lastX = 0;
+let dragging = false, lastX = 0, dragId = null;
+const beltButtons = [$("belt0"), $("belt1")];
+const controlButtons = [beltButtons[0], beltButtons[1], $("surgeButton"), $("surgeBar")];
+function overControl(e) {
+  for (const el of controlButtons) {
+    if (el.hidden || el.closest("[hidden]")) continue;
+    const r = el.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return true;
+  }
+  return false;
+}
+for (const el of controlButtons) {
+  el.addEventListener("pointerdown", e => e.stopPropagation());
+  el.addEventListener("pointerup", e => e.stopPropagation());
+}
+beltButtons.forEach((el, i) => el.onclick = e => { e.stopPropagation(); usePowerup(i); });
+$("surgeButton").onclick = $("surgeBar").onclick = e => { e.stopPropagation(); useSurge(); };
+$("surgeBar").setAttribute("role", "button"); $("surgeBar").setAttribute("aria-label", "Activate SURGE when ready");
+$("surgeBar").tabIndex = 0;
+$("surgeBar").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); useSurge(); } };
 gameEl.addEventListener("pointerdown", e => {
-  if (e.target.closest("button,.panel")) return;
+  if (e.target.closest("button,.panel,#surgeBar") || overControl(e)) return;
   if (state === "home") { setState("play"); sfx("gate"); }
   if (state !== "play" && state !== "boss") return;
-  dragging = true; lastX = e.clientX; gameEl.setPointerCapture?.(e.pointerId);
+  dragging = true; dragId = e.pointerId; lastX = e.clientX; gameEl.setPointerCapture?.(e.pointerId);
 });
 gameEl.addEventListener("pointermove", e => {
-  if (!dragging || !L) return;
+  if (!dragging || !L || e.pointerId !== dragId) return;
+  if (overControl(e)) { lastX = e.clientX; return; }
   const dx = (e.clientX - lastX) / gameEl.clientWidth; lastX = e.clientX;
   L.targetX += dx * ROAD * 2.6;
 });
@@ -597,6 +832,12 @@ addEventListener("pointercancel", () => dragging = false);
 const keys = {};
 addEventListener("keydown", e => {
   keys[e.key] = true;
+  if ((state === "play" || state === "boss") && !e.repeat) {
+    const k = e.key.toLowerCase();
+    if (k === "1" || k === "q") { e.preventDefault(); usePowerup(0); }
+    if (k === "2" || k === "e") { e.preventDefault(); usePowerup(1); }
+    if (e.code === "Space") { e.preventDefault(); useSurge(); }
+  }
   if (state === "home" && ["ArrowLeft", "ArrowRight", "a", "d", " ", "Enter"].includes(e.key)) setState("play");
   if (state === "levels" && e.key === "Escape") { setState("home"); return; }
   if (e.key === "Escape" || e.key === "p") togglePause();
@@ -622,7 +863,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && (st
 
 // ---------- simulation ----------
 const ENEMY_ASPECT = { zombie: 0.861, grunt: 0.787, brute: 0.946 };
-function fireRate() { return (1 / 0.3) * WEAPONS[L.weapon].rate * L.rateMult; }
+function fireRate() { return (1 / 0.3) * WEAPONS[L.weapon].rate * L.rateMult * (L.surgeT > 0 ? 2 : 1); }
 function damage() { return WEAPONS[L.weapon].dmg * (L.surgeT > 0 ? 2 : 1); } // SURGE: double damage (and pierce), same bullet count
 
 // ---------- time feel: hit-stop and slow motion (sim only; UI and camera shake keep real time) ----------
@@ -656,9 +897,19 @@ function addScore(points, o = {}) {
   return pts;
 }
 function fillSurge(amount) {
-  if (L.surgeT > 0 || L.surges >= SURGES_PER_LEVEL) return;
+  if (L.surgeReady || L.surgeT > 0 || L.surges >= SURGES_PER_LEVEL) return;
   L.surge = Math.min(1, L.surge + amount);
-  if (L.surge >= 1) { L.surgeT = SURGE_TIME; L.surges++; bus.emit("surge", { on: true }); sfx("win"); vibe(60); floatText(L.sx, 3.2, L.sz, "SURGE!", "#ffd84a"); }
+  if (L.surge >= 1) { L.surgeReady = true; bus.emit("surgeReady", {}); updateBeltHUD(); }
+}
+function useSurge() {
+  if (!L || !L.surgeReady || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+  L.surgeReady = false; L.surgeT = SURGE_TIME; L.surges++;
+  const perfect = !!L.threat || state === "boss";
+  L.tactics.used++;
+  if (perfect) { L.tactics.surgePerfect++; rewardPerfect("surge", false); }
+  bus.emit("powerupUse", { type: "surge", slot: null, perfect, misused: false, wasted: false, threatKind: L.threat ? L.threat.kind : null });
+  bus.emit("surge", { on: true, perfect });
+  sfx("win"); vibe(60); updateBeltHUD(); return true;
 }
 function breakCombo() { if (L.combo >= 5) bus.emit("comboEnd", { count: L.combo }); L.combo = 0; L.comboT = 0; }
 function onKill(e) {
@@ -673,16 +924,16 @@ function onKill(e) {
 function setShield(sec) { const was = L.shieldT > 0; L.shieldT = Math.max(0, sec); if (was !== L.shieldT > 0) bus.emit("shield", { on: L.shieldT > 0 }); }
 function setGiant(sec) { const was = L.giantT > 0; L.giantT = Math.max(0, sec); if (was !== L.giantT > 0) bus.emit("giant", { on: L.giantT > 0 }); }
 function spawnSolid(kind, x, z, hp, extra = {}) { const o = makeSolid(kind, x, z, hp, extra); L.solids.push(o); return o; }
-function damageArea(x, z, radius, dmg) { // explosions from modules (barrels, airstrikes): enemies, solids and the boss
+function damageArea(x, z, radius, dmg, opts = {}) { // explosions from modules (barrels, airstrikes): enemies, solids and the boss
   for (const e of L.enemies) if (e.hp > 0 && e.state !== "dead" && e.state !== "dying" && Math.hypot(e.x - x, e.z - z) < radius + e.r) hitEnemy(e, dmg);
   for (const o of L.solids) if (o.alive && Math.hypot(o.x - x, o.z - z) < radius + o.hw) hitSolid(o, dmg);
-  const b = L.boss; if (state === "boss" && b.hp > 0 && Math.hypot(b.x - x, b.z - z) < radius + 2.6) { b.hp -= dmg; b.flash = 0.08; if (b.hp <= 0) bossDown(); }
+  const b = L.boss; if (!opts.skipBoss && state === "boss" && b.hp > 0 && Math.hypot(b.x - x, b.z - z) < radius + 2.6) { b.hp -= dmg; b.flash = 0.08; if (b.hp <= 0) bossDown(); }
   bus.emit("explosion", { x, z, radius });
 }
-function finishLevel(mult) { L.mult = Math.max(1, mult || 1); win(); } // called by js/finale.js
+function finishLevel(mult) { if (state !== "bonus" && state !== "boss") return; L.finaleMult = Math.max(1, mult || 1); L.mult = L.finaleMult + L.bankBonus; win(); } // called by js/finale.js
 function endBoss() { // after the boss falls: hand over to the finale if there is one
   if (window.Finale && Finale.start && Finale.start(ctx)) { L.bonusT = 0; setState("bonus"); bus.emit("bonusState", {}); }
-  else win();
+  else finishLevel(1);
 }
 function bonusStep(dt) { // finale: js/finale.js moves the squad and breaks walls; the game keeps formation and effects running
   L.soldiers.forEach((s, i) => { const [ox, oz] = slot(i); s.x += (L.sx + ox - s.x) * Math.min(1, dt * 10); s.z += (L.sz + oz - s.z) * Math.min(1, dt * 10); s.x = Math.max(-ROAD + 0.3, Math.min(ROAD - 0.3, s.x)); });
@@ -719,7 +970,7 @@ function step(dt) {
     if (L.sz <= -L.length) {
       L.sz = -L.length; state = "boss"; setState("boss"); L.boss.state = "walk"; vibe(80);
       L.boss.z = Math.min(L.boss.z, L.sz - squadRadius(L.soldiers.length) - 10); // fair fight window for any squad size
-      setShield(0); setGiant(0); // power-ups never carry into the boss fight: the slam dodge stays real
+      if (L.threat) endThreat(L.threat); // belt effects carry into the boss fight
       bus.emit("bossStart", { boss: L.boss });
     }
   }
@@ -727,9 +978,10 @@ function step(dt) {
   L.popSfx -= dt;
   if (L.comboT > 0 && L.surgeT <= 0) { L.comboT -= dt; if (L.comboT <= 0) breakCombo(); }
   if (L.surgeT > 0) { L.surgeT -= dt; L.surge = Math.max(0, L.surgeT / SURGE_TIME); if (L.surgeT <= 0) { L.surge = 0; L.comboT = COMBO_WINDOW; bus.emit("surge", { on: false }); } }
-  else { L.idleT += dt; if (L.idleT > 3) L.surge = Math.max(0, L.surge - dt * 0.05); }
+  else { L.idleT += dt; if (!L.surgeReady && L.idleT > 3) L.surge = Math.max(0, L.surge - dt * 0.05); }
   if (L.shieldT > 0) { L.shieldT -= dt; if (L.shieldT <= 0) bus.emit("shield", { on: false }); }
   if (L.giantT > 0) { L.giantT -= dt; if (L.giantT <= 0) bus.emit("giant", { on: false }); }
+  updateTactics(dt);
   for (const m of [100, 250, 500]) if (L.soldiers.length >= m && L.milestone < m) {
     L.milestone = m; bus.emit("squadMilestone", { n: m });
     floatText(L.sx, 3.4, L.sz, m >= 500 ? "ULTRA SQUAD!" : m >= 250 ? "MEGA SQUAD!" : "BIG SQUAD!", "#7fd0ff");
@@ -746,7 +998,8 @@ function step(dt) {
     g.used = true;
     const h = g.halves.find(h => (L.sx < 0) === (h.side < 0));
     const before = L.soldiers.length;
-    const after = h.op === "x" ? Math.round(before * h.v) : before + h.v;
+    const after = h.powerup ? before : h.op === "x" ? Math.round(before * h.v) : before + h.v;
+    if (h.powerup) collectPowerup(h.powerup);
     if (after > before) {
       const gain = after - before;
       addSoldiers(gain); sfx("gate"); floatText(L.sx, 2, L.sz, h.op === "x" ? `x${h.v}` : `+${gain}`, h.jackpot ? "#ffd84a" : "#7fd0ff");
@@ -762,9 +1015,12 @@ function step(dt) {
     if (!o.alive || !(prevZ > o.z + 0.4 && L.sz <= o.z + 0.4)) continue;
     const hit = L.soldiers.filter(s => Math.abs(s.x - o.x) < o.hw + 0.2).length;
     if (!hit) continue;
-    const guarded = L.shieldT > 0 || L.giantT > 0, lose = guarded ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);
+    const guarded = L.shieldT > 0 || L.giantT > 0;
+    let lose = guarded || o.kind === "airdrop" ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);
+    if (o.threat) lose = Math.min(lose, threatLossLeft(o.threat));
     if (lose) { killSoldiers(lose, o.x); breakCombo(); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a"); }
-    breakSolid(o, L.giantT > 0); // a GIANT squad smashes things and keeps the reward
+    if (o.threat) o.threat.lost += lose;
+    breakSolid(o, L.giantT > 0 || o.kind === "airdrop"); // a GIANT squad smashes things and keeps the reward
   }
   // shooting (gates/solids above may have changed the count)
   const nNow = L.soldiers.length;
@@ -807,7 +1063,7 @@ function step(dt) {
       if (e.hp > 0 && Math.abs(b.x - e.x) < e.r + 0.08 && oz >= e.z - 0.3 && b.z <= e.z + 0.3) { hitEnemy(e, b.dmg); if (b.splash) explode(e.x, e.z, b.dmg, b.splash, e); if (b.pierce > 0) { b.pierce--; b.z -= 0.7; } else hit = true; break; }
     }
     if (!hit && state === "boss" && b0.hp > 0 && Math.abs(b.x - b0.x) < 2.6 && b.z <= b0.z + 0.5) {
-      b0.hp -= b.dmg * (b.splash ? 1.2 : 1); b0.flash = 0.08; hit = true;
+      b0.hp -= b.dmg * (b.splash ? 1.2 : 1) * (L.giantT > 0 ? 2 : 1); b0.flash = 0.08; hit = true;
       if (b.splash) L.fx.push({ x: b.x, y: 1.5 + Math.random() * 3, z: b0.z + 1, f: 9, t: 0, dur: 0.4, size: 2.6 });
       else if (Math.random() < 0.3) L.fx.push({ x: b.x, y: 2 + Math.random() * 3, z: b0.z + 1, f: 4, t: 0, dur: 0.2, size: 1.3 });
       if (b0.hp <= 0) bossDown();
@@ -828,7 +1084,10 @@ function step(dt) {
     // separation
     if (L.soldiers.length && Math.hypot(e.x - L.sx, (e.z - L.sz) * 1.2) < R * (L.giantT > 0 ? 1.4 : 1) + e.r) {
       const guarded = L.shieldT > 0 || L.giantT > 0;
-      if (!guarded) killSoldiers(e.dmg, e.x);
+      if (!guarded) {
+        const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
+        killSoldiers(loss, e.x); if (e.threat) e.threat.lost += loss;
+      }
       e.hp = 0; e.state = "dying"; e.dieT = 0.3;
       if (guarded) onKill(e); // trampled by a GIANT squad or bounced off the SHIELD
       L.fx.push({ x: e.x, y: 0.8, z: e.z, f: 5, t: 0, dur: 0.3, size: 1.4 }); vibe(20);
@@ -854,6 +1113,7 @@ function step(dt) {
       }
       if (k) bus.emit("soldiersLost", { n: k, total: L.soldiers.length });
       bus.emit("bossSlam", { boss: b0, killed: k });
+      if (L.threat && L.threat.kind === "slam") { L.threat.lost += k; endThreat(L.threat); }
       if (k) { flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); } else if (L.sz - b0.z < 14) floatText(L.sx, 2.5, L.sz, "DODGED!", "#7fd0ff");
       L.fx.push({ x: cx, y: 0.3, z: cz, f: 9, t: 0, dur: 0.5, size: SLAM_R * 1.6 });
     }
@@ -895,7 +1155,18 @@ function hitEnemy(e, dmg) {
     else if (Math.random() < 0.3) L.fx.push({ x: e.x, y: 0.9, z: e.z, f: 6, t: 0, dur: 0.3, size: 1 });
   }
 }
+function damageBoss(n) {
+  if (state !== "boss" || L.boss.hp <= 0) return;
+  L.boss.hp -= n; L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
+}
 function bossDown() {
+  if (L.bankLocked) return;
+  if (L.threat) endThreat(L.threat);
+  L.bankLocked = true;
+  const count = (L.belt[0] ? 1 : 0) + (L.belt[1] ? 1 : 0);
+  L.tactics.banked = count; L.bankBonus = count * 0.5;
+  bus.emit("bank", { count, bonus: L.bankBonus });
+  L.swap = null; L.belt[0] = L.belt[1] = null; beltChanged();
   L.boss.state = "down"; L.shake = 0.6; sfx("boom"); vibe(200);
   for (let k = 0; k < 6; k++) L.fx.push({ x: L.boss.x + (Math.random() - 0.5) * 4, y: Math.random() * 4, z: L.boss.z + 1, f: 9, t: -k * 0.08, dur: 0.6, size: 4 });
   L.bossSoldiers = L.soldiers.length; // stars are decided here; the finale cannot lower them
@@ -935,7 +1206,7 @@ function win() {
   $("stars").innerHTML = starIcons(stars);
   $("winSub").textContent = `${total.toLocaleString()} POINTS${L.mult > 1 ? ` · x${L.mult} FINALE` : ""} · ${n} soldiers${newBestScore ? " · NEW BEST!" : ""}`;
   sfx("win"); setState("win");
-  bus.emit("win", { stars, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
+  bus.emit("win", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
   if (normal) Scenery.preload(themeFor(L.level + 1)).catch(() => {}); // fetch the next theme while the player looks at the stars
 }
 function explode(x, z, dmg, radius, skip = null) {
@@ -953,8 +1224,10 @@ function lose() {
   $("loseBest").textContent = prev && prev < 1 ? `Best: ${Math.floor(prev * 100)}%` : "";
   const atBoss = state === "boss", bossPct = atBoss ? Math.max(1, Math.round(L.boss.hp / L.boss.maxHp * 100)) : null;
   if (atBoss) $("losePct").textContent = `BOSS ${bossPct}%`;
+  if (L.threat) endThreat(L.threat);
+  L.belt[0] = L.belt[1] = null; L.swap = null; beltChanged();
   sfx("bad"); vibe(200); setState("lose");
-  bus.emit("lose", { pct, atBoss, bossPct, score: L.score, mode: L.mode, modifier: L.modifier, level: L.level });
+  bus.emit("lose", { tactics: { ...L.tactics }, pct, atBoss, bossPct, score: L.score, mode: L.mode, modifier: L.modifier, level: L.level });
 }
 
 // ---------- adaptive quality ----------
@@ -1053,6 +1326,7 @@ function render(dt) {
   const cEl = $("combo"), tier = L.combo >= 10 ? comboTier() : null;
   cEl.hidden = L.combo < 5;
   if (!cEl.hidden) { cEl.textContent = `x${L.combo}`; cEl.className = "combo stroke" + (tier ? ` t${COMBO_TIERS.length - COMBO_TIERS.indexOf(tier)}` : ""); }
+  updateBeltHUD();
   $("surgeFill").style.width = `${Math.round(L.surge * 100)}%`; $("count").classList.toggle("surging", L.surgeT > 0);
   // squad count badge above the squad
   if (!$("count").hidden) {
@@ -1097,6 +1371,7 @@ function frame(now) {
   Object.defineProperty(layers, "enem", { get: () => { const k = L.theme.enemy; const other = k === "zombie" ? "grunt" : "zombie"; enemyLayers[other].begin(); enemyLayers[other].end(); return enemyLayers[k]; } });
   resize(); syncToggles();
   Scenery.setup(ctx); Obj3D.setup(ctx); Juice.setup(ctx);
+  hud.externalSwap = !!gameEl.querySelector(".jt-swap");
   for (const m of [window.Powerups, window.Finale, window.Meta]) { try { m?.setup?.(ctx); } catch (e) { console.error("module setup failed", e); } }
   applySkin();
   if (!quality.auto) quality.level = 2; // ?hq: full quality for screenshots and tests
