@@ -5306,3 +5306,280 @@ PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT
 {"level":8,"state":"win","squad":600,"used":0,"perfect":0}
 PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.
 
+exec
+/bin/bash -lc "sed -n '153,195p' js/juice.js; wc -l index.html js/powerups.js js/objects3d.js tools/bot-tactics.js tools/check-tactics.js; rg -n 'reserve|threats|surgeReady|bankBonus|skipBoss|fork' index.html js/powerups.js | tail -35" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+    on("powerupUse", (d = {}) => {
+      clearCoach();
+      const type = toolType(d.type);
+      if (d.perfect && type) enqueue("PERFECT " + type.toUpperCase() + "!", { color: "#ffd84a", size: 9, ring: true });
+      else if (d.wasted) {
+        const button = slotButton(d.slot), g = game.getBoundingClientRect(), r = button && button.getBoundingClientRect();
+        wasteChip.textContent = "WASTED"; wasteChip.style.left = (r ? r.left + r.width / 2 - g.left : g.width / 2) + "px";
+        wasteChip.style.top = (r ? r.top - g.top - 8 : g.height - 100) + "px"; wasteChip.hidden = false;
+        clearTimeout(wasteTimer); wasteTimer = setTimeout(() => { wasteChip.hidden = true; }, 1200);
+      } else if (d.misused) enqueue("MISFIRE", { color: "#a8b0be", size: 5 });
+      if (type === "surge") readyShown = false;
+    });
+    on("bank", (d = {}) => {
+      const count = Number.isFinite(d.count) ? d.count : 0, bonus = Number.isFinite(d.bonus) ? d.bonus : count * .5;
+      enqueue(`BANKED ×${count} → +${bonus.toFixed(1)}×`, { color: "#ffd84a", size: 7 });
+    });
+    on("surgeReady", () => { if (!readyShown) { readyShown = true; enqueue("SURGE READY!", { color: "#ffd84a", icon: "surge" }); } });
+    on("surge", d => { if (d && d.on) readyShown = false; });
+
+    function stop(el) {
+      const animation = animations.get(el);
+      if (animation) { animations.delete(el); animation.cancel(); }
+    }
+    function animate(el, frames, duration, options = {}, done) {
+      if (!el) return;
+      stop(el);
+      if (!el.animate) { if (done) done(); return; }
+      // In reduced motion all programmatic transforms become simple fades.
+      if (reduced) frames = frames.map(f => ({ opacity: f.opacity === undefined ? 1 : f.opacity, offset: f.offset }));
+      const animation = el.animate(frames, Object.assign({ duration, easing: "ease-out" }, options));
+      animations.set(el, animation);
+      animation.onfinish = safe(() => {
+        if (animations.get(el) !== animation) return;
+        animations.delete(el);
+        animation.cancel();
+        if (done) done();
+      });
+    }
+    const vignette = document.createElement("div");
+    vignette.className = "juice-vignette";
+    vignette.setAttribute("aria-hidden", "true");
+    game.appendChild(vignette);
+    const banner = document.createElement("div");
+  1388 index.html
+   332 js/powerups.js
+   566 js/objects3d.js
+   121 tools/bot-tactics.js
+    63 tools/check-tactics.js
+  2470 total
+index.html:417:  get tactics() { return L.tactics; }, get threat() { return L.threat; }, get surgeReady() { return !!L.surgeReady; },
+index.html:457:  $("surgeButton").hidden = !L.surgeReady || L.bankLocked;
+index.html:458:  $("count").classList.toggle("ready", L.surgeReady);
+index.html:484:  for (const t of L.threats) {
+index.html:503:    for (const t of L.threats) if (!t.done && L.sz - t.z >= 0 && L.sz - t.z < 24 + SPEED * L.speedMul * 4) return true;
+index.html:566:  if (state === "play") for (const t of L.threats) {
+index.html:638:  const threats = [];
+index.html:643:      threats.push({ id: `road-${i}`, kind, counter: THREAT_COUNTER[kind], z: -100 - i * (length - 165) / (count - 1), announced: false, live: false, done: false, countered: false, lost: 0, actors: [], age: 0, shotT: 0, shellT: 0, gap: rj() < 0.5 ? -1 : 1, teaching: i === 0 && level <= 4 });
+index.html:668:      const nextThreat = threats[threatIndex];
+index.html:712:    const free = zz => !solids.some(o => Math.abs(o.z - zz) < 5) && !gates.some(g => Math.abs(g.z - zz) < 5) && !threats.some(t => Math.abs(t.z - zz) < 35);
+index.html:718:  return { level, theme, length, gates, solids, enemies, threats, expectedKills: enemies.length, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
+index.html:762:    tactics: { perfect: 0, used: 0, wasted: 0, misused: 0, banked: 0, surgePerfect: 0 }, threat: null, surgeReady: false, bankBonus: 0, bankLocked: false,
+index.html:900:  if (L.surgeReady || L.surgeT > 0 || L.surges >= SURGES_PER_LEVEL) return;
+index.html:902:  if (L.surge >= 1) { L.surgeReady = true; bus.emit("surgeReady", {}); updateBeltHUD(); }
+index.html:905:  if (!L || !L.surgeReady || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+index.html:906:  L.surgeReady = false; L.surgeT = SURGE_TIME; L.surges++;
+index.html:930:  const b = L.boss; if (!opts.skipBoss && state === "boss" && b.hp > 0 && Math.hypot(b.x - x, b.z - z) < radius + 2.6) { b.hp -= dmg; b.flash = 0.08; if (b.hp <= 0) bossDown(); }
+index.html:933:function finishLevel(mult) { if (state !== "bonus" && state !== "boss") return; L.finaleMult = Math.max(1, mult || 1); L.mult = L.finaleMult + L.bankBonus; win(); } // called by js/finale.js
+index.html:981:  else { L.idleT += dt; if (!L.surgeReady && L.idleT > 3) L.surge = Math.max(0, L.surge - dt * 0.05); }
+index.html:1167:  L.tactics.banked = count; L.bankBonus = count * 0.5;
+index.html:1168:  bus.emit("bank", { count, bonus: L.bankBonus });
+index.html:1209:  bus.emit("win", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
+js/powerups.js:152:    else for (let i = 0; i < L.threats.length; i++) {
+js/powerups.js:153:      const t = L.threats[i]; if (t.tool) continue;
+js/powerups.js:154:      // Alternating fork drops: the second icon is a different tool, never a disguised copy.
+js/powerups.js:155:      const fork = i === 0 ? ev.level % 2 === 0 : ev.level % 2 !== 0;
+js/powerups.js:157:      S.plan.push({ x: fork ? -3.3 : 0, z: t.z + 43, lead: 35, powerup: t.counter, other: fork ? alternatives[Math.floor(ev.rng() * 2)] : null, guaranteed: t.teaching, fired: false, o: null });
+js/powerups.js:201:      if (C.state === "boss") { C.damageArea(L.sx, L.sz - 8, 22, 100 + 8 * L.level, { skipBoss: true }); C.damageBoss(L.boss.maxHp * 0.18); }
+js/powerups.js:234:        C.damageArea(b.x, b.z, st.threat && st.threat.kind === "swarm" ? 10 : 4, 40 + 8 * L.level, { skipBoss: true });
+js/powerups.js:311:      C.damageArea(p.o.x, p.o.z, 0.01, p.o.hp, { skipBoss: true });
+
+codex
+The browser-free checks pass for swaps, rewards, teaching drops, counters, banking, and restart cleanup. A simulation smoke test also cleared levels 1–8 without using power-ups. That’s preliminary evidence only: the Playwright bot still needs the orchestrator’s Chromium run to validate browser behavior and casual-player balance.
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html'); s=p.read_text().replace('width:112px;min-height:55px','width:96px;min-height:55px').replace('L.sz = -L.length; state = \"boss\"; setState(\"boss\");','L.sz = -L.length; setState(\"boss\");');p.write_text(s)
+PY
+cat >> tools/check-tactics.js <<'EOF'
+// Bomb ticks must not secretly deal additional boss damage after the initial 18%.
+start(4); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+H.collectPowerup('airstrike'); H.usePowerup(0);
+const afterStrike = H.L.boss.hp;
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'boss' });
+assert.equal(H.L.boss.hp, afterStrike);
+// The same bullet does exactly twice the boss damage while GIANT is active.
+const bossHits = [];
+for (const giant of [false, true]) {
+  start(3); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+  if (giant) H.ctx.setGiant(6);
+  H.L.bullets.push({ x: 0, z: H.L.boss.z + 1, vx: 0, life: 1, dmg: 10, splash: 0, pierce: 0 });
+  const hp = H.L.boss.hp; H.step(.02); bossHits.push(hp - H.L.boss.hp);
+}
+assert.deepEqual(bossHits, [10, 20]);
+// Counter clears a dense SWARM; road threat losses stay bounded without a counter.
+start(2); const swarm = H.L.threats[0]; H.L.sz = swarm.z + 24; H.updateTactics(.01);
+H.collectPowerup('airstrike'); H.usePowerup(0);
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'play' });
+assert(swarm.actors.filter(e => e.hp <= 0).length >= swarm.actors.length * .8);
+start(4); const mortar = H.L.threats[0]; H.L.sz = mortar.z + 24; H.updateTactics(.01);
+for (let i = 0; i < 130; i++) H.updateTactics(.05);
+assert(mortar.done); assert(mortar.lost <= mortar.lossCap); assert(H.L.soldiers.length >= 3);
+// Per-level label resources are disposed; old warning meshes detach on restart.
+let disposed = false;
+mortar.vis.sign.children[1].material.addEventListener('dispose', () => { disposed = true; });
+start(2); assert(disposed); assert.equal(mortar.vis.sign.parent, null);
+console.log('PASS: no extra boss splash, double GIANT damage, SWARM clearance, bounded losses, per-level visual disposal.');
+EOF
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/check-tactics.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 2783ms:
+PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.
+{"level":1,"state":"win","squad":183,"used":0,"perfect":0}
+{"level":2,"state":"win","squad":238,"used":0,"perfect":0}
+{"level":3,"state":"win","squad":223,"used":0,"perfect":0}
+{"level":4,"state":"win","squad":319,"used":0,"perfect":0}
+{"level":5,"state":"win","squad":346,"used":0,"perfect":0}
+{"level":6,"state":"win","squad":339,"used":0,"perfect":0}
+{"level":7,"state":"win","squad":600,"used":0,"perfect":0}
+{"level":8,"state":"win","squad":600,"used":0,"perfect":0}
+PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.
+PASS: no extra boss splash, double GIANT damage, SWARM clearance, bounded losses, per-level visual disposal.
+
+exec
+/bin/bash -lc "cat > tools/tactics-notes.md <<'EOF'
+# Tactics run A handoff
+
+Mechanics live in "'`index.html`; supply planning/activation in `js/powerups.js`; icons, tool gates, barricades, mortar towers and warning/target visuals in `js/objects3d.js`. No changes to juice/meta or git operations.
+
+## Run B contract
+
+- `ctx.belt` contains two types/nulls; slots are **zero-based**. Buttons are `#belt0`/`#belt1`, also `[data-slot="0"]`/`[data-slot="1"]`.
+- `ctx.usePowerup(slot)` activates, or accepts the outstanding swap **without activating it**. `ctx.collectPowerup(type)` is the pickup entry point. JACKPOT remains instant.
+- `ctx.tactics` / `L.tactics`: `perfect`, `used`, `wasted`, `misused`, `banked`, `surgePerfect`. `perfect` and `used` include SURGE; `surgePerfect` is its subset.
+- `ctx.threat` / `L.threat`: current live encounter, or null. Kinds are `swarm`, `barricade`, `mortars`, `slam`; counters are `airstrike`, `giant`, `shield`, `shield`.
+- `ctx.surgeReady` / `L.surgeReady`, `ctx.useSurge()`.
+- All section 3 events are emitted: `belt`, `powerupGot`, `swapOffer`, `swapDone`, `swapExpired`, `powerupUse`, `threat`, `threatLive`, `threatEnd`, `surgeReady`, `bank`, `tacticsCoach`.
+- **SURGE also emits `powerupUse`**, with `type:"surge"`, `slot:null`, and the PERFECT flag, before `surge {on:true, perfect}`. No extra slow motion for PERFECT SURGE.
+- `tacticsCoach.kind` is the tool type, not the encounter kind. Each teaching encounter emits at most once. Persistent counters are `save.tacticsCounters[type]` (stop coaching at 2) and `save.tacticsPerfect` (fade gold HUD hint at 3).
+- `swapOffer.until` is in **`L.time` simulation seconds**, so the offer freezes while paused and follows slow motion. The core has a fallback swap chip, suppressed while juice'"'s "'`.jt-swap` is visible; juice should derive its countdown from the simulation deadline.
+- `bank` fires at boss death, before `bossDown`. Belt consumption closes at that instant. `win` includes `tactics`, `bankBonus`, `finaleMult`, and `mult` already includes banking. **Do not add bank again in meta.** `lose` includes `tactics` and empties the belt.
+- Existing `powerup {type}` still fires on actual effect activation, not pickup or swap.
+
+## Tuning
+
+- 70 px belt buttons; keys 1/Q, 2/E. SURGE: centre button, meter tap, Space.
+- SHIELD/GIANT: 6 simulation seconds. Full belt offer: 3 seconds, then +8 soldiers.
+- PERFECT: `ctx.addScore(300 * level, {raw:true})`, +10 combo; slow-mo 0.4x for 0.35 s, subject to the existing cooldown/cap.
+- SURGE holds at 100%; activation lasts 6 s, doubles fire rate and retains existing double damage/pierce. Existing cap: 2 activations/level.
+- Road threats: 2 on levels 2–5; 3 from level 6. First is at z=-100; remaining threats spaced through the road, ending at least 65 units before the boss. Holo warning 2.5 s before live range (24 units).
+- Threat corridors replace ordinary encounter segments; two positive supply gates and existing jackpot pity preserve squad growth. Drops arrive 43 units before threats; one tool gate/level from level 3. Counter availability is visible; steering still decides the pickup. First teaching supplies have a missed-crate fallback.
+- SWARM: 1.8 × (6 + 3 × level) normal enemies. BARRICADE: three 3.6-unit blocks, 1.2-unit side gap, HP 70 + 8 × level. MORTARS: one tower, two from level 6; HP 22 + 4 × level; shots every 1.6 s, 0.85 s warning rings, 2–4 losses/hit, encounter up to 6 s.
+- Road threat loss budget: 24% of squad size at live start, capped at 12 for SWARM / 10 otherwise; these added hazards preserve the last 3 soldiers. Ordinary enemies/solids and the boss retain their normal lethal behavior.
+- Boss: shield counters slam; AIRSTRIKE deals exactly 18% max HP and clears adds (bombs cannot add extra boss splash); GIANT doubles bullet damage. Effects carry into the boss fight.
+- Bank: +0.5 final multiplier per held item (maximum +1.0), added once by `finishLevel`.
+
+## Validation
+
+`node --check` the two modules and tools; extract inline scripts from `index.html` and check those too.
+
+Browser-free behavioral tests (real core, Powerups and Obj3D; stubbed DOM, textures and renderer):
+
+```sh
+THREE_LOCAL=/path/to/three-r128.min.js node tools/check-tactics.js
+```
+
+Checks swaps/expiry, held SURGE, PERFECT/WASTED/MISUSED, early teaching supplies, counter effects, exact boss damage, bank integration, encounter spacing, restart cleanup and per-level disposal. Includes a no-power-up simulation smoke run across levels 1–8. This is not visual/browser balance validation.
+
+Orchestrator browser run:
+
+```sh
+THREE_LOCAL=/path/to/three-r128.min.js node tools/bot-tactics.js --runs 3 --steering casual
+```
+
+All three policies use the same casual steering (60% preferred gate choices and 50% slam dodges). `never` never presses any power-up or SURGE; `smart` uses live counters and SURGE on the boss; `random` activates at random intervals. Optional `--steering perfect`, `--levels 1-8`, `--policies never,smart,random`, `CHROMIUM_PATH`. Fresh browser contexts isolate saves. Renderer is stubbed after boot; both performance.now and RAF timestamps run at ×4 (the game'"'s 50 ms step cap still applies). Prints per-run JSON and a win/attempt table, distinguishing errors/timeouts from losses. Chromium was not launched in the sandbox.
+EOF
+python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('  "'$("swapChip").hidden = !L.swap || hud.externalSwap;'"', '  "'$("swapChip").hidden = !L.swap || !!(hud.externalSwap && !hud.externalSwap.hidden);'"').replace('hud.externalSwap = "'!!gameEl.querySelector(".jt-swap");'"','hud.externalSwap = gameEl.querySelector(\".jt-swap\");');p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'node --check tools/check-tactics.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'node --check js/powerups.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'node --check tools/bot-tactics.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'node --check js/objects3d.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "python - <<'PY'
+import re, subprocess
+from pathlib import Path
+count=0
+for i,m in enumerate(re.finditer(r'<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)</script>',Path('index.html').read_text())):
+    if not m.group(1).strip(): continue
+    p=Path('/tmp/squad-final-inline-'+str(i)+'.js');p.write_text(m.group(1));subprocess.run(['node','--check',str(p)],check=True);count+=1
+print(f'PASS: {count} inline script(s) parse')
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+PASS: 1 inline script(s) parse
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('function killSoldiers(n, nearX = null, force = false) {\\n', 'function killSoldiers(n, nearX = null, force = false) {\\n  if (L.bankLocked && state === \"boss\") return; // victory is locked during the pre-finale celebration\\n');p.write_text(s)
+p=Path('tools/tactics-notes.md');s=p.read_text().replace('two positive supply gates and existing jackpot pity', 'positive soldier halves on supply gates and existing jackpot pity');p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/check-tactics.js
+python - <<'PY'
+import re, subprocess
+from pathlib import Path
+for i,m in enumerate(re.finditer(r'<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)</script>',Path('index.html').read_text())):
+    if m.group(1).strip():
+        p=Path('/tmp/squad-final-inline-'+str(i)+'.js');p.write_text(m.group(1));subprocess.run(['node','--check',str(p)],check=True)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 2841ms:
+PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.
+{"level":1,"state":"win","squad":183,"used":0,"perfect":0}
+{"level":2,"state":"win","squad":238,"used":0,"perfect":0}
+{"level":3,"state":"win","squad":224,"used":0,"perfect":0}
+{"level":4,"state":"win","squad":318,"used":0,"perfect":0}
+{"level":5,"state":"win","squad":344,"used":0,"perfect":0}
+{"level":6,"state":"win","squad":339,"used":0,"perfect":0}
+{"level":7,"state":"win","squad":600,"used":0,"perfect":0}
+{"level":8,"state":"win","squad":600,"used":0,"perfect":0}
+PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.
+PASS: no extra boss splash, double GIANT damage, SWARM clearance, bounded losses, per-level visual disposal.
+
+codex
+Implemented T1–T7 mechanics in `index.html`, `js/powerups.js`, and `js/objects3d.js`. Juice/meta untouched; no git commands run.
+
+- Added belt controls, swaps, fork drops, tool gates, threats, counters, teaching, manual SURGE, and banking.
+- Exposed `ctx.belt`, `usePowerup`, `tactics`, `threat`, `surgeReady`, and `useSurge`. All specified events emit.
+- Tuning: 6-second effects; 3-second swap → +8 soldiers; PERFECT +300×level and +10 combo; AIRSTRIKE 18% boss HP; GIANT double boss damage; banking +0.5× per item. Road threat losses are capped.
+- Syntax checks passed, including extracted inline JavaScript. Behavioral checks passed; browser-free no-power-up simulation cleared levels 1–8. Chromium remains untested.
+
+Run the [balance bot](/home/user/my-first-repo/squad-surge/tools/bot-tactics.js):
+
+```sh
+THREE_LOCAL=/path/to/three.min.js node tools/bot-tactics.js --runs 3 --steering casual
+```
+
+[Run B handoff and full tuning](/home/user/my-first-repo/squad-surge/tools/tactics-notes.md): slots are zero-based; SURGE emits `powerupUse` with `slot:null`; swap deadlines use simulation time; results already include banking.
+tokens used
+126,331
+Implemented T1–T7 mechanics in `index.html`, `js/powerups.js`, and `js/objects3d.js`. Juice/meta untouched; no git commands run.
+
+- Added belt controls, swaps, fork drops, tool gates, threats, counters, teaching, manual SURGE, and banking.
+- Exposed `ctx.belt`, `usePowerup`, `tactics`, `threat`, `surgeReady`, and `useSurge`. All specified events emit.
+- Tuning: 6-second effects; 3-second swap → +8 soldiers; PERFECT +300×level and +10 combo; AIRSTRIKE 18% boss HP; GIANT double boss damage; banking +0.5× per item. Road threat losses are capped.
+- Syntax checks passed, including extracted inline JavaScript. Behavioral checks passed; browser-free no-power-up simulation cleared levels 1–8. Chromium remains untested.
+
+Run the [balance bot](/home/user/my-first-repo/squad-surge/tools/bot-tactics.js):
+
+```sh
+THREE_LOCAL=/path/to/three.min.js node tools/bot-tactics.js --runs 3 --steering casual
+```
+
+[Run B handoff and full tuning](/home/user/my-first-repo/squad-surge/tools/tactics-notes.md): slots are zero-based; SURGE emits `powerupUse` with `slot:null`; swap deadlines use simulation time; results already include banking.
+codex exit 0

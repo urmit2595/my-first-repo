@@ -61,3 +61,31 @@ assert.equal(H.ctx.tactics.misused, 1); assert.equal(H.L.score, misuseScore);
 H.collectPowerup('shield'); H.collectPowerup('giant'); H.collectPowerup('airstrike'); H.fillSurge(1);
 start(3); assert.equal(H.L.swap, null); assert.equal(H.ctx.surgeReady, false); assert(H.ctx.belt.every(x => x === null));
 console.log('PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.');
+// Bomb ticks must not secretly deal additional boss damage after the initial 18%.
+start(4); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+H.collectPowerup('airstrike'); H.usePowerup(0);
+const afterStrike = H.L.boss.hp;
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'boss' });
+assert.equal(H.L.boss.hp, afterStrike);
+// The same bullet does exactly twice the boss damage while GIANT is active.
+const bossHits = [];
+for (const giant of [false, true]) {
+  start(3); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+  if (giant) H.ctx.setGiant(6);
+  H.L.bullets.push({ x: 0, z: H.L.boss.z + 1, vx: 0, life: 1, dmg: 10, splash: 0, pierce: 0 });
+  const hp = H.L.boss.hp; H.step(.02); bossHits.push(hp - H.L.boss.hp);
+}
+assert.deepEqual(bossHits, [10, 20]);
+// Counter clears a dense SWARM; road threat losses stay bounded without a counter.
+start(2); const swarm = H.L.threats[0]; H.L.sz = swarm.z + 24; H.updateTactics(.01);
+H.collectPowerup('airstrike'); H.usePowerup(0);
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'play' });
+assert(swarm.actors.filter(e => e.hp <= 0).length >= swarm.actors.length * .8);
+start(4); const mortar = H.L.threats[0]; H.L.sz = mortar.z + 24; H.updateTactics(.01);
+for (let i = 0; i < 130; i++) H.updateTactics(.05);
+assert(mortar.done); assert(mortar.lost <= mortar.lossCap); assert(H.L.soldiers.length >= 3);
+// Per-level label resources are disposed; old warning meshes detach on restart.
+let disposed = false;
+mortar.vis.sign.children[1].material.addEventListener('dispose', () => { disposed = true; });
+start(2); assert(disposed); assert.equal(mortar.vis.sign.parent, null);
+console.log('PASS: no extra boss splash, double GIANT damage, SWARM clearance, bounded losses, per-level visual disposal.');

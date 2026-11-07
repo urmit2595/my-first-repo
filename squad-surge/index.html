@@ -65,7 +65,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 .belt-slot.counter{border-color:#ffe066;box-shadow:0 0 0 4px #ffcb3c66,0 0 24px #ffd84aaa,0 5px 0 #0d1630}
 .belt-slot.active{animation:beltpulse .7s ease-in-out infinite}
 @keyframes beltpulse{50%{filter:brightness(1.5);transform:scale(1.06)}}
-.surge-button{position:absolute;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:112px;min-height:55px;border-radius:28px;background:linear-gradient(#fff07a,#ffb300);border:3px solid #0d1630;color:#14213d;pointer-events:auto;font-size:17px;box-shadow:0 4px 0 #875100}
+.surge-button{position:absolute;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:96px;min-height:55px;border-radius:28px;background:linear-gradient(#fff07a,#ffb300);border:3px solid #0d1630;color:#14213d;pointer-events:auto;font-size:17px;box-shadow:0 4px 0 #875100}
 .swap-chip{position:absolute;bottom:calc(102px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:5px 12px;border:2px solid #ffe066;border-radius:16px;background:#14213dee;font:16px 'Lilita One';white-space:nowrap}
 .swap-chip img{width:32px;height:32px;vertical-align:middle;object-fit:contain}
 .weapon-tag{bottom:calc(100px + env(safe-area-inset-bottom));font-size:11px;max-width:45%}
@@ -456,7 +456,7 @@ function updateBeltHUD() {
   }
   $("surgeButton").hidden = !L.surgeReady || L.bankLocked;
   $("count").classList.toggle("ready", L.surgeReady);
-  $("swapChip").hidden = !L.swap || hud.externalSwap;
+  $("swapChip").hidden = !L.swap || !!(hud.externalSwap && !hud.externalSwap.hidden);
   if (L.swap && $("swapIcon").dataset.type !== L.swap.type) {
     $("swapIcon").dataset.type = L.swap.type; $("swapIcon").src = `assets/ui/icons/pu-${L.swap.type}.webp`;
   }
@@ -730,6 +730,7 @@ function addSoldiers(n) {
   if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
 }
 function killSoldiers(n, nearX = null, force = false) {
+  if (L.bankLocked && state === "boss") return; // victory is locked during the pre-finale celebration
   if (!force && (L.shieldT > 0 || L.giantT > 0)) return; // SHIELD / GIANT power-ups
   for (let k = 0; k < n && L.soldiers.length; k++) {
     let idx = L.soldiers.length - 1;
@@ -968,7 +969,7 @@ function step(dt) {
   if (state === "play") {
     L.sz -= SPEED * L.speedMul * dt;
     if (L.sz <= -L.length) {
-      L.sz = -L.length; state = "boss"; setState("boss"); L.boss.state = "walk"; vibe(80);
+      L.sz = -L.length; setState("boss"); L.boss.state = "walk"; vibe(80);
       L.boss.z = Math.min(L.boss.z, L.sz - squadRadius(L.soldiers.length) - 10); // fair fight window for any squad size
       if (L.threat) endThreat(L.threat); // belt effects carry into the boss fight
       bus.emit("bossStart", { boss: L.boss });
@@ -1371,7 +1372,7 @@ function frame(now) {
   Object.defineProperty(layers, "enem", { get: () => { const k = L.theme.enemy; const other = k === "zombie" ? "grunt" : "zombie"; enemyLayers[other].begin(); enemyLayers[other].end(); return enemyLayers[k]; } });
   resize(); syncToggles();
   Scenery.setup(ctx); Obj3D.setup(ctx); Juice.setup(ctx);
-  hud.externalSwap = !!gameEl.querySelector(".jt-swap");
+  hud.externalSwap = gameEl.querySelector(".jt-swap");
   for (const m of [window.Powerups, window.Finale, window.Meta]) { try { m?.setup?.(ctx); } catch (e) { console.error("module setup failed", e); } }
   applySkin();
   if (!quality.auto) quality.level = 2; // ?hq: full quality for screenshots and tests
