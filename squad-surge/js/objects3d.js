@@ -10,6 +10,8 @@
 window.Obj3D = (() => {
   let C = null, ready = false;
   let LIN = null;                       // renderer outputs sRGB => convert colours to linear
+  let gatePosts = null; const postMatrix = new THREE.Matrix4();
+  const LEVELGEO = [];
   let T = 0;                            // animation clock
   let fbEnv = null, envMode = null;     // own fallback environment (used only while scene.environment is null)
 
@@ -299,7 +301,8 @@ window.Obj3D = (() => {
   function gate(g) {
     refreshPipeline(); ensure(); syncEnv();
     const { track } = C, grp = new THREE.Group(); grp.position.set(0, 0, g.z); track.add(grp); GATES.push(grp);
-    const posts = new THREE.Mesh(G.posts, M.post); posts.castShadow = true; posts.receiveShadow = true; grp.add(posts);
+    if (!gatePosts) { gatePosts = new THREE.InstancedMesh(G.posts, M.post, 128); gatePosts.count = 0; gatePosts.frustumCulled = false; gatePosts.castShadow = gatePosts.receiveShadow = true; track.add(gatePosts); }
+    grp.userData.postIndex = gatePosts.count++; g.vis = grp;
     for (const h of g.halves) {
       const body = new THREE.Group(); body.position.set(h.x, PY, 0); grp.add(body);
       const panel = mat("MeshStandardMaterial", { color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.2, emissiveMap: X.panel, transparent: true, opacity: 0.8, roughness: 0.1, metalness: 0, depthWrite: false, envMapIntensity: 0.7 }, true);
@@ -311,7 +314,7 @@ window.Obj3D = (() => {
       const hm = new THREE.Mesh(G.plane, halo); hm.scale.set(PW * 1.15, PH * 1.15, 1); hm.position.z = -PD / 2 - 0.03; hm.renderOrder = 1; body.add(hm);
       const gm = new THREE.Mesh(G.floor, glow); gm.scale.set(PW * 0.95, 1, 2.6); gm.position.set(h.x, 0.03, 1.1); gm.renderOrder = 1; grp.add(gm);
       const L = newLabel(384, 192, 3.7, 5); L.mesh.position.set(0, 0.02, PD / 2 + 0.05); body.add(L.mesh);
-      const hs = { grp, body, panel, frame, glow, halo, L, cur: { panel: new THREE.Color(), edge: new THREE.Color(), glow: new THREE.Color() }, src: null, dst: null, bt: 1, good: undefined, text: undefined, pulse: 0, flash: 0, ph: Math.random() * 6, used: false, ut: 0, chosen: false, done: false, gm };
+      const hs = { grp, body, panel, frame, glow, halo, L, cur: { panel: new THREE.Color(), edge: new THREE.Color(), glow: new THREE.Color() }, src: null, dst: null, bt: 1, good: undefined, text: undefined, pulse: 0, flash: 0, ph: rnd() * 6, used: false, ut: 0, chosen: false, done: false, gm };
       if (h.jackpot) { // golden half: twinkling stars, a travelling shine and a bigger warm halo
         const tm = (map, op) => mat("MeshBasicMaterial", { color: 0xfff2b0, map, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }, true);
         hs.spk1 = new THREE.Mesh(G.plane, tm(X.sparkle, 0.8)); hs.spk2 = new THREE.Mesh(G.plane, tm(X.sparkle, 0.8)); hs.shine = new THREE.Mesh(G.plane, tm(X.shine, 0));
@@ -324,6 +327,7 @@ window.Obj3D = (() => {
       h.vis = hs; HALVES.push(hs);
     }
   }
+  function moveGate(g) { if (g.vis) g.vis.position.x = g.offset || 0; }
   function gateHalf(g, h, good, text) {
     const hs = h.vis; if (!hs) return;
     const pal = h.jackpot ? GOLD : good ? GOOD : BAD; good = h.jackpot ? "gold" : good;
@@ -394,6 +398,11 @@ window.Obj3D = (() => {
     return m;
   }
   const SPEC = {
+    fuelTruck(v, r) {
+      part(v,r,G.crate,M.barrel,0,1.1,-.7); const tank=part(v,r,G.barrel,M.steel,0,2,-.7);tank.rotation.z=Math.PI/2;tank.scale.set(1.2,1.6,1.2);
+      return {y:3.3,w:2.6,pill:true};
+    },
+    shortcut(v,r) { const wall=part(v,r,G.blue,M.wood,0,1.5,-.6);wall.scale.set(1.5,1.4,1);return {y:3.4,w:2.8,pill:true}; },
     blockBlue(v, r) { part(v, r, G.blue, M.blue, 0, 1.05, -0.66); return { y: 1.62, w: 2.0 }; },
     blockYellow(v, r) { part(v, r, G.yellow, M.yellow, 0, 1.15, -0.71); return { y: 1.7, w: 2.1 }; },
     crate(v, r) { part(v, r, G.crate, M.wood, 0, 1.1, -0.66); part(v, r, G.bracket, M.steel, 0, 0, -0.66, false, false); return { y: 1.1, w: 2.0, pill: true }; },
@@ -445,7 +454,7 @@ window.Obj3D = (() => {
   function solid(o) {
     refreshPipeline(); ensure(); syncEnv();
     const spec = SPEC[o.kind] || SPEC.blockBlue, root = new THREE.Group(); root.position.set(o.x, 0, o.z);
-    const v = { root, body: [], L: null, text: undefined, pulse: 0, hit: 0, flash: 0, flashed: false, icon: null, dead: false, ph: Math.random() * 6, o };
+    const v = { root, body: [], L: null, text: undefined, pulse: 0, hit: 0, flash: 0, flashed: false, icon: null, dead: false, ph: rnd() * 6, o };
     const s = spec(v, root, o) || { y: 1, w: 1.7 };
     const onFront = o.kind === "blockBlue" || o.kind === "blockYellow" || o.kind === "crate";
     v.pill = !!s.pill; v.L = newLabel(256, 128, s.w, 5); v.L.mesh.position.set(0, s.y, onFront ? 0.08 : 0.1); if (!onFront) v.L.mesh.renderOrder = 6; root.add(v.L.mesh);
@@ -525,6 +534,36 @@ window.Obj3D = (() => {
     C.track.add(ring); C.track.add(shell); t.vis = { sign, ring, shell };
   }
 
+  function finishArch(z) {
+    ensure();
+    const geo=merge([{g:roundedBox(.5,5,.7,.15),x:-5.5,y:2.5},{g:roundedBox(.5,5,.7,.15),x:5.5,y:2.5},{g:roundedBox(11.5,.6,.7,.15),y:5}]);LEVELGEO.push(geo);
+    const root=new THREE.Group();root.position.z=z;C.track.add(root);root.add(new THREE.Mesh(geo,M.gold));
+    const label=newLabel(512,128,6,5);label.mesh.position.set(0,4.95,.4);C.drawLabel(label.lab,"DISTRICT CLEAR","#fff3b8",.7);root.add(label.mesh);
+  }
+  function hazard(h) {
+    ensure();const root=new THREE.Group();root.position.set(h.x,0,h.z);C.track.add(root);h.vis=root;
+    const warning=mat("MeshBasicMaterial",{color:0xffb329,transparent:true,opacity:.4,depthWrite:false,toneMapped:false},true);
+    const floor=new THREE.Mesh(G.floor,warning);floor.scale.set(2.7,1,3.2);floor.position.y=.06;root.add(floor);
+    const moving=new THREE.Mesh(h.kind==="saw"?G.tyres:G.blue,M.steel);moving.position.y=h.kind==="crusher"?5:.2;moving.scale.set(1.1,h.kind==="collapse"?.08:.5,1.2);root.add(moving);h.marker=floor;h.movingPart=moving;root.visible=false;
+  }
+  function updateHazard(h) {
+    if(!h.vis)return;h.vis.visible=h.warned&&!h.done;h.vis.position.x=h.x;
+    h.marker.material.color.set(h.active?0xff3020:0xffb329);h.marker.material.opacity=h.active?.75:.35+.2*Math.sin(h.age*12);
+    if(h.kind==="crusher")h.movingPart.position.y=h.active?.2:5;
+    else if(h.kind==="saw")h.movingPart.rotation.z=h.age*10;
+    else h.movingPart.position.y=h.active?-3:.05;
+  }
+  let bossMark=null, bossWarn=null;
+  function bossWarning(b,on) {
+    ensure();if(!bossWarn){bossWarn=new THREE.Mesh(G.floor,mat("MeshBasicMaterial",{color:0xff3020,transparent:true,opacity:.5,depthWrite:false},true));bossWarn.scale.set(2.7,1,22);C.track.add(bossWarn);}
+    bossWarn.visible=on;if(on)bossWarn.position.set(b.lockX,.07,C.L.sz-5);
+  }
+  function weakMarker(b,on) {
+    if(b.def?.update)return; // Scripted bosses own their pooled marker.
+    ensure();if(!bossMark){bossMark=new THREE.Mesh(G.plane,M.beaconGlow);bossMark.scale.set(2.5,2.5,1);C.track.add(bossMark);}
+    bossMark.visible=on;if(on){bossMark.position.set(b.x,4,b.z+1);bossMark.quaternion.copy(C.camera.quaternion);}
+  }
+
   // ---------------------------------------------------------------- lifecycle
   function setup(ctx) {
     C = ctx;
@@ -538,6 +577,7 @@ window.Obj3D = (() => {
     const t = C.track;
     for (const c of t.children.slice()) if (c !== dgroup) t.remove(c);
     for (const m of LMATS) m.dispose(); for (const x of LTEX) x.dispose(); for (const m of LEVELMATS) m.dispose();
+    for(const g of LEVELGEO)g.dispose();LEVELGEO.length=0;gatePosts=null;bossMark=bossWarn=null;
     LMATS.length = LTEX.length = LEVELMATS.length = HALVES.length = SOLIDS.length = GATES.length = 0;
     for (const k in WICON) WICON[k].meshes.length = 0;
     for (const p of POOL) { p.active = false; p.me.visible = false; }
@@ -546,7 +586,11 @@ window.Obj3D = (() => {
     if (!C || !ready) return; dt = Math.min(dt, 0.1); T += dt;
     refreshPipeline(); syncEnv();
     const cz = C.camera.position.z, vis = z => cz - z < VIS_FAR && z - cz < VIS_BACK;
-    for (const g of GATES) g.visible = vis(g.position.z);
+    for (const g of GATES) {
+      g.visible = vis(g.position.z);
+      if(gatePosts){postMatrix.makeScale(g.visible?1:0,g.visible?1:0,g.visible?1:0);postMatrix.setPosition(g.position.x,0,g.position.z);gatePosts.setMatrixAt(g.userData.postIndex,postMatrix);}
+    }
+    if(gatePosts)gatePosts.instanceMatrix.needsUpdate=true;
     for (const hs of HALVES) if (hs.grp.visible) updateHalf(hs, dt);
     for (const v of SOLIDS) {
       const on = vis(v.root.position.z); v.root.visible = on; if (!on) continue;
@@ -562,5 +606,5 @@ window.Obj3D = (() => {
     }
   }
 
-  return { setup, clear, threatSign, gate, gateHalf, gateUsed, solid, solidLabel, solidHit, solidBreak, update };
+  return { setup, clear, finishArch, hazard, updateHazard, moveGate, bossWarning, weakMarker, threatSign, gate, gateHalf, gateUsed, solid, solidLabel, solidHit, solidBreak, update };
 })();

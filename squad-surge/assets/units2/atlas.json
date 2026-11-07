@@ -1,0 +1,110 @@
+{
+ "shieldbearer": {
+  "cols": 4,
+  "rows": 2,
+  "aspect": 0.904,
+  "cell": [
+   293,
+   324
+  ]
+ },
+ "charger": {
+  "cols": 4,
+  "rows": 2,
+  "aspect": 0.88,
+  "cell": [
+   285,
+   324
+  ]
+ },
+ "bomber": {
+  "cols": 4,
+  "rows": 2,
+  "aspect": 0.836,
+  "cell": [
+   271,
+   324
+  ]
+ },
+ "rifleman": {
+  "cols": 4,
+  "rows": 2,
+  "aspect": 0.867,
+  "cell": [
+   281,
+   324
+  ]
+ },
+ "medic": {
+  "cols": 4,
+  "rows": 2,
+  "aspect": 0.639,
+  "cell": [
+   207,
+   324
+  ]
+ },
+ "splitter": {
+  "cols": 4,
+  "rows": 2,
+  "aspect": 0.92,
+  "cell": [
+   298,
+   324
+  ]
+ },
+ "splitter-mini": {
+  "cols": 4,
+  "rows": 2,
+  "aspect": 0.886,
+  "cell": [
+   287,
+   324
+  ]
+ },
+ "boss-bulwark": {
+  "cols": 3,
+  "rows": 2,
+  "aspect": 1.041,
+  "cell": [
+   358,
+   344
+  ]
+ },
+ "boss-ravager": {
+  "cols": 3,
+  "rows": 2,
+  "aspect": 1.029,
+  "cell": [
+   354,
+   344
+  ]
+ },
+ "boss-gunner": {
+  "cols": 3,
+  "rows": 2,
+  "aspect": 1.017,
+  "cell": [
+   350,
+   344
+  ]
+ },
+ "boss-colossus": {
+  "cols": 3,
+  "rows": 2,
+  "aspect": 0.994,
+  "cell": [
+   342,
+   344
+  ]
+ },
+ "boss-warlord": {
+  "cols": 3,
+  "rows": 2,
+  "aspect": 0.997,
+  "cell": [
+   343,
+   344
+  ]
+ }
+}

@@ -82,13 +82,13 @@ let browser;
 (async () => {
   const results = [];
   if (args.engine === "simulation") {
-    console.log("Simulation balance check: real core and bot policies; DOM/graphics stubbed, fixed 50 ms steps.");
+    console.log("Simulation balance check: real core and bot policies; DOM/graphics stubbed, fixed 60 Hz steps.");
     const vm = require("vm");
     process.chdir(ROOT);
     // Reuse the behavioral checker's boot fixture, without executing its tests.
     const fixture = fs.readFileSync(path.join(ROOT, "tools/check-tactics.js"), "utf8").split("const H=sandbox.H,events=[];")[0];
     for (let attempt = 0; attempt < runs; attempt++) for (const level of levels) for (const policy of policies) {
-      const sandbox = new Function("require", fixture.replace(/^#!.*\n/, "") + "\nreturn sandbox;")(require);
+      const sandbox = new Function("require", fixture.replace(/^#!.*\n/, "").replace("ctx,startLevel,setState,step,", "ctx,fixedStep,startLevel,setState,step,") + "\nreturn sandbox;")(require);
       const H = sandbox.H;
       let randomSeed = level * 997 + attempt * 193 + 17;
       sandbox.Math = Object.create(Math);
@@ -96,7 +96,7 @@ let browser;
       sandbox.__game = { ctx: H.ctx, get L() { return H.L; }, get state() { return H.state; }, goLevel(l) { H.startLevel(l); H.setState("play"); } };
       const config = { level, policy, steering, seed: level * 173 + attempt * 697 + 11 };
       await vm.runInContext(`(${setupBot.toString()})(${JSON.stringify(config)})`, sandbox);
-      for (let i = 0; i < 10000 && ["play", "boss", "bonus"].includes(H.state); i++) H.step(.05);
+      for (let i = 0; i < 30000 && ["play", "boss", "bonus"].includes(H.state); i++) H.fixedStep();
       const L = H.L, errors = [];
       if (sandbox.__tacticsCounts.maxLive > 1) errors.push("Overlapping live threats");
       if (policy === "never" && sandbox.__tacticsCounts.uses) errors.push("Never policy activated a power-up");

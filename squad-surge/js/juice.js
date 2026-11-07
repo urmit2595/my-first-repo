@@ -426,6 +426,13 @@ window.Juice = (() => {
       const distance = Math.hypot(x - L.sx, z - L.sz);
       trauma = clamp(trauma + clamp(radius / 10, 0, .7) / (1 + distance / Math.max(1, radius)), 0, 1);
     });
+    on("bossPhase", ({ phase } = {}) => {
+      enqueue(`BOSS PHASE ${Number.isFinite(Number(phase)) ? Number(phase) : "SHIFT"}!`, { color: "#ff8563", icon: "boss", priority: true });
+      pulse();
+    });
+    on("bossWeak", ({ on: weak } = {}) => {
+      if (weak) enqueue("WEAK POINT!", { color: "#ffe478", size: 9, priority: true, ring: true });
+    });
     on("bossEnrage", () => { enqueue("BOSS IS ANGRY!", { color: "#ff5549", icon: "boss" }); pulse(); });
     on("bonusStart", () => { bossActive = false; enqueue("SURGE FINALE!", { icon: "surge", color: "#ffd84a" }); });
     function bonusStamp(mult, final) {

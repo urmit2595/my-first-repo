@@ -1031,3 +1031,2302 @@ drwxr-xr-x 11 root root  4096 Nov  7 20:16 ..
 -rw-r--r--  1 root root 23083 Nov  7 12:29 powerups.js
 -rw-r--r--  1 root root 58142 Nov  6 16:42 scenery.js
 
+codex
+The current engine uses atlas sprites and an event bus. I’m keeping behavior in the registry callbacks and pooling the telegraph meshes. Boss attacks will lock their target lanes when the warning starts and leave a neighboring lane open; Scrap Colossus will spawn two damageable halves at 50% HP.
+
+exec
+/bin/bash -lc "cat > js/enemies.js <<'EOF'
+\"use strict\";
+// Campaign enemies. Registry callbacks own movement and attack clocks; no frame listener
+// changes gameplay. setup() is safe before the optional registry/THREE seams exist.
+window.Enemies = (() => {
+  // Tuning: distances are metres, timers are simulation seconds, damage is HP.
+  const TUNE = Object.freeze({
+    lane: 3.4, laneHalf: 1.35, activeRange: 48, contactRadius: 0.65,
+    shieldSide: 2.2, shieldAngle: 25 * Math.PI / 180,
+    chargeWarn: 0.9, chargeTrigger: 18, chargeSpeed: 3, chargeCap: 8,
+    fuse: 2.2, fuseRange: 9, blastRadius: 2.4, blastDamage: 30,
+    rifleRange: 20, rifleWarn: 1, rifleCooldown: 2.6, rifleFraction: 0.03,
+    healRate: 0.06, healRange: 24, healSearch: 0.25,
+    bossWarn: 1.1, bossGap: 17, bossChargeSpeed: 24,
+    bossChargeCap: 12, bossSlamCap: 10, bossBarrageFraction: 0.08,
+    weakDuration: 1.4, weakMultiplier: 2.5, splitAt: 0.5,
+    // Fixed mesh budget. If exhausted, new damaging telegraphs wait for a slot.
+    telegraphs: 256, bossReserve: 12
+  });
+  const RED = 0xff4036, AMBER = 0xffad32, GREEN = 0x64ff9c;
+  const CYAN = 0x62e8ff, GOLD = 0xffec73;
+  const EMPTY = [];
+  let C = null, pool = [], actors = [], definitions = [], subscribed = false;
+  let built = false, serial = 0;
+  const squadScratch = { x: 0, z: 0, count: 0, radius: 0, soldiers: EMPTY };
+  const MINI_OPTIONS = { campaignChild: true };
+
+  function number(n, fallback) { return typeof n === \"number\" && Number.isFinite(n) ? n : fallback; }
+  function alive(e) { return "'!!e && e.hp > 0 && e.state !== "dead" && e.state !== "dying" && e.state !== "down"; }
+  function level() { try { return C && C.L; } catch (_) { return null; } }
+  function squad() {
+    try { if (C && C.squad) return C.squad; } catch (_) { /* older engine */ }
+    const l = level();
+    if (!l) return null;
+    squadScratch.x = number(l.sx, 0); squadScratch.z = number(l.sz, 0);
+    squadScratch.soldiers = l.soldiers || EMPTY; squadScratch.count = squadScratch.soldiers.length;
+    squadScratch.radius = number(l.radius, 3);
+    return squadScratch;
+  }
+  // Never require a sibling module, and contain failures at each engine boundary.
+  function rect(x0, x1, z0, z1, cap, cause) {
+    try { return C && typeof C.killSoldiersInRect === "function" ? number(C.killSoldiersInRect(x0, x1, z0, z1, cap, cause), 0) : 0; } catch (_) { return 0; }
+  }
+  function circle(x, z, radius, cap, cause) {
+    try { return C && typeof C.killSoldiersInCircle === "function" ? number(C.killSoldiersInCircle(x, z, radius, cap, cause), 0) : 0; } catch (_) { return 0; }
+  }
+  function damageArea(x, z, radius, damage) {
+    try { if (C && typeof C.damageEnemiesInCircle === "function") C.damageEnemiesInCircle(x, z, radius, damage); } catch (_) { /* optional seam */ }
+  }
+  function spawn(type, x, z, opts) {
+    try { return C && typeof C.spawnEnemy === "function" ? C.spawnEnemy(type, x, z, opts) : null; } catch (_) { return null; }
+  }
+  function emit(name, event) {
+    try { if (C && C.bus && typeof C.bus.emit === "function") C.bus.emit(name, event); } catch (_) { /* optional bus */ }
+  }
+  function lane(x) { return x < -TUNE.lane / 2 ? -1 : x > TUNE.lane / 2 ? 1 : 0; }
+  function bypass(b) {
+    const l = level();
+    return !!b && (!!b.splash || b.pierce > 0 || b.piercer || b.kind === "piercer" ||
+      b.kind === "grenadier" || b.source === "airstrike" || b.source === "giant" || !!(l && l.giantT > 0));
+  }
+
+  // One shared quad geometry. Shader masks produce arrows, rings, lanes, shields,
+  // tethers and glowing weak cores without rebuilding geometry or allocating FX.
+  const VERT = "varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}";
+  const FRAG = "uniform vec3 color;uniform float mode;uniform float progress;uniform float opacity;varying vec2 vUv;" +
+    "void main(){vec2 p=vUv-0.5;float a=1.;float glow=1.;" +
+    "if(mode<0.5){float edge=step(0.44,abs(p.x));a=0.18+0.72*edge;}" +
+    "else if(mode<1.5){float shaft=step(abs(p.x),0.13)*step(vUv.y,0.70);float head=step(0.52,vUv.y)*step(abs(p.x),(1.-vUv.y)*0.95);a=max(shaft,head);}" +
+    "else if(mode<2.5){float r=length(p)*2.;float angle=atan(p.x,p.y)/6.2831853+0.5;float ring=smoothstep(0.78,0.84,r)*(1.-smoothstep(0.94,1.,r));a=ring*(angle<progress?1.:0.20)+0.06*step(r,0.78);}" +
+    "else if(mode<3.5){float edge=max(step(0.42,abs(p.x)),step(0.42,abs(p.y)));a=0.28+0.65*edge;}" +
+    "else if(mode<4.5){a=1.-smoothstep(0.1,0.5,abs(p.x));glow=1.4;}" +
+    "else{float r=length(p)*2.;a=(1.-smoothstep(0.1,1.,r))*(0.65+0.35*progress);glow=2.;}" +
+    "gl_FragColor=vec4(color*glow,a*opacity);}";
+
+  function buildPool() {
+    if (built || !C || !C.telegraphGroup || typeof C.telegraphGroup.add !== "function") return;
+    const t = C.THREE;
+    if (!t || typeof t.PlaneBufferGeometry !== "function" || typeof t.ShaderMaterial !== "function" ||
+        typeof t.Mesh !== "function" || typeof t.Color !== "function") return;
+    try {
+      const geo = new t.PlaneBufferGeometry(1, 1);
+      for (let i = 0; i < TUNE.telegraphs; i++) {
+        const material = new t.ShaderMaterial({
+          uniforms: { color: { value: new t.Color(RED) }, mode: { value: 0 },
+            progress: { value: 1 }, opacity: { value: 0.8 } },
+          vertexShader: VERT, fragmentShader: FRAG, transparent: true,
+          depthWrite: false, side: t.DoubleSide, toneMapped: false, fog: false
+        });
+        const mesh = new t.Mesh(geo, material);
+        mesh.visible = false; mesh.frustumCulled = false; mesh.renderOrder = 9;
+        C.telegraphGroup.add(mesh);
+        pool.push({ mesh, owner: null });
+      }
+      built = true;
+    } catch (_) { built = true; /* any successfully built slots remain usable */ }
+  }
+  function take(s, mode, color, boss) {
+    const end = boss ? pool.length : Math.max(0, pool.length - TUNE.bossReserve);
+    for (let i = 0; i < end; i++) {
+      const p = pool[i];
+      if (p.owner) continue;
+      p.owner = s;
+      const m = p.mesh, u = m.material.uniforms;
+      u.mode.value = mode; u.color.value.set(color); u.progress.value = 1; u.opacity.value = 0.8;
+      m.rotation.set(-Math.PI / 2, 0, 0); m.visible = true;
+      return p;
+    }
+    return null;
+  }
+  function release(p) { if (p) { p.mesh.visible = false; p.owner = null; } }
+  function releaseAttack(s) { release(s.a); release(s.b); s.a = s.b = null; }
+  function cleanup(s) {
+    releaseAttack(s); release(s.shield); release(s.marker); s.shield = s.marker = null;
+    if (s.weak > 0) { s.weak = 0; s.weakEvent.on = false; emit("bossWeak", s.weakEvent); }
+  }
+  function ground(p, x, z, width, depth, progress) {
+    if (!p) return;
+    const m = p.mesh;
+    m.position.set(x, 0.08, z); m.scale.set(width, depth, 1);
+    m.material.uniforms.progress.value = progress;
+  }
+  function laneVisual(p, x, z0, z1, arrow, progress) {
+    ground(p, x, (z0 + z1) * 0.5, TUNE.laneHalf * 2, Math.max(1, Math.abs(z1 - z0)), progress);
+    // Ground quad +Y points toward -Z after rotateX(-PI/2): reverse arrows toward squad (+Z).
+    if (p) p.mesh.rotation.set(-Math.PI / 2, 0, arrow ? Math.PI : 0);
+  }
+  function shieldVisual(s, q) {
+    if (!s.shield) s.shield = take(s, 3, CYAN, s.boss);
+    if (!s.shield) return;
+    const e = s.e, m = s.shield.mesh;
+    const angle = Math.atan2(number(q.x, 0) - e.x, number(q.z, 0) - e.z);
+    m.rotation.set(0, angle, 0);
+    m.position.set(e.x + Math.sin(angle) * 0.55, s.baseH * 0.48, e.z + Math.cos(angle) * 0.55);
+    m.scale.set(s.boss ? 4.2 : 1.6, s.boss ? 3 : 1.9, 1);
+  }
+  function signal(s, kind) {
+    const ev = s.teleEvent;
+    ev.kind = kind; ev.x = s.targetX; ev.z = s.targetZ;
+    emit("enemyTelegraph", ev);
+  }
+  function makeState(e, type, boss) {
+    if (!e || typeof e !== "object") return null;
+    if (e._campaignEnemy) return e._campaignEnemy;
+    const s = {
+      e, type, boss: !!boss, id: ++serial, mode: "walk", timer: 0, cooldown: 0,
+      age: 0, baseH: number(e.h, boss ? 9.5 : 1.7), speed: number(e.sp, 3),
+      a: null, b: null, shield: null, marker: null, patient: null, search: 0,
+      targetX: 0, targetZ: 0, z0: 0, z1: 0, lane1: 0, lane2: 9, safeLane: 0,
+      losses: 0, detonated: false, dead: false, phase: -1, attackIndex: 0,
+      attack: "", config: null, weak: 0, wall: 0, split: false, half1: null, half2: null,
+      parent: null, halfOptions1: { hp: 1, maxHp: 1 }, halfOptions2: { hp: 1, maxHp: 1 },
+      teleEvent: { type, kind: "", x: 0, z: 0 },
+      phaseEvent: { type, phase: 0 }, weakEvent: { on: false }
+    };
+    e._campaignEnemy = s;
+    // Supported by registry implementations that retain generic movement/contact.
+    e.manualMovement = true; e.noContact = true;
+    actors.push(s);
+    return s;
+  }
+  function liveState(e, type, boss) { return e && (e._campaignEnemy || makeState(e, type, boss)); }
+  function active(e, q) { return alive(e) && q && e.z > number(q.z, 0) - TUNE.activeRange; }
+  function walk(s, dt, q, contact) {
+    const e = s.e, oldZ = e.z;
+    e.state = "walk"; e.z += s.speed * dt;
+    if (contact && rect(e.x - e.r, e.x + e.r, oldZ - e.r, e.z + e.r, e.dmg || 1, s.type) > 0) retire(s);
+    if (e.z > q.z + Math.max(16, number(q.radius, 0) + 3)) retire(s);
+  }
+  function retire(s) { s.e.hp = 0; s.e.state = "dead"; s.dead = true; cleanup(s); }
+  function stop(s) { s.e.state = "idle"; }
+  function detonate(s, early) {
+    if (s.detonated) return;
+    s.detonated = true;
+    if (early) damageArea(s.e.x, s.e.z, TUNE.blastRadius, TUNE.blastDamage);
+    else circle(s.e.x, s.e.z, TUNE.blastRadius, 1000000, "bomber");
+  }
+  function nearestPatient(s) {
+    const l = level(); let best = null, distance = TUNE.healRange * TUNE.healRange;
+    const boss = l && l.boss;
+    if (alive(boss) && boss.state !== "wait" && !(boss._campaignEnemy && boss._campaignEnemy.split)) {
+      const d = (boss.x - s.e.x) ** 2 + (boss.z - s.e.z) ** 2;
+      if (d < distance) { best = boss; distance = d; }
+    }
+    const list = l && l.enemies ? l.enemies : EMPTY;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (!alive(e) || (e.type !== "brute" && e.type !== "colossus_half")) continue;
+      const d = (e.x - s.e.x) ** 2 + (e.z - s.e.z) ** 2;
+      if (d < distance) { best = e; distance = d; }
+    }
+    // Registry-only hosts can still expose a boss through its init callback.
+    for (let i = 0; i < actors.length; i++) {
+      const a = actors[i], e = a.e;
+      if (!a.boss || a.split || !alive(e) || e.state === "wait") continue;
+      const d = (e.x - s.e.x) ** 2 + (e.z - s.e.z) ** 2;
+      if (d < distance) { best = e; distance = d; }
+    }
+    return best;
+  }
+  function enemyUpdate(e, dt) {
+    const s = liveState(e, e && e.type, false), q = squad();
+    if (!s || !active(e, q) || !(dt > 0)) { if (s && !alive(e)) cleanup(s); return true; }
+    s.age += dt; s.cooldown = Math.max(0, s.cooldown - dt);
+    const distance = q.z - e.z;
+    if (s.type === "shieldbearer") {
+      shieldVisual(s, q); walk(s, dt, q, true);
+    } else if (s.type === "charger") {
+      if (s.mode === "walk" && distance < TUNE.chargeTrigger && distance > 0) {
+        s.a = take(s, 1, RED, false);
+        if (s.a) {
+          s.mode = "warn"; s.timer = TUNE.chargeWarn; s.targetX = e.x;
+          s.targetZ = q.z; s.z0 = e.z; s.z1 = q.z + number(q.radius, 3) + 5;
+          signal(s, "charge");
+        } else { stop(s); return true; }
+      }
+      if (s.mode === "warn") {
+        stop(s); e.h = s.baseH * 0.58; e.crouch = true;
+        laneVisual(s.a, s.targetX, s.z0, s.z1, true, 1 - s.timer / TUNE.chargeWarn);
+        s.timer -= dt;
+        if (s.timer <= 0) { s.mode = "rush"; e.h = s.baseH; e.crouch = false; }
+      } else if (s.mode === "rush") {
+        e.state = "walk";
+        const oldZ = e.z; e.z += s.speed * TUNE.chargeSpeed * dt;
+        s.losses += rect(e.x - TUNE.contactRadius, e.x + TUNE.contactRadius,
+          oldZ - e.r, e.z + e.r, Math.max(0, TUNE.chargeCap - s.losses), "charger");
+        if (e.z >= s.z1) retire(s);
+      } else walk(s, dt, q, true);
+    } else if (s.type === "bomber") {
+      if (s.mode === "walk" && distance <= TUNE.fuseRange && distance >= -TUNE.blastRadius) {
+        s.a = take(s, 2, AMBER, false);
+        if (s.a) { s.mode = "fuse"; s.timer = TUNE.fuse; s.targetX = e.x; s.targetZ = e.z; signal(s, "fuse"); }
+        else { stop(s); return true; }
+      }
+      if (s.mode === "fuse") {
+        stop(s); ground(s.a, e.x, e.z, TUNE.blastRadius * 2, TUNE.blastRadius * 2, s.timer / TUNE.fuse);
+        s.timer -= dt;
+        if (s.timer <= 0) { detonate(s, false); retire(s); }
+      } else walk(s, dt, q, false);
+    } else if (s.type === "rifleman") {
+      if (distance > TUNE.rifleRange) walk(s, dt, q, false);
+      else {
+        stop(s);
+        if (s.mode !== "warn" && s.cooldown <= 0) {
+          s.a = take(s, 0, RED, false);
+          if (s.a) {
+            s.mode = "warn"; s.timer = TUNE.rifleWarn; s.targetX = lane(q.x) * TUNE.lane;
+            s.targetZ = q.z; s.z0 = e.z; s.z1 = q.z + number(q.radius, 3) + 8; signal(s, "laser");
+          }
+        }
+        if (s.mode === "warn") {
+          laneVisual(s.a, s.targetX, s.z0, s.z1, false, 1 - s.timer / TUNE.rifleWarn);
+          s.timer -= dt;
+          if (s.timer <= 0) {
+            rect(s.targetX - TUNE.laneHalf, s.targetX + TUNE.laneHalf, s.z0, s.z1,
+              Math.max(2, Math.floor(number(q.count, 0) * TUNE.rifleFraction)), "rifleman");
+            releaseAttack(s); s.mode = "walk"; s.cooldown = TUNE.rifleCooldown;
+          }
+        }
+      }
+      if (distance < -number(q.radius, 3) - 8) retire(s);
+    } else if (s.type === "medic") {
+      s.search -= dt;
+      if (s.search <= 0 || !alive(s.patient)) { s.patient = nearestPatient(s); s.search = TUNE.healSearch; }
+      const p = s.patient;
+      if (alive(p)) {
+        if (!s.a) s.a = take(s, 4, GREEN, false);
+        stop(s);
+        if (s.a) {
+          p.hp = Math.min(number(p.maxHp, p.hp), p.hp + number(p.maxHp, p.hp) * TUNE.healRate * dt);
+          const dx = p.x - e.x, dz = p.z - e.z;
+          ground(s.a, (e.x + p.x) / 2, (e.z + p.z) / 2, 0.24, Math.max(0.1, Math.hypot(dx, dz)), 1);
+          s.a.mesh.position.y = 1.1; s.a.mesh.rotation.set(-Math.PI / 2, 0, Math.atan2(dx, -dz));
+        }
+      } else { releaseAttack(s); walk(s, dt, q, true); }
+    } else if (s.type === "colossus_half") {
+      stop(s); // Parent schedules both halves against one shared, safe-lane attack plan.
+      if (s.parent && (!alive(s.parent.e) || s.parent.dead)) retire(s);
+    } else walk(s, dt, q, true); // splitter and its small, fast mini
+    return true;
+  }
+  function enemyBullet(e, b) {
+    const s = e && e._campaignEnemy;
+    if (!s || s.type !== "shieldbearer" || bypass(b)) return true;
+    const q = squad(); if (!q) return true;
+    const dx = Math.abs(q.x - e.x), dz = q.z - e.z;
+    // Front is +Z; shield graphic faces the squad. Both side distance and
+    // the narrow frontal cone are checked, so distant frontal bullets cannot flank.
+    return dz <= 0 || (dx > TUNE.shieldSide && Math.atan2(dx, dz) > TUNE.shieldAngle);
+  }
+  function enemyDeath(e) {
+    const s = e && e._campaignEnemy;
+    if (!s || s.dead) return;
+    s.dead = true; cleanup(s);
+    if (s.type === "bomber") detonate(s, true);
+    if (s.type === "splitter") {
+      for (let i = 0; i < 3; i++) spawn("splitter_mini", e.x + (i - 1) * 0.65, e.z - (i % 2) * 0.6, MINI_OPTIONS);
+    }
+  }
+
+  // Declarative phase tables: thresholds are descending remaining-HP fractions.
+  const BOSS_DATA = {
+    ogre: { name: "Ogre Warlord", hp: 900, tint: 0xe8ac78,
+      phases: [{ at: 1, attacks: ["slam"], cadence: 2.6 },
+        { at: 0.5, attacks: ["slam", "summon"], cadence: 1.9, summonType: "grunt", summons: 4 }],
+      weak: { after: "slam", dur: TUNE.weakDuration, mult: TUNE.weakMultiplier } },
+    bulwark: { name: "Iron Bulwark", hp: 1400, tint: 0x8ac9e4,
+      phases: [{ at: 1, attacks: ["shieldWall", "slam"], cadence: 2.6 },
+        { at: 0.5, attacks: ["shieldWall", "slam", "summon"], cadence: 2.0, summonType: "shieldbearer", summons: 2 }],
+      weak: { after: "slam", dur: 1.4, mult: 2.5 } },
+    ravager: { name: "Dune Ravager", hp: 1800, tint: 0xffb268,
+      phases: [{ at: 1, attacks: ["charge"], cadence: 2.6, lanes: 1 },
+        { at: 0.5, attacks: ["charge", "charge", "slam"], cadence: 1.9, lanes: 2 }],
+      weak: { after: "charge", dur: 1.4, mult: 2.5 } },
+    gunner: { name: "Harbor Gunner", hp: 2200, tint: 0x9cabed,
+      phases: [{ at: 1, attacks: ["barrage", "summon"], cadence: 2.6, lanes: 1, summonType: "rifleman", summons: 2 },
+        { at: 0.5, attacks: ["barrage", "barrage", "summon"], cadence: 2.0, lanes: 2, summonType: "rifleman", summons: 3 }],
+      weak: { after: "barrage", dur: 1.4, mult: 2.5 } },
+    colossus: { name: "Scrap Colossus", hp: 2800, tint: 0xc4b5d3,
+      phases: [{ at: 1, attacks: ["slam", "shieldWall"], cadence: 2.6 },
+        { at: 0.5, attacks: ["slam", "barrage"], cadence: 1.9, lanes: 2, entry: "split" }],
+      weak: { after: "slam", dur: 1.4, mult: 2.5 } },
+    warlord: { name: "The Warlord, Reborn", hp: 3600, tint: 0xff7c8a,
+      phases: [{ at: 1, attacks: ["slam", "shieldWall", "summon"], cadence: 2.6, summonType: "shieldbearer", summons: 2 },
+        { at: 0.66, attacks: ["charge", "barrage", "summon"], cadence: 2.2, lanes: 2, summonType: "rifleman", summons: 2 },
+        { at: 0.33, attacks: ["shieldWall", "slam", "charge", "barrage", "summon"], cadence: 1.9, lanes: 2, summonType: "splitter", summons: 2 }],
+      weak: { after: "slam", dur: 1.4, mult: 2.5 } }
+  };
+  function bossInit(e, type) {
+    const s = makeState(e, type, true);
+    if (s) { s.config = BOSS_DATA[type]; s.cooldown = 1.2; }
+    return s;
+  }
+  function phaseFor(s) {
+    const phases = s.config.phases, ratio = s.e.hp / Math.max(1, s.e.maxHp);
+    let phase = 0;
+    for (let i = 1; i < phases.length; i++) if (ratio <= phases[i].at) phase = i;
+    if (s.phase !== phase) {
+      s.phase = phase; s.attackIndex = 0; s.phaseEvent.phase = phase + 1;
+      emit("bossPhase", s.phaseEvent);
+    }
+    return phases[phase];
+  }
+  function beginAttack(s, name, q, phase) {
+    if (s.attack || s.weak > 0) return false;
+    // For two lanes, reserve the adjacent lane closest to the squad. Never target
+    // both neighboring exits while painting the squad'"'s lane; dodge distance <= 3.4m.
+    s.lane1 = lane(q.x);
+    s.safeLane = s.lane1 === 0 ? (q.x < 0 ? -1 : 1) : 0;
+    s.lane2 = (phase.lanes === 2 && (name === \"charge\" || name === \"barrage\" || (s.split && name === \"slam\"))) ? -s.lane1 - s.safeLane : 9;
+    s.targetX = s.lane1 * TUNE.lane; s.targetZ = q.z;
+    s.z0 = Math.min(s.e.z, q.z - TUNE.bossGap);
+    s.z1 = q.z + number(q.radius, 3) + 6;
+    const mode = name === \"charge\" ? 1 : name === \"summon\" || name === \"split\" ? 2 : 0;
+    s.a = take(s, mode, name === \"summon\" || name === \"split\" ? AMBER : RED, true);
+    if ("'!s.a) return false;
+    if (s.lane2 !== 9) {
+      s.b = take(s, mode, RED, true);
+      if (!s.b) { releaseAttack(s); return false; }
+    }
+    s.attack = name; s.mode = "warn"; s.timer = TUNE.bossWarn; s.losses = 0;
+    // Warning coordinates are immutable through the complete attack.
+    drawBossAttack(s); signal(s, name);
+    return true;
+  }
+  function drawBossAttack(s) {
+    const progress = 1 - Math.max(0, s.timer) / TUNE.bossWarn;
+    if (s.attack === "summon" || s.attack === "split") {
+      ground(s.a, s.targetX, s.z0, 3.1, 3.1, progress);
+    } else {
+      laneVisual(s.a, s.targetX, s.z0, s.z1, s.attack === "charge", progress);
+      if (s.b) laneVisual(s.b, s.lane2 * TUNE.lane, s.z0, s.z1, s.attack === "charge", progress);
+    }
+  }
+  function weakWindow(s, attack) {
+    if (s.config.weak.after !== attack || !alive(s.e)) return;
+    release(s.shield); s.shield = null; s.wall = 0;
+    s.weak = s.config.weak.dur; s.e.weakT = s.weak;
+    s.marker = take(s, 5, GOLD, true);
+    s.weakEvent.on = true; emit("bossWeak", s.weakEvent);
+  }
+  function finishAttack(s, phase) {
+    const attack = s.attack;
+    releaseAttack(s); s.attack = ""; s.mode = "walk";
+    s.e.h = s.split ? 0 : s.baseH;
+    s.e.crouch = false; s.cooldown = Math.max(phase.cadence, s.config.weak.dur);
+    weakWindow(s, attack);
+  }
+  function hitBossLanes(s, cap, cause, z0, z1) {
+    let killed = rect(s.targetX - TUNE.laneHalf, s.targetX + TUNE.laneHalf, z0, z1, cap, cause);
+    if (s.lane2 !== 9 && killed < cap) killed += rect(s.lane2 * TUNE.lane - TUNE.laneHalf,
+      s.lane2 * TUNE.lane + TUNE.laneHalf, z0, z1, cap - killed, cause);
+    return killed;
+  }
+  function splitBoss(s) {
+    if (s.split) return true;
+    const hp = Math.max(1, s.e.hp * 0.5);
+    s.halfOptions1.hp = s.halfOptions1.maxHp = hp;
+    s.halfOptions2.hp = s.halfOptions2.maxHp = hp;
+    // Separate spawn options are retained by some hosts; never reuse between halves.
+    s.half1 = spawn("colossus_half", -TUNE.lane, s.e.z, s.halfOptions1);
+    s.half2 = spawn("colossus_half", TUNE.lane, s.e.z, s.halfOptions2);
+    if (!s.half1 || !s.half2) {
+      if (s.half1) { s.half1.hp = 0; s.half1.state = "dead"; }
+      if (s.half2) { s.half2.hp = 0; s.half2.state = "dead"; }
+      s.half1 = s.half2 = null; return false;
+    }
+    s.split = true;
+    for (let i = 0; i < 2; i++) {
+      const half = i === 0 ? s.half1 : s.half2;
+      half.hp = half.maxHp = hp;
+      const hs = liveState(half, "colossus_half", false);
+      if (hs) hs.parent = s;
+    }
+    s.e.hidden = true; s.e.h = 0; s.e.renderScale = 0;
+    release(s.shield); s.shield = null;
+    return true;
+  }
+  function executeAttack(s, q, phase) {
+    const name = s.attack;
+    if (name === "charge") {
+      s.mode = "rush"; s.timer = 0; s.e.x = s.targetX; s.e.z = s.z0;
+      return;
+    }
+    if (name === "slam") hitBossLanes(s, TUNE.bossSlamCap, "boss:slam", s.z0, s.z1);
+    else if (name === "barrage") hitBossLanes(s, Math.max(3, Math.floor(q.count * TUNE.bossBarrageFraction)), "boss:barrage", s.z0, s.z1);
+    else if (name === "summon") {
+      const n = phase.summons || 3, type = phase.summonType || "grunt";
+      for (let i = 0; i < n; i++) {
+        const child = spawn(type, s.targetX + ((i % 3) - 1) * 0.65, s.z0 - 2 - Math.floor(i / 3) * 1.5, MINI_OPTIONS);
+        // Summoned riflemen respect the boss'"'s reserved dodge lane for their first shot.
+        if (child && child._campaignEnemy) child._campaignEnemy.cooldown = TUNE.rifleCooldown;
+      }
+    } else if (name === \"shieldWall\") {
+      s.wall = 4.5; shieldVisual(s, q);
+      hitBossLanes(s, 6, \"boss:shieldWall\", s.z0, s.z1);
+    } else if (name === \"split\") splitBoss(s);
+    finishAttack(s, phase);
+  }
+  function bossUpdate(e, dt) {
+    let s = e && e._campaignEnemy;
+    if ("'!s && e && BOSS_DATA[e.type]) s = bossInit(e, e.type);
+    const q = squad();
+    if (!s || !s.config || !q || !(dt > 0) || !alive(e) || e.state === "wait") {
+      if (s && !alive(e)) cleanup(s); return true;
+    }
+    s.age += dt;
+    if (s.split) {
+      e.hp = Math.max(0, number(s.half1 && s.half1.hp, 0)) + Math.max(0, number(s.half2 && s.half2.hp, 0));
+      if (e.hp <= 0) {
+        // Route victory through the engine'"'s normal damage/down hook when present.
+        try { if (C && typeof C.damageBoss === \"function\") { e.hp = 0.001; C.damageBoss(1); } } catch (_) { e.hp = 0; }
+        cleanup(s); return true;
+      }
+    }
+    const phase = phaseFor(s);
+    s.wall = Math.max(0, s.wall - dt);
+    if (s.wall > 0 && "'!s.split) shieldVisual(s, q);
+    else { release(s.shield); s.shield = null; }
+    if (s.weak > 0) {
+      s.weak = Math.max(0, s.weak - dt); e.weakT = s.weak;
+      if (s.marker) {
+        const m = s.marker.mesh;
+        m.position.set(e.x, s.split ? 3.4 : s.baseH * 0.57, e.z + 0.6); m.scale.set(2.2, 2.2, 1);
+        if (C.camera && C.camera.quaternion && m.quaternion && typeof m.quaternion.copy === "function") m.quaternion.copy(C.camera.quaternion);
+        m.material.uniforms.progress.value = 0.5 + 0.5 * Math.sin(s.age * 12);
+      }
+      if (s.weak <= 0) { release(s.marker); s.marker = null; s.weakEvent.on = false; emit("bossWeak", s.weakEvent); }
+    }
+    if (!s.attack) {
+      e.z = Math.min(e.z, q.z - TUNE.bossGap - number(q.radius, 0));
+      s.cooldown -= dt;
+      if (s.type === "colossus" && !s.split && e.hp / e.maxHp <= TUNE.splitAt) {
+        beginAttack(s, "split", q, phase);
+      } else if (s.cooldown <= 0 && s.weak <= 0) {
+        const name = phase.attacks[s.attackIndex % phase.attacks.length];
+        if (beginAttack(s, name, q, phase)) s.attackIndex++;
+      }
+      return true;
+    }
+    if (s.mode === "warn") {
+      if (s.attack === "charge" || s.attack === "slam") { e.h = s.split ? 0 : s.baseH * 0.78; e.crouch = true; }
+      drawBossAttack(s); s.timer -= dt;
+      if (s.timer <= 0) executeAttack(s, q, phase);
+    } else if (s.mode === "rush") {
+      const oldZ = e.z;
+      e.z += TUNE.bossChargeSpeed * dt;
+      s.losses += hitBossLanes(s, Math.max(0, TUNE.bossChargeCap - s.losses), "boss:charge", oldZ - 0.7, e.z + 0.7);
+      if (e.z >= s.z1) { e.z = q.z - TUNE.bossGap - number(q.radius, 0); finishAttack(s, phase); }
+    }
+    return true;
+  }
+  function bossBullet(e, b) {
+    const s = e && e._campaignEnemy;
+    if (!s) return true;
+    if (s.split) return false;
+    if (s.wall > 0 && s.weak <= 0 && !bypass(b)) return false;
+    // Apply extra damage to this target, never mutate a pooled/piercing projectile.
+    if (s.weak > 0 && b) e.hp -= number(b.dmg, 0) * (s.config.weak.mult - 1);
+    return true;
+  }
+  function halfBullet(e, b) {
+    const s = e && e._campaignEnemy, parent = s && s.parent;
+    if (parent && parent.weak > 0 && b) e.hp -= number(b.dmg, 0) * (parent.config.weak.mult - 1);
+    return true;
+  }
+  function bossDeath(e) {
+    const s = e && e._campaignEnemy;
+    if (!s) return;
+    s.dead = true; cleanup(s);
+    if (s.half1) { s.half1.hp = 0; s.half1.state = "dead"; }
+    if (s.half2) { s.half2.hp = 0; s.half2.state = "dead"; }
+  }
+
+  // All exported callbacks are guarded once, at registration (no per-tick closures).
+  function guarded(fn, fallback) {
+    return function (a, b) { try { return fn(a, b); } catch (_) { return fallback; } };
+  }
+  function register(record) {
+    const method = record.boss ? "registerBoss" : "registerEnemy";
+    try {
+      if (!C || typeof C[method] !== "function") return false;
+      C[method](record.type, record.def); record.registered = true; return true;
+    } catch (_) { return false; }
+  }
+  function addDefinition(type, hp, r, h, sp, dmg, tint, boss) {
+    const fallback = boss || type === "shieldbearer" || type === "splitter" || type === "colossus_half" ? "assets/brute.webp" : "assets/grunt.webp";
+    const record = { type, boss, registered: false, probed: false, def: null };
+    const def = { sheet: fallback, fallbackSheet: fallback, cols: 4, rows: 2,
+      hp, r, h, sp, dmg, scale: 1, tint, fallbackTint: tint,
+      manualMovement: true, noContact: true,
+      init: guarded(function (e) { return boss ? bossInit(e, type) : makeState(e, type, false); }, null),
+      update: guarded(boss ? bossUpdate : enemyUpdate, true),
+      onBullet: guarded(boss ? bossBullet : type === "colossus_half" ? halfBullet : enemyBullet, true),
+      onDeath: guarded(boss ? bossDeath : enemyDeath, undefined)
+    };
+    if (boss) {
+      const data = BOSS_DATA[type];
+      def.name = data.name; def.phases = data.phases; def.weak = data.weak; def.attacks = {};
+      const names = ["slam", "summon", "charge", "barrage", "shieldWall", "split"];
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        def.attacks[name] = guarded(function (e) {
+          const s = e && e._campaignEnemy, q = squad();
+          return !!s && !!q && beginAttack(s, name, q, phaseFor(s));
+        }, false);
+      }
+    }
+    record.def = def; definitions.push(record);
+  }
+  function defineAll() {
+    if (definitions.length) return;
+    addDefinition("shieldbearer", 18, 0.65, 2.05, 2.1, 3, 0x8ecbff, false);
+    addDefinition("charger", 10, 0.48, 1.8, 3.5, 2, 0xff7163, false);
+    addDefinition("bomber", 7, 0.46, 1.65, 2.8, 0, 0xffb251, false);
+    addDefinition("rifleman", 8, 0.44, 1.7, 2.5, 1, 0xc8a0ff, false);
+    addDefinition("medic", 9, 0.44, 1.7, 2.6, 1, 0x75ffb1, false);
+    addDefinition("splitter", 16, 0.65, 2.15, 2.5, 3, 0xd1a0ff, false);
+    addDefinition("splitter_mini", 3, 0.26, 0.9, 5.2, 1, 0xe3baff, false);
+    addDefinition("colossus_half", 700, 1.1, 4.5, 0, 0, 0xc4b5d3, false);
+    const keys = Object.keys(BOSS_DATA);
+    for (let i = 0; i < keys.length; i++) {
+      const type = keys[i], d = BOSS_DATA[type];
+      addDefinition(type, d.hp, 2.1, 8, 0, 0, d.tint, true);
+    }
+  }
+  function probe(record) {
+    if (record.probed || typeof window.Image !== "function") return;
+    record.probed = true;
+    try {
+      const img = new window.Image();
+      img.onload = function () {
+        if (!number(img.naturalWidth, img.width)) return;
+        record.def.sheet = img.src; record.def.cols = record.boss ? 3 : 4;
+        record.def.tint = 0xffffff; register(record);
+      };
+      // The already registered, correctly laid-out tinted fallback remains live.
+      img.onerror = function () {};
+      img.src = "assets/units2/" + record.type + ".webp";
+    } catch (_) { /* optional browser image loader */ }
+  }
+  function refresh() {
+    buildPool();
+    for (let i = 0; i < definitions.length; i++) {
+      const record = definitions[i];
+      if (!record.registered) register(record);
+      if (record.registered) probe(record);
+    }
+  }
+  function reset() {
+    for (let i = 0; i < actors.length; i++) cleanup(actors[i]);
+    actors.length = 0; serial = 0;
+    for (let i = 0; i < pool.length; i++) release(pool[i]);
+    refresh();
+  }
+  function sweep() {
+    // No map/filter/splice/temporary payloads in simulation callbacks.
+    let n = 0;
+    for (let i = 0; i < actors.length; i++) {
+      const s = actors[i];
+      if (!alive(s.e)) { cleanup(s); continue; }
+      actors[n++] = s;
+    }
+    actors.length = n;
+    // Registries/group can arrive after setup, including when another module is absent.
+    if (!built) buildPool();
+    for (let i = 0; i < definitions.length; i++) if (!definitions[i].registered) register(definitions[i]);
+  }
+  function setup(ctx) {
+    try {
+      if (!ctx || (C && C !== ctx)) return;
+      C = ctx; defineAll(); refresh();
+      if (!subscribed && C.bus && typeof C.bus.on === "function") {
+        subscribed = true;
+        C.bus.on("generate", guarded(reset));
+        C.bus.on("missionStart", guarded(reset));
+        C.bus.on("tick", guarded(sweep));
+        C.bus.on("enemyDie", guarded(function (ev) { if (ev && ev.e) enemyDeath(ev.e); }));
+        C.bus.on("bossDown", guarded(function (ev) { if (ev && ev.boss) bossDeath(ev.boss); }));
+        C.bus.on("win", guarded(reset)); C.bus.on("lose", guarded(reset));
+        C.bus.on("state", guarded(function (ev) { if (ev && (ev.to === "home" || ev.to === "levels")) reset(); }));
+      }
+    } catch (_) { /* Module is optional; a partial host must still boot. */ }
+  }
+  return { setup, tuning: TUNE, bosses: BOSS_DATA };
+})();
+EOF
+node --check js/enemies.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "rg -n 'registerEnemy|registerBoss|manualMovement|noContact|renderScale|weakT|customDef|enemyDefs|bossDefs|telegraphGroup|Enemies' index.html
+rg --files assets/units2 tools | head -40" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+tools/codex_image.py
+tools/kit_tools.py
+tools/shot.js
+tools/check_kits.py
+tools/tactics-notes.md
+tools/codex_code.sh
+tools/check-tactics.js
+tools/bot-tactics.js
+tools/recut_sprites.py
+tools/webpify.py
+
+codex
+The first implementation passes `node --check`. I’m now checking warning durations, cancellation on death, casualty caps, and Colossus health handling with a small harness. The registry changes are not yet visible in `index.html`, so live integration remains unverified.
+
+apply patch
+patch: completed
+/home/user/my-first-repo/squad-surge/js/enemies.js
+diff --git a/squad-surge/js/enemies.js b/squad-surge/js/enemies.js
+index bf1fa92880ad5bd47ec3132580e56a874180c14f..ad820225120b37d7f41b810a9c56badeb924d38c
+--- a/squad-surge/js/enemies.js
++++ b/squad-surge/js/enemies.js
+@@ -147,7 +147,7 @@
+       a: null, b: null, shield: null, marker: null, patient: null, search: 0,
+       targetX: 0, targetZ: 0, z0: 0, z1: 0, lane1: 0, lane2: 9, safeLane: 0,
+       losses: 0, detonated: false, dead: false, phase: -1, attackIndex: 0,
+-      attack: "", config: null, weak: 0, wall: 0, split: false, half1: null, half2: null,
++      attack: "", config: null, weak: 0, wall: 0, split: false, splitAttempted: false, half1: null, half2: null,
+       parent: null, halfOptions1: { hp: 1, maxHp: 1 }, halfOptions2: { hp: 1, maxHp: 1 },
+       teleEvent: { type, kind: "", x: 0, z: 0 },
+       phaseEvent: { type, phase: 0 }, weakEvent: { on: false }
+@@ -163,7 +163,9 @@
+   function walk(s, dt, q, contact) {
+     const e = s.e, oldZ = e.z;
+     e.state = "walk"; e.z += s.speed * dt;
+-    if (contact && rect(e.x - e.r, e.x + e.r, oldZ - e.r, e.z + e.r, e.dmg || 1, s.type) > 0) retire(s);
++    if (contact && rect(e.x - e.r, e.x + e.r, oldZ - e.r, e.z + e.r, e.dmg || 1, s.type) > 0) {
++      enemyDeath(e); retire(s);
++    }
+     if (e.z > q.z + Math.max(16, number(q.radius, 0) + 3)) retire(s);
+   }
+   function retire(s) { s.e.hp = 0; s.e.state = "dead"; s.dead = true; cleanup(s); }
+@@ -210,7 +212,9 @@
+         if (s.a) {
+           s.mode = "warn"; s.timer = TUNE.chargeWarn; s.targetX = e.x;
+           s.targetZ = q.z; s.z0 = e.z; s.z1 = q.z + number(q.radius, 3) + 5;
+-          signal(s, "charge");
++          signal(s, "charge"); stop(s); e.h = s.baseH * 0.58; e.crouch = true;
++          laneVisual(s.a, s.targetX, s.z0, s.z1, true, 0);
++          return true; // The warning begins now; its first full dt is the next tick.
+         } else { stop(s); return true; }
+       }
+       if (s.mode === "warn") {
+@@ -228,7 +232,11 @@
+     } else if (s.type === "bomber") {
+       if (s.mode === "walk" && distance <= TUNE.fuseRange && distance >= -TUNE.blastRadius) {
+         s.a = take(s, 2, AMBER, false);
+-        if (s.a) { s.mode = "fuse"; s.timer = TUNE.fuse; s.targetX = e.x; s.targetZ = e.z; signal(s, "fuse"); }
++        if (s.a) {
++          s.mode = "fuse"; s.timer = TUNE.fuse; s.targetX = e.x; s.targetZ = e.z; signal(s, "fuse");
++          stop(s); ground(s.a, e.x, e.z, TUNE.blastRadius * 2, TUNE.blastRadius * 2, 1);
++          return true;
++        }
+         else { stop(s); return true; }
+       }
+       if (s.mode === "fuse") {
+@@ -245,6 +253,7 @@
+           if (s.a) {
+             s.mode = "warn"; s.timer = TUNE.rifleWarn; s.targetX = lane(q.x) * TUNE.lane;
+             s.targetZ = q.z; s.z0 = e.z; s.z1 = q.z + number(q.radius, 3) + 8; signal(s, "laser");
++            laneVisual(s.a, s.targetX, s.z0, s.z1, false, 0); return true;
+           }
+         }
+         if (s.mode === "warn") {
+@@ -283,9 +292,9 @@
+     if (!s || s.type !== "shieldbearer" || bypass(b)) return true;
+     const q = squad(); if (!q) return true;
+     const dx = Math.abs(q.x - e.x), dz = q.z - e.z;
+-    // Front is +Z; shield graphic faces the squad. Both side distance and
+-    // the narrow frontal cone are checked, so distant frontal bullets cannot flank.
+-    return dz <= 0 || (dx > TUNE.shieldSide && Math.atan2(dx, dz) > TUNE.shieldAngle);
++    // Front is +Z. Moving >2.2m to the side exposes the body; the shield's
++    // narrow +/-25 degree frontal cone also leaves close side/rear shots open.
++    return dz <= 0 || dx > TUNE.shieldSide || Math.atan2(dx, dz) > TUNE.shieldAngle;
+   }
+   function enemyDeath(e) {
+     const s = e && e._campaignEnemy;
+@@ -393,6 +402,7 @@
+   }
+   function splitBoss(s) {
+     if (s.split) return true;
++    s.splitAttempted = true;
+     const hp = Math.max(1, s.e.hp * 0.5);
+     s.halfOptions1.hp = s.halfOptions1.maxHp = hp;
+     s.halfOptions2.hp = s.halfOptions2.maxHp = hp;
+@@ -411,7 +421,10 @@
+       const hs = liveState(half, "colossus_half", false);
+       if (hs) hs.parent = s;
+     }
+-    s.e.hidden = true; s.e.h = 0; s.e.renderScale = 0;
++    s.e.hidden = true; s.e.h = 0; s.e.scale = 0; s.e.renderScale = 0; s.e.r = 0;
++    // h/scale are honoured by new registries. Moving the aggregate health carrier
++    // off-road also works in hosts whose legacy boss renderer uses a fixed size.
++    s.e.x = 1000;
+     release(s.shield); s.shield = null;
+     return true;
+   }
+@@ -427,7 +440,7 @@
+       const n = phase.summons || 3, type = phase.summonType || "grunt";
+       for (let i = 0; i < n; i++) {
+         const child = spawn(type, s.targetX + ((i % 3) - 1) * 0.65, s.z0 - 2 - Math.floor(i / 3) * 1.5, MINI_OPTIONS);
+-        // Summoned riflemen respect the boss's reserved dodge lane for their first shot.
++        // Give summons time to become readable before their first independent shot.
+         if (child && child._campaignEnemy) child._campaignEnemy.cooldown = TUNE.rifleCooldown;
+       }
+     } else if (name === "shieldWall") {
+@@ -460,7 +473,8 @@
+       s.weak = Math.max(0, s.weak - dt); e.weakT = s.weak;
+       if (s.marker) {
+         const m = s.marker.mesh;
+-        m.position.set(e.x, s.split ? 3.4 : s.baseH * 0.57, e.z + 0.6); m.scale.set(2.2, 2.2, 1);
++        const core = s.split ? (alive(s.half1) ? s.half1 : s.half2) : e;
++        m.position.set(core.x, s.split ? 3.4 : s.baseH * 0.57, core.z + 0.6); m.scale.set(2.2, 2.2, 1);
+         if (C.camera && C.camera.quaternion && m.quaternion && typeof m.quaternion.copy === "function") m.quaternion.copy(C.camera.quaternion);
+         m.material.uniforms.progress.value = 0.5 + 0.5 * Math.sin(s.age * 12);
+       }
+@@ -469,7 +483,7 @@
+     if (!s.attack) {
+       e.z = Math.min(e.z, q.z - TUNE.bossGap - number(q.radius, 0));
+       s.cooldown -= dt;
+-      if (s.type === "colossus" && !s.split && e.hp / e.maxHp <= TUNE.splitAt) {
++      if (s.type === "colossus" && !s.splitAttempted && e.hp / e.maxHp <= TUNE.splitAt) {
+         beginAttack(s, "split", q, phase);
+       } else if (s.cooldown <= 0 && s.weak <= 0) {
+         const name = phase.attacks[s.attackIndex % phase.attacks.length];
+@@ -587,8 +601,15 @@
+     }
+   }
+   function reset() {
+-    for (let i = 0; i < actors.length; i++) cleanup(actors[i]);
+-    actors.length = 0; serial = 0;
++    const l = level(), enemies = l && l.enemies ? l.enemies : EMPTY;
++    let n = 0;
++    for (let i = 0; i < actors.length; i++) {
++      const s = actors[i]; cleanup(s);
++      // generate/missionStart may arrive AFTER the engine has called init on the
++      // new roster. Retain those actors so their later telegraphs are reclaimed.
++      if (alive(s.e) && l && (s.e === l.boss || enemies.indexOf(s.e) !== -1)) actors[n++] = s;
++    }
++    actors.length = n;
+     for (let i = 0; i < pool.length; i++) release(pool[i]);
+     refresh();
+   }
+
+exec
+/bin/bash -lc 'node --check js/enemies.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "node <<'NODE'
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const source = fs.readFileSync('js/enemies.js', 'utf8');
+function host(options = {}) {
+  const enemies = {}, bosses = {}, events = [], hits = [], group = { children: [], add(m) { this.children.push(m); } };
+  class V { set(x,y,z) {this.x=x;this.y=y;this.z=z; return this;} copy(v) { return this.set(v.x,v.y,v.z); } }
+  class Mesh { constructor(g,m) {this.geometry=g;this.material=m;this.position=new V();this.rotation=new V();this.scale=new V();this.quaternion=new V();} }
+  const THREE={ PlaneBufferGeometry:class {}, ShaderMaterial:class {constructor(o){Object.assign(this,o);}}, Color:class {set(c){this.value=c;}}, Mesh };
+  const listeners={}; let time=0;
+  const ctx={ THREE, telegraphGroup:group, squad:{x:0,z:0,count:100,radius:3,soldiers:[]}, L:{enemies:[],boss:null},
+    bus:{on(k,f){(listeners[k] ||= []).push(f);},emit(k,v){events.push({k,v:{...v},time});for(const f of listeners[k]||[])f(v);}},
+    registerEnemy(k,d){enemies[k]=d;}, registerBoss(k,d){bosses[k]=d;},
+    killSoldiersInRect(...a){hits.push({shape:'rect',a,time});return options.kill ? Math.min(a[4],options.kill):0;},
+    killSoldiersInCircle(...a){hits.push({shape:'circle',a,time});return 0;},
+    damageEnemiesInCircle(...a){hits.push({shape:'damage',a,time});},
+    damageBoss(n){ctx.L.boss.hp-=n;if(ctx.L.boss.hp<=0){ctx.L.boss.state='down';bosses[ctx.L.boss.type].onDeath(ctx.L.boss);}},
+    spawnEnemy(type,x,z,opts){return make(type,x,z,opts);}
+  };
+  function make(type,x=0,z=-10,opts={},boss=false) {const def=(boss?bosses:enemies)[type]; const e={...def,...opts,type,x,z,state:'walk',t:0,maxHp:opts.maxHp||def.hp};(boss?ctx.L.boss=e:ctx.L.enemies.push(e));def.init(e);return e;}
+  const box={window:{},Object,Math,Number};vm.createContext(box);vm.runInContext(source,box);box.window.Enemies.setup(ctx);
+  function step(e,n=1,dt=1/60){for(let i=0;i<n;i++){time+=dt;((bosses[e.type]||enemies[e.type])).update(e,dt);}}
+  return {ctx,enemies,bosses,events,hits,group,make,step,module:box.window.Enemies};
+}
+let h=host(); assert.equal(Object.keys(h.enemies).length,8);assert.equal(Object.keys(h.bosses).length,6);assert.equal(h.group.children.length,256);
+for(const d of Object.values(h.enemies))assert.equal(d.cols,4);
+let e=h.make('rifleman');h.step(e);assert.equal(h.hits.length,0);h.step(e,59);assert.equal(h.hits.length,0);h.step(e,2);assert.equal(h.hits[0].a[4],3);assert(h.hits[0].time-h.events.find(e=>e.k==='enemyTelegraph').time>=1);
+h=host();e=h.make('rifleman');h.step(e,20);e.hp=0;h.enemies.rifleman.onDeath(e);h.step(e,120);assert.equal(h.hits.length,0);assert.equal(h.group.children.filter(m=>m.visible).length,0);
+h=host({kill:3});e=h.make('charger');h.step(e);assert(e.h<1.8);h.step(e,53);assert.equal(h.hits.length,0);h.step(e,200);assert.equal(h.hits.reduce((n,h)=>n+Math.min(h.a[4],3),0),8);
+h=host();e=h.make('bomber',0,-5);h.step(e,132);assert.equal(h.hits.length,0);h.step(e,2);assert.equal(h.hits[0].shape,'circle');assert(h.hits[0].time-h.events[0].time>=2.2);
+h=host();e=h.make('bomber');h.enemies.bomber.onDeath(e);h.enemies.bomber.onDeath(e);assert.equal(h.hits.length,1);assert.equal(h.hits[0].shape,'damage');
+h=host();e=h.make('shieldbearer');assert.equal(h.enemies.shieldbearer.onBullet(e,{dmg:1}),false);h.ctx.squad.x=2.3;assert.equal(h.enemies.shieldbearer.onBullet(e,{dmg:1}),true);h.ctx.squad.x=0;assert.equal(h.enemies.shieldbearer.onBullet(e,{dmg:1,pierce:1}),true);
+h=host();e=h.make('splitter');h.enemies.splitter.onDeath(e);h.enemies.splitter.onDeath(e);assert.equal(h.ctx.L.enemies.filter(e=>e.type==='splitter_mini').length,3);
+h=host();e=h.make('medic');const brute={type:'brute',x:1,z:-11,hp:50,maxHp:100,state:'walk'};h.ctx.L.enemies.push(brute);h.step(e,60);assert(Math.abs(brute.hp-56)<1e-9);
+for(const type of ['ogre','bulwark','ravager','gunner','warlord']) {
+  h=host();e=h.make(type,0,-25,{},true);e.hp=e.maxHp*0.3;
+  h.step(e,1800);
+  assert(h.events.some(e=>e.k==='enemyTelegraph'),type);
+  for(const hit of h.hits){if(hit.shape==='rect')assert(hit.a[1]-hit.a[0]<3,type);}
+  const signals=h.events.filter(e=>e.k==='enemyTelegraph');
+  for(const hit of h.hits){const sig=signals.filter(s=>s.time<=hit.time).pop();assert(hit.time-sig.time>=0.9,type+' warning');}
+}
+h=host();e=h.make('colossus',0,-25,{},true);e.hp=e.maxHp/2;h.step(e,80);const s=e._campaignEnemy;assert(s.split);assert.equal(s.half1.hp+s.half2.hp,1400);assert.notEqual(s.half1,s.half2);s.half1.hp=0;h.step(e);assert.equal(e.hp,700);s.half2.hp=0;h.step(e);assert.equal(e.state,'down');
+for(const ctx of [null,{}, {bus:{on(){throw Error('test')}}}, {registerEnemy(){throw Error('test')},registerBoss(){throw Error('test')}}]){const box={window:{}};vm.createContext(box);vm.runInContext(source,box);assert.doesNotThrow(()=>box.window.Enemies.setup(ctx));}
+console.log('PASS: registry/fallback layout, pooling, rifle timing/cancellation, charge cap, fuse/death blast, shielding, minis, healing, all boss patterns, split health, partial hosts.');
+NODE" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+PASS: registry/fallback layout, pooling, rifle timing/cancellation, charge cap, fuse/death blast, shielding, minis, healing, all boss patterns, split health, partial hosts.
+
+exec
+/bin/bash -lc "sed -n '1155,1175p' index.html
+rg -n 'registerEnemy|registerBoss|Enemies|telegraphGroup' index.html
+wc -l js/enemies.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+  // fx
+  updateFx(dt);
+  L.shake = Math.max(0, L.shake - dt);
+  // progress & end
+  const prog = Math.min(1, -L.sz / L.length); L.reached = Math.max(L.reached, prog);
+  hudSet("progFill", "width", `${Math.floor(prog * 100)}%`); hudSet("progPct", "textContent", `${Math.floor(prog * 100)}%`);
+  hudSet("countN", "textContent", L.soldiers.length); updateSpecialistHUD();
+  bus.emit("tick", { dt, L, state });
+  if (L.soldiers.length === 0 && (state === "play" || state === "boss")) lose();
+}
+function hitSolid(o, dmg) {
+  if (!o.alive) return;
+  o.hp -= dmg; Obj3D.solidHit(o); bus.emit("solidHit", { o });
+  if (visualRandom() < 0.25) L.fx.push({ x: o.x + (visualRandom() - 0.5) * o.hw, y: 1 + visualRandom(), z: o.z + 0.3, f: 4, t: 0, dur: 0.15, size: 0.8 });
+  if (o.hp <= 0) breakSolid(o, true); else labelSolid(o);
+}
+function breakSolid(o, earned) {
+  if (!o.alive) return;
+  o.alive = false; Obj3D.solidBreak(o); bus.emit("solidBreak", { o, earned });
+  L.fx.push({ x: o.x, y: 1, z: o.z, f: 9, t: 0, dur: 0.45, size: 3 });
+  if (!earned) return;
+1131:  compactEnemies();
+1409:const telegraphGroup = new THREE.Group(); scene.add(telegraphGroup);
+1500:function registerEnemy(type,def){enemyDefs[type]=def;registerLayer(type,def);}
+1501:function registerBoss(type,def){bossDefs[type]=def;registerLayer("boss:"+type,def);}
+1508:function damageEnemiesInCircle(x,z,r,dmg){for(const e of L.enemies)if(e.hp>0 && Math.hypot(e.x-x,e.z-z)<r+e.r)hitEnemy(e,dmg);const b=L.boss;if(state==="boss"&&Math.hypot(b.x-x,b.z-z)<r+(b.r||2.6))damageBoss(dmg);}
+1509:function compactEnemies(){let n=0;for(const e of L.enemies)if(e.state!=="dead")L.enemies[n++]=e;L.enemies.length=n;}
+1612:Object.assign(ctx,{registerEnemy,registerBoss,spawnEnemy,killSoldiersInRect,killSoldiersInCircle,damageEnemiesInCircle,telegraphGroup,goMission,goArcade,restartSame});
+1705:  for (const m of [window.Powerups, window.Finale, window.Meta, window.Enemies, window.Campaign, window.Story]) { try { m?.setup?.(ctx); } catch (e) { console.error("module setup failed", e); } }
+646 js/enemies.js
+
+exec
+/bin/bash -lc "sed -n '1068,1155p' index.html
+sed -n '1180,1215p' index.html
+sed -n '1400,1512p' index.html
+sed -n '1610,1635p' index.html
+rg -n 'custom|def\\.update|def\\.init|onBullet|bossDefs|enemyDefs|e\\.scale|e\\.h|b\\.h|weakT' index.html" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+      if (h.jackpot || (h.op === "x" && h.v >= 3)) slowMo(0.4, 0.45); else if (gain >= Math.max(10, before * 0.4)) hitStop(0.07);
+    }
+    else if (after < before) { killSoldiers(before - after, null, true, "gate"); breakCombo(); sfx("bad"); vibe(60); flashRed(); floatText(L.sx, 2, L.sz, `${after - before}`, "#ff6a5a"); }
+    Obj3D.gateUsed(g, h);
+    bus.emit("gatePass", { gate: g, half: h, before, after });
+  }
+  // squad runs into unbroken solids: soldiers in that column die, object breaks
+  for (const o of L.solids) {
+    if (!o.alive || Math.abs(L.sz-o.z) > squadRadius(L.soldiers.length)+3) continue;
+    const hit = L.soldiers.reduce((n,s) => n + (Math.abs(s.x-o.x) < o.hw+0.2 && Math.abs(s.z-o.z)<0.8 ? 1 : 0), 0);
+    if (!hit) continue;
+    const guarded = L.shieldT > 0 || L.giantT > 0;
+    let lose = guarded || o.kind === "airdrop" ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);
+    if (o.threat) lose = Math.min(o.kind === "barricade" && !guarded ? o.threat.lossCap : lose, threatLossLeft(o.threat));
+    if (lose) { lose = killSoldiersInRect(o.x-o.hw-0.2, o.x+o.hw+0.2, o.z-0.8, o.z+0.8, lose, o.threat ? `threat:${o.threat.kind}` : "attrition"); breakCombo(); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a"); }
+    if (o.threat) o.threat.lost += lose;
+    breakSolid(o, L.giantT > 0 || o.kind === "airdrop"); // a GIANT squad smashes things and keeps the reward
+  }
+  // shooting (gates/solids above may have changed the count)
+  const nNow = L.soldiers.length;
+  if (nNow > 0) {
+    const n = nNow;
+    const shooters = Math.min(n, MAX_SHOOTERS), per = n / shooters, wp = WEAPONS[L.weapon];
+    L.fireAcc += dt * shooters * fireRate();
+    while (L.fireAcc >= 1) {
+      L.fireAcc -= 1;
+      const s = L.soldiers[Math.floor(gameplayRng("shooting") * n)];
+      for (let k = 0; k < wp.spread; k++) {
+        const vx = wp.spread > 1 ? (k - 1) * 4 : 0;
+        L.bullets.push({ x: s.x + 0.12, z: s.z - 0.4, vx, life: BULLET_RANGE / BULLET_SPEED, dmg: damage() * per, splash: s.specialist === "grenadier" ? Math.max(2, wp.splash || 0) : wp.splash || 0, shieldPierce: s.specialist === "piercer", piercer: s.specialist === "piercer", specialist: s.specialist, pierce: L.surgeT > 0 ? 1 : 0 });
+      }
+      if (visualRandom() < 0.15) L.fx.push({ x: s.x + 0.12, y: 1.15, z: s.z - 0.5, f: 1, t: 0, dur: 0.08, size: 0.7 });
+    }
+    L.shotSfx -= dt; if (L.shotSfx <= 0) { sfx(wp.splash ? "rocket" : "shot"); L.shotSfx = wp.splash ? 0.2 : 0.11; }
+  }
+  updateBullets(dt);
+  const b0 = L.boss;
+  // enemies
+  L.boomSfx -= dt;
+  const R = squadRadius(L.soldiers.length);
+  for (const e of L.enemies) {
+    if (e.state === "dead") continue;
+    e.t += dt; e.flash = Math.max(0, e.flash - dt);
+    if (e.state === "dying") { e.dieT += dt; if (e.dieT > 0.9) e.state = "dead"; continue; }
+    if (e.state === "idle" && e.z > L.sz - 48) e.state = "walk";
+    if (e.def?.update && e.state !== "idle") { e.def.update(e, dt); continue; }
+    if (e.state !== "walk") continue;
+    e.z += e.sp * dt;
+    const dx = L.sx - e.x; e.x += Math.sign(dx) * Math.min(Math.abs(dx), dt * e.sp * 0.35);
+    // separation
+    if (L.soldiers.length && L.soldiers.some(s => Math.hypot(e.x-s.x, e.z-s.z) < e.r+0.35)) {
+      const guarded = L.shieldT > 0 || L.giantT > 0;
+      if (!guarded) {
+        const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
+        const lost = killSoldiersInCircle(e.x, e.z, e.r + 0.65, loss, e.threat ? `threat:${e.threat.kind}` : "swarm"); if (e.threat) e.threat.lost += lost;
+      }
+      e.hp = 0; e.state = "dying"; e.dieT = 0.3;
+      if (guarded) onKill(e); // trampled by a GIANT squad or bounced off the SHIELD
+      L.fx.push({ x: e.x, y: 0.8, z: e.z, f: 5, t: 0, dur: 0.3, size: 1.4 }); vibe(20);
+      if (e.type === "brute" && !guarded) { flashRed(); L.shake = 0.3; floatText(e.x, 2.5, e.z, `-${e.dmg}`, "#ff6a5a"); }
+    }
+    if (e.z > L.sz + 12) e.state = "dead";
+  }
+  compactEnemies();
+  // Registered bosses own movement; the engine schedules data-only definitions.
+  if (state === "boss" && b0.hp > 0 && b0.def) updateRegisteredBoss(b0, dt);
+  // boss
+  if (state === "boss" && b0.hp > 0 && !b0.def) {
+    b0.t += dt; b0.flash = Math.max(0, b0.flash - dt);
+    b0.z += 1.1 * dt;
+    if (b0.slamT < SLAM_WARN) b0.x += (L.sx - b0.x) * dt * 0.4; // the boss stops aiming once the warning ring shows: dodge sideways
+    if (!b0.enraged && b0.hp < b0.maxHp * 0.5) { b0.enraged = true; bus.emit("bossEnrage", { boss: b0 }); floatText(b0.x, 7, b0.z, "ENRAGED!", "#ff6a5a"); sfx("bad"); vibe(80); }
+    const prevSlam = b0.slamT; b0.slamT += dt * (b0.enraged ? 1.4 : 1);
+    if (prevSlam < SLAM_WARN && b0.slamT >= SLAM_WARN) bus.emit("bossWarn", { boss: b0 });
+    if (b0.slamT > SLAM_AT) {
+      b0.slamT = 0; L.shake = 0.4; sfx("boom"); vibe(120);
+      const [cx, cz] = slamCenter(b0), cap = 2 + L.level;
+      const k = killSoldiersInCircle(cx, cz, SLAM_R, cap, "boss:slam");
+      bus.emit("bossSlam", { boss: b0, killed: k });
+      if (L.threat && L.threat.kind === "slam") { L.threat.lost += k; endThreat(L.threat); }
+      if (k) { flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); } else if (L.sz - b0.z < 14) floatText(L.sx, 2.5, L.sz, "DODGED!", "#7fd0ff");
+      L.fx.push({ x: cx, y: 0.3, z: cz, f: 9, t: 0, dur: 0.5, size: SLAM_R * 1.6 });
+    }
+    if (b0.z + 2.6 > L.sz - R) killSoldiersInCircle(b0.x, b0.z, 3, Infinity, "boss:contact");
+    hudSet("bossFill", "width", `${Math.round(Math.max(0, b0.hp / b0.maxHp) * 100)}%`);
+  }
+  if (L.winT > 0) { L.winT -= dt; if (L.winT <= 0) endBoss(); }
+  // fx
+  if (o.kind === "blockYellow" || o.kind === "crate" || o.kind === "weaponCase" || o.kind === "airdrop") hitStop(0.05);
+  if (o.reward) { addSoldiers(o.reward); floatText(o.x, 2.2, o.z, `+${o.reward}`, "#7fd0ff"); L.fx.push({ x: o.x, y: 1.4, z: o.z, f: 14, t: 0, dur: 0.4, size: 1.8 }); }
+  if (o.ammo) { L.rateMult = Math.min(2.2, L.rateMult * 1.35); weaponLabel(); bus.emit("rateUp", { mult: L.rateMult }); floatText(o.x, 2.6, o.z, "FIRE RATE UP!", "#9dff7a"); sfx("gate"); vibe(40); }
+  if (o.weapon) { if (o.weapon > L.weapon) setWeapon(o.weapon); floatText(o.x, 2.6, o.z, WEAPONS[L.weapon].name + "!", "#ffe066"); sfx("win"); vibe(60); }
+}
+function hitEnemy(e, dmg) {
+  if (e.hp <= 0 || e.state === "dying" || e.state === "dead") return;
+  // Dense swarms resist ordinary fire; the matching airstrike removes that resistance.
+  if (e.threat && e.threat.kind === "swarm" && !e.threat.countered) dmg *= 0.2;
+  e.hp -= dmg; e.flash = 0.07; bus.emit("enemyHit", { e });
+  if (e.hp <= 0) {
+    e.state = "dying"; e.dieT = 0; checkMedicOrder(e); e.def?.onDeath?.(e); bus.emit("enemyDie", { e }); onKill(e);
+    if (e.type === "brute") { L.fx.push({ x: e.x, y: 0.5, z: e.z, f: 9, t: 0, dur: 0.45, size: 3 }); L.shake = 0.2; sfx("boom"); }
+    else if (visualRandom() < 0.3) L.fx.push({ x: e.x, y: 0.9, z: e.z, f: 6, t: 0, dur: 0.3, size: 1 });
+  }
+}
+function damageBoss(n, raw = false) {
+  if (state !== "boss" || L.boss.hp <= 0) return;
+  L.boss.hp -= n * (raw ? 1 : bossWeakMultiplier(L.boss)); L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
+}
+function bossDown() {
+  if (L.bankLocked) return;
+  if (L.threat) endThreat(L.threat);
+  checkMedicOrder(L.boss);
+  L.boss.def?.onDeath?.(L.boss);
+  L.bankLocked = true;
+  const count = (L.belt[0] ? 1 : 0) + (L.belt[1] ? 1 : 0);
+  L.tactics.banked = count; L.bankBonus = count * 0.5;
+  bus.emit("bank", { count, bonus: L.bankBonus });
+  L.swap = null; L.belt[0] = L.belt[1] = null; beltChanged();
+  L.boss.state = "down"; L.shake = 0.6; sfx("boom"); vibe(200);
+  for (let k = 0; k < 6; k++) L.fx.push({ x: L.boss.x + (visualRandom() - 0.5) * 4, y: visualRandom() * 4, z: L.boss.z + 1, f: 9, t: -k * 0.08, dur: 0.6, size: 4 });
+  L.bossSoldiers = L.soldiers.length; // stars are decided here; the finale cannot lower them
+  addScore(400 + 100 * L.level, { x: L.boss.x, z: L.boss.z, reason: "boss" });
+  slowMo(0.3, 0.6, true);
+  L.winT = 1.2; // counted in step() so pausing can't swallow the win
+const FIXED_DT = 1/60, MAX_CATCHUP = 5, HASH_CELL = 2;
+const clocks = { real: 0, sim: 0, slow: 0, wall: 0 };
+let accumulator = 0, slowAccumulator = 0, testMode = false, nextEntityId = 1;
+let runSeed = 1, streams = Object.create(null), replay = null, playback = null, playbackAt = 0;
+let pendingInputs = [], pendingTarget = null;
+const visualRandom = rng(0xc05e71c);
+const enemyDefs = Object.create(null), bossDefs = Object.create(null), registeredLayers = Object.create(null), specialistLayers = Object.create(null);
+const BASE_ENEMIES = { zombie:{hp:2,r:.42,h:1.45,sp:2.6,dmg:1}, grunt:{hp:2,r:.42,h:1.45,sp:3.2,dmg:1}, brute:{hp:22,r:.85,h:2.3,sp:2.2,dmg:5} };
+const SPECIALISTS = { piercer:{icon:"↟",color:0x6bffdf}, grenadier:{icon:"✹",color:0xffba65}, defender:{icon:"⬡",color:0xada0ff} };
+const telegraphGroup = new THREE.Group(); scene.add(telegraphGroup);
+const bulletPool = [], fxPool = [], hudCache = new Map();
+const profile = { steps:0, simMs:0, maxSimMs:0, frames:0, calls:0, triangles:0, maxCalls:0, droppedSeconds:0, candidates:0 };
+function resetProfile() { for (const k in profile) profile[k]=0; }
+function sampleRenderer() { const r=renderer.info?.render; if(!r)return; profile.frames++; profile.calls+=r.calls; profile.triangles+=r.triangles; profile.maxCalls=Math.max(profile.maxCalls,r.calls); }
+function profileSnapshot() { return {...profile, meanSimMs:profile.steps?profile.simMs/profile.steps:0, meanCalls:profile.frames?profile.calls/profile.frames:null, meanTriangles:profile.frames?profile.triangles/profile.frames:null, memory:renderer.info?.memory || null}; }
+function gameplayRng(stream = "gameplay") {
+  // Numeric arguments retain the old seeded-generator helper used by scenery modules.
+  if (typeof stream === "number") return rng(stream);
+  if (streams[stream] === undefined) { let h=runSeed; for(let i=0;i<stream.length;i++)h=Math.imul(h^stream.charCodeAt(i),16777619); streams[stream]=h>>>0; }
+  streams[stream]=(Math.imul(streams[stream],1664525)+1013904223)>>>0; return streams[stream]/4294967296;
+}
+function resetEngine(seed) {
+  runSeed=seed>>>0; streams=Object.create(null); nextEntityId=1; accumulator=slowAccumulator=0; clocks.sim=clocks.slow=clocks.wall=0;
+  playback=null; playbackAt=0; pendingInputs=[]; pendingTarget=null;
+  if(L) { for(const b of L.bullets || [])bulletPool.push(b); for(const f of L.fx || [])fxPool.push(f); }
+  resetProfile();
+}
+function pooledList(pool) {
+  const a=[];
+  Object.defineProperty(a,"push",{value:function(...items){for(const data of items){const p=pool.pop() || {}; for(const k in p)delete p[k]; Object.assign(p,data); Array.prototype.push.call(this,p);}return this.length;}});
+  return a;
+}
+function releaseAt(a,i,pool) { const p=a[i]; a[i]=a[a.length-1];a.pop();pool.push(p); }
+function spawnFx(f) { L.fx.push(f); }
+function updateFx(dt) {
+  for(let i=L.fx.length-1;i>=0;i--) {const f=L.fx[i];f.t+=dt; if(f.vy!==undefined){f.vy-=12*dt;f.x+=(f.vx||0)*dt;f.z+=(f.vz||0)*dt;f.y=Math.max(.05,f.y+f.vy*dt);} if(f.t>=f.dur)releaseAt(L.fx,i,fxPool);}
+}
+function hudSet(id,key,value) {
+  const k=id+":"+key;if(hudCache.get(k)===value)return;hudCache.set(k,value);
+  const el=$(id);if(!el)return;if(["width","left","top"].includes(key))el.style[key]=value;else el[key]=value;
+}
+function updateSpecialistHUD() {
+  const counts={};for(const s of L.soldiers)if(s.specialist)counts[s.specialist]=(counts[s.specialist]||0)+1;
+  hudSet("specialists","textContent",Object.keys(SPECIALISTS).filter(k=>counts[k]).map(k=>`${SPECIALISTS[k].icon}${counts[k]}`).join(" "));
+}
+function queueInput(kind,value) {
+  if(!L || playback || !["play","boss"].includes(state))return false;
+  if(kind==="steer"){value=Math.max(-ROAD,Math.min(ROAD,Number(value)||0));pendingTarget=value;}
+  pendingInputs.push({kind,value});return true;
+}
+function fixedStep() {
+  if(!L || !["play","boss","bonus"].includes(state))return;
+  const tick=L.tick || 0;
+  let inputs;
+  if(playback){const row=playback.inputs[playbackAt];inputs=row?.tick===tick?row:null;if(inputs)playbackAt++;}
+  else {
+    inputs={tick,targetX:L.targetX,kx:(keys.ArrowLeft||keys.a?-1:0)+(keys.ArrowRight||keys.d?1:0),actions:pendingInputs};
+    replay?.inputs.push(inputs);
+  }
+  pendingInputs=[];pendingTarget=null;
+  const oldKeys={...keys};
+  for(const k in keys)keys[k]=false;
+  if(inputs){L.targetX=inputs.targetX;keys.a=inputs.kx<0;keys.d=inputs.kx>0;for(const a of inputs.actions || []) {if(a.kind==="steer")L.targetX=a.value;else if(a.kind==="powerup")usePowerup(a.value);else if(a.kind==="surge")useSurge();}}
+  const began=performance.now();step(FIXED_DT);const elapsed=performance.now()-began;
+  for(const k in keys)keys[k]=false;Object.assign(keys,oldKeys);
+  L.tick=tick+1;clocks.sim+=FIXED_DT;profile.steps++;profile.simMs+=elapsed;profile.maxSimMs=Math.max(profile.maxSimMs,elapsed);
+}
+function advanceTicks(n=1) { for(let i=0;i<n && ["play","boss","bonus"].includes(state);i++)fixedStep(); return stateHash(); }
+function advanceClock(dt) {
+  if(!["play","boss","bonus"].includes(state)){accumulator=slowAccumulator=0;return;}
+  accumulator+=Math.max(0,dt);let steps=0;
+  while(accumulator+1e-9>=FIXED_DT && steps<MAX_CATCHUP){
+    accumulator-=FIXED_DT;clocks.wall+=FIXED_DT;
+    const scaled=FIXED_DT*timeScale(FIXED_DT);clocks.slow+=scaled;slowAccumulator+=scaled;
+    if(slowAccumulator+1e-9>=FIXED_DT){slowAccumulator-=FIXED_DT;fixedStep();}
+    steps++;
+    if(!["play","boss","bonus"].includes(state))break;
+  }
+  if(accumulator>=FIXED_DT){const drop=Math.floor(accumulator/FIXED_DT)*FIXED_DT;profile.droppedSeconds+=drop;accumulator-=drop;}
+}
+async function playReplay(record) {
+  if(record.version!==1)throw new Error("Unsupported replay version");testMode=true;
+  if(record.initial)save.jackDry=record.initial.jackDry;
+  if(record.mission)await goMission(record.mission,{assist:record.assist,elite:record.elite});
+  else await goLevel(record.level,"play",{seed:record.seed});
+  playback=record;playbackAt=0;pendingInputs=[];return true;
+}
+function stateHash() {
+  if(!L)return "00000000";
+  const skip=new Set(["hitKind","hitHW","hitHZ","entry","a","b","marker","shield","vis","mesh","def","fx","shake","giantK","ph","born","flash","popSfx","boomSfx","shotSfx","coach","coached","announcedVisual","_hashSeen"]), seen=new Map();
+  function clean(o){if(typeof o==="function"||o===undefined)return null;if(typeof o==="number")return Number.isFinite(o)?Math.round(o*1e7)/1e7:String(o);if(!o||typeof o!=="object")return o;if(o.isObject3D||o.isMaterial||o.isTexture)return null;if(seen.has(o))return {$ref:seen.get(o)};seen.set(o,seen.size);if(Array.isArray(o))return o.map(clean);const r={};for(const k of Object.keys(o).sort())if(!skip.has(k)&&!(k==="id"&&o.teleEvent))r[k]=clean(o[k]);return r;}
+  const data=JSON.stringify(clean({state,L,streams,nextEntityId,powerups:window.Powerups?.snapshot?.()}));let h=2166136261;for(let i=0;i<data.length;i++)h=Math.imul(h^data.charCodeAt(i),16777619);return (h>>>0).toString(16).padStart(8,"0");
+}
+function registerLayer(key,def) {
+  if(!TEX.grunt)return;
+  if(registeredLayers[key]){const old=registeredLayers[key];scene.remove(old.mesh);old.g.dispose();old.mesh.material.dispose();const i=spriteLayers.indexOf(old);if(i>=0)spriteLayers.splice(i,1);}
+  const layer=new SpriteLayer(TEX.grunt,4,2,key.startsWith("boss:")?4:600);registeredLayers[key]=layer;
+  layer.mesh.material.uniforms.tint.value.set(def.tint || 0xb6c6e8);
+  if(def.sheet)loader.load(def.sheet,tex=>{tex.anisotropy=4;layer.mesh.material.uniforms.map.value=tex;layer.mesh.material.uniforms.grid.value.set(def.cols||4,def.rows||2);layer.mesh.material.uniforms.tint.value.set(def.tint || 0xffffff);},undefined,()=>{layer.mesh.material.uniforms.map.value=TEX.grunt;layer.mesh.material.uniforms.grid.value.set(4,2);layer.mesh.material.uniforms.tint.value.set(def.tint || 0xb6c6e8);});
+}
+function registerEnemy(type,def){enemyDefs[type]=def;registerLayer(type,def);}
+function registerBoss(type,def){bossDefs[type]=def;registerLayer("boss:"+type,def);}
+function createSpecialistLayers(){for(const k in SPECIALISTS){const l=new SpriteLayer(TEX.soldier,4,2,300);l.mesh.material.uniforms.tint.value.set(SPECIALISTS[k].color);specialistLayers[k]=l;}}
+function initEnemy(e){if(e.initialized)return;e.initialized=true;e.def?.init?.(e);}
+function spawnEnemy(type,x,z,opts={}) {
+  const e=enemy(type,x,z,L.level,{authored:!!L.mission,...opts});
+  const factor=L.missionState?.assisted===2?.65:L.missionState?.assisted?.8:1;e.hp*=factor;e.maxHp=e.hp;L.enemies.push(e);initEnemy(e);return e;
+}
+function damageEnemiesInCircle(x,z,r,dmg){for(const e of L.enemies)if(e.hp>0 && Math.hypot(e.x-x,e.z-z)<r+e.r)hitEnemy(e,dmg);const b=L.boss;if(state==="boss"&&Math.hypot(b.x-x,b.z-z)<r+(b.r||2.6))damageBoss(dmg);}
+function compactEnemies(){let n=0;for(const e of L.enemies)if(e.state!=="dead")L.enemies[n++]=e;L.enemies.length=n;}
+function checkMedicOrder(patient){if(!L.missionState)return;for(const e of L.enemies)if(e.type==="medic"&&e.hp>0&&(e.patient===patient||e.target===patient||e.patientId===patient.id||e._campaignEnemy?.patient===patient))L.missionState.medicsFirst=false;}
+function onboarding(){return !L.mission || (L.mission.chapter===1 && L.mission.n<=3);}
+function missionTheme(m){return THEMES.find(t=>t.id===m.theme) || themeFor((m.chapter||1));}
+  if(b.hp<=0)bossDown();
+}
+Object.assign(ctx,{registerEnemy,registerBoss,spawnEnemy,killSoldiersInRect,killSoldiersInCircle,damageEnemiesInCircle,telegraphGroup,goMission,goArcade,restartSame});
+Object.defineProperties(ctx,{squad:{get:()=>({x:L?.sx||0,z:L?.sz||0,count:L?.soldiers.length||0,radius:squadRadius(L?.soldiers.length||0),soldiers:L?.soldiers||[]})},mission:{get:()=>L?.mission||null},missionState:{get:()=>L?.missionState||null}});
+
+// Swept bullets: insert hit bounds into 2 m cells, query once, resolve by entry distance.
+class SpatialHash {
+  constructor(cell=HASH_CELL){this.cell=cell;this.cells=new Map();this.buckets=[];this.queryId=0;this.results=[];}
+  clear(){for(const a of this.cells.values()){a.length=0;this.buckets.push(a);}this.cells.clear();}
+  insert(o,x0,x1,z0,z1){for(let x=Math.floor(x0/this.cell);x<=Math.floor(x1/this.cell);x++)for(let z=Math.floor(z0/this.cell);z<=Math.floor(z1/this.cell);z++){const key=x+","+z;let a=this.cells.get(key);if(!a){a=this.buckets.pop()||[];this.cells.set(key,a);}a.push(o);}}
+  query(x0,x1,z0,z1){this.results.length=0;const id=++this.queryId;for(let x=Math.floor(x0/this.cell);x<=Math.floor(x1/this.cell);x++)for(let z=Math.floor(z0/this.cell);z<=Math.floor(z1/this.cell);z++){const a=this.cells.get(x+","+z);if(a)for(const o of a)if(o._hashSeen!==id){o._hashSeen=id;this.results.push(o);}}return this.results;}
+}
+const bulletGrid=new SpatialHash(),crowdGrid=new SpatialHash(.65);
+function sweepEntry(x,z,nx,nz,x0,x1,z0,z1){
+  let lo=0,hi=1;
+  for(const [p,d,a,b] of [[x,nx-x,x0,x1],[z,nz-z,z0,z1]]){if(Math.abs(d)<1e-10){if(p<a||p>b)return Infinity;}else{let t0=(a-p)/d,t1=(b-p)/d;if(t0>t1)[t0,t1]=[t1,t0];lo=Math.max(lo,t0);hi=Math.min(hi,t1);if(lo>hi)return Infinity;}}
+  return lo;
+}
+function updateBullets(dt){
+  bulletGrid.clear();
+  const insert=(o,kind,hw,hz)=>{o.hitKind=kind;o.hitHW=hw;o.hitHZ=hz;bulletGrid.insert(o,o.x-hw,o.x+hw,o.z-hz,o.z+hz);};
+  for(const e of L.enemies)if(e.hp>0&&e.state!=="dead"&&e.state!=="dying"&&Math.abs(e.z-L.sz)<65)insert(e,"enemy",e.r+.08,.3);
+  for(const o of L.solids)if(o.alive&&Math.abs(o.z-L.sz)<65)insert(o,"solid",o.hw,.1);
+  for(const g of L.gates)if(!g.used&&Math.abs(g.z-L.sz)<65)for(const h of g.halves){h.z=g.z;h.gate=g;insert(h,"gate",h.hw,.08);}
+  if(state==="boss"&&L.boss.hp>0)insert(L.boss,"boss",L.boss.r||2.6,.5);
+  for(let i=L.bullets.length-1;i>=0;i--){
+510:    for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z <= L.sz + 5 && L.sz - e.z < 4 * (SPEED * L.speedMul + e.sp)) return true;
+515:  for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z < L.sz + 5 && e.z > L.sz - range) return true;
+548:      e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6);
+623:    gate.halves.push(h);
+627:function refreshGate(gate) { for (const h of gate.halves) Obj3D.gateHalf(gate, h, isGood(h), gateText(h)); }
+639:  const def = enemyDefs[type] || BASE_ENEMIES[type] || BASE_ENEMIES.grunt;
+641:  return { id: nextEntityId++, type, x, z, hp, maxHp: hp, r: def.r || 0.42, h: def.h || 1.45, sp: (def.sp || 3) * (0.85 + gameplayRng("enemies") * 0.3), dmg: def.dmg || 1, state: "idle", t: 0, flash: 0, dieT: 0, def: enemyDefs[type] || null, ...opts };
+813:  time.scale = time.target = 1; time.slowT = time.stopT = 0; time.lastSlow = time.lastStop = -99;
+817:  if (L.boss.def?.init) L.boss.def.init(L.boss);
+941:  if (time.slowT > 0) { time.slowT -= realDt; time.scale += (time.target - time.scale) * Math.min(1, realDt * 20); }
+942:  else time.scale += (1 - time.scale) * Math.min(1, realDt * 6);
+943:  return time.scale;
+986:  for (const e of L.enemies) if (e.hp > 0 && e.state !== "dead" && e.state !== "dying" && Math.hypot(e.x - x, e.z - z) < radius + e.r) hitEnemy(e, dmg);
+988:  const b = L.boss; if (!opts.skipBoss && state === "boss" && b.hp > 0 && Math.hypot(b.x - x, b.z - z) < radius + 2.6) { damageBoss(dmg); }
+1113:    if (e.def?.update && e.state !== "idle") { e.def.update(e, dt); continue; }
+1124:      e.hp = 0; e.state = "dying"; e.dieT = 0.3;
+1186:  if (e.hp <= 0 || e.state === "dying" || e.state === "dead") return;
+1189:  e.hp -= dmg; e.flash = 0.07; bus.emit("enemyHit", { e });
+1190:  if (e.hp <= 0) {
+1259:    if (e === skip || e.hp <= 0 || e.state === "dead" || e.state === "dying") continue;
+1331:    layer.push(e.x, 0, e.z, e.h * CHAR_K * ENEMY_ASPECT[e.type === "brute" ? "brute" : eTex], e.h * CHAR_K, f, a, e.flash > 0 ? 0.7 : 0);
+1335:  if (!b.hidden && state !== "bonus" && (b.hp > 0 || b.state === "down")) { // the fallen boss leaves the stage for the finale
+1340:    if (b.enraged && b.hp > 0) { const p = 0.5 + 0.5 * Math.sin(L.time * 9); bt.g *= 0.72 + 0.18 * p; bt.b *= 0.62 + 0.2 * p; }
+1341:    (registeredLayers["boss:"+b.type] || boss).push(b.x, 0, b.z, b.h || BOSS_H, b.h || BOSS_H, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); shadow.push(b.x + SHADOW_DX * 3, b.z + SHADOW_DZ * 3, 8);
+1394:    render(state === "paused" ? 0 : Math.min(rawDt, 0.1) * time.scale);
+1406:const enemyDefs = Object.create(null), bossDefs = Object.create(null), registeredLayers = Object.create(null), specialistLayers = Object.create(null);
+1500:function registerEnemy(type,def){enemyDefs[type]=def;registerLayer(type,def);}
+1501:function registerBoss(type,def){bossDefs[type]=def;registerLayer("boss:"+type,def);}
+1506:  const factor=L.missionState?.assisted===2?.65:L.missionState?.assisted?.8:1;e.hp*=factor;e.maxHp=e.hp;L.enemies.push(e);initEnemy(e);return e;
+1508:function damageEnemiesInCircle(x,z,r,dmg){for(const e of L.enemies)if(e.hp>0 && Math.hypot(e.x-x,e.z-z)<r+e.r)hitEnemy(e,dmg);const b=L.boss;if(state==="boss"&&Math.hypot(b.x-x,b.z-z)<r+(b.r||2.6))damageBoss(dmg);}
+1510:function checkMedicOrder(patient){if(!L.missionState)return;for(const e of L.enemies)if(e.type==="medic"&&e.hp>0&&(e.patient===patient||e.target===patient||e.patientId===patient.id||e._campaignEnemy?.patient===patient))L.missionState.medicsFirst=false;}
+1534:      const n=e.n||1;for(let j=0;j<n;j++)out.solids.push(makeSolid(e.kind,e.x??0,z-j*2.7,e.hp??10,{reward:e.reward,weapon:e.weapon,ammo:e.kind==="ammo"}));
+1538:    else if(type==="scenery")out.solids.push(makeSolid(e.kind,(e.lane||0)*3.4,z,e.hp || (e.kind==="fuelTruck"?20:35)));
+1542:  const def=m.boss?bossDefs[m.boss.type]:null,hp=(m.boss?.hp||def?.hp||1)*factor*(opts.elite?1.3:1);
+1584:function bossWeakMultiplier(b){return (b.weakT>0||b.weakUntil>L.time||b.weakOpen===true)?(b.def?.weak?.mult||2.5):1;}
+1587:  const phases=b.def.phases||[], ratio=b.hp/b.maxHp;let phase=0;
+1589:  if(!b.def.update && b.phase!==phase){b.phase=phase;bus.emit("bossPhase",{type:b.type,phase:phase+1});}
+1590:  if(b.def.update){b.def.update(b,dt);}else{
+1591:    if(b.weakT>0){b.weakT=Math.max(0,b.weakT-dt);if(!b.weakT)bus.emit("bossWeak",{on:false});}
+1605:      if(b.def.weak?.after===name){b.weakT=b.def.weak.dur;bus.emit("bossWeak",{on:true});}
+1608:  hudSet("bossFill","width",`${Math.round(Math.max(0,b.hp/b.maxHp)*100)}%`);
+1610:  if(b.hp<=0)bossDown();
+1631:  for(const e of L.enemies)if(e.hp>0&&e.state!=="dead"&&e.state!=="dying"&&Math.abs(e.z-L.sz)<65)insert(e,"enemy",e.r+.08,.3);
+1650:        if(!(o.shieldT>0&&!b.shieldPierce&&!b.splash)&&o.def?.onBullet?.(o,b)!==false){if(o.hp<=0)bossDown();else damageBoss(Math.max(0,base*bossWeakMultiplier(o)-(hp-o.hp)),true);}hit=true;}
+1652:        const blocked=o.def?.onBullet?.(o,b)===false && !b.shieldPierce && !b.splash;
+
+exec
+/bin/bash -lc "sed -n '1582,1613p' index.html
+sed -n '1642,1665p' index.html
+sed -n '804,825p' index.html
+sed -n '1538,1550p' index.html
+sed -n '200,220p' index.html
+head -n 45 tools/shot.js
+head -n 40 tools/bot-tactics.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+  }
+}
+function bossWeakMultiplier(b){return (b.weakT>0||b.weakUntil>L.time||b.weakOpen===true)?(b.def?.weak?.mult||2.5):1;}
+function updateRegisteredBoss(b,dt) {
+  b.t+=dt;b.flash=Math.max(0,b.flash-dt);
+  const phases=b.def.phases||[], ratio=b.hp/b.maxHp;let phase=0;
+  for(let i=0;i<phases.length;i++)if(ratio<=phases[i].at)phase=i;
+  if(!b.def.update && b.phase!==phase){b.phase=phase;bus.emit("bossPhase",{type:b.type,phase:phase+1});}
+  if(b.def.update){b.def.update(b,dt);}else{
+    if(b.weakT>0){b.weakT=Math.max(0,b.weakT-dt);if(!b.weakT)bus.emit("bossWeak",{on:false});}
+    const p=phases[phase]||{attacks:["slam"],cadence:2.6};b.attackT+=dt;
+    if(!b.pending && b.attackT>=Math.max(0,p.cadence-.9)){
+      const a=p.attacks[(b.attackIndex||0)%p.attacks.length];b.pending=typeof a==="string"?{name:a}:a;b.warnT=.9;b.lockX=L.sx;
+      bus.emit("enemyTelegraph",{type:b.type,kind:b.pending.name||b.pending.type,x:b.lockX,z:L.sz});
+      Obj3D.bossWarning?.(b,true);
+    }
+    if(b.pending){b.warnT-=dt;if(b.warnT<=0){const a=b.pending,name=a.name||a.type;b.pending=null;b.attackT=0;b.attackIndex=(b.attackIndex||0)+1;Obj3D.bossWarning?.(b,false);
+      if(b.def.attacks?.[name])b.def.attacks[name](b,a);
+      else if(name==="summon")for(let i=0;i<(a.n||4);i++)spawnEnemy(a.enemy||"grunt",(i%3-1)*3,b.z+3-i);
+      else if(name==="split")for(const x of [-2.5,2.5])spawnEnemy("brute",x,b.z,{hp:b.maxHp*.15});
+      else if(name==="shieldWall")b.shieldT=2;
+      else if(name==="charge"||name==="barrage"){for(const lane of a.lanes||[Math.round(b.lockX/3.4)])killSoldiersInRect(lane*3.4-1.3,lane*3.4+1.3,L.sz-12,L.sz+12,name==="charge"?8:Math.max(2,Math.ceil(L.soldiers.length*.03)),"boss:"+name);}
+      else killSoldiersInCircle(b.lockX,L.sz,3,8,"boss:slam");
+      if(b.def.weak?.after===name){b.weakT=b.def.weak.dur;bus.emit("bossWeak",{on:true});}
+    }}
+  }
+  hudSet("bossFill","width",`${Math.round(Math.max(0,b.hp/b.maxHp)*100)}%`);
+  Obj3D.weakMarker?.(b,bossWeakMultiplier(b)>1);
+  if(b.hp<=0)bossDown();
+}
+Object.assign(ctx,{registerEnemy,registerBoss,spawnEnemy,killSoldiersInRect,killSoldiersInCircle,damageEnemiesInCircle,telegraphGroup,goMission,goArcade,restartSame});
+Object.defineProperties(ctx,{squad:{get:()=>({x:L?.sx||0,z:L?.sz||0,count:L?.soldiers.length||0,radius:squadRadius(L?.soldiers.length||0),soldiers:L?.soldiers||[]})},mission:{get:()=>L?.mission||null},missionState:{get:()=>L?.missionState||null}});
+      if(o.hitKind==="enemy"&&(o.hp<=0||o.state==="dying"||o.state==="dead"))continue;
+      if(o.hitKind==="solid"&&!o.alive)continue;
+      b.x=x+(nx-x)*o.entry;b.z=z+(nz-z)*o.entry;
+      if(o.hitKind==="gate"){
+        const h=o;if(h.op==="+"&&!h.powerup&&!h.recruit&&!h.rescue){h.acc=(h.acc||0)+b.dmg*.35;if(h.acc>=1){const inc=Math.floor(h.acc);h.acc-=inc;h.v=Math.min(h.v+inc,99);refreshGate(h.gate);bus.emit("gateShot",{gate:h.gate,half:h});}}
+        else if(h.op==="x"){h.acc=(h.acc||0)+b.dmg*.02;if(h.acc>=1&&h.v<3){h.acc=0;h.v++;refreshGate(h.gate);bus.emit("gateShot",{gate:h.gate,half:h});}}hit=true;
+      } else if(o.hitKind==="solid"){hitSolid(o,b.dmg);if(b.splash)explode(b.x,b.z,b.dmg,b.splash);hit=true;}
+      else if(o.hitKind==="boss") {const hp=o.hp, base=b.dmg*(b.splash?1.2:1)*(L.giantT>0?2:1);
+        if(!(o.shieldT>0&&!b.shieldPierce&&!b.splash)&&o.def?.onBullet?.(o,b)!==false){if(o.hp<=0)bossDown();else damageBoss(Math.max(0,base*bossWeakMultiplier(o)-(hp-o.hp)),true);}hit=true;}
+      else {
+        const blocked=o.def?.onBullet?.(o,b)===false && !b.shieldPierce && !b.splash;
+        if(!blocked){if(o.hp<=0){o.hp=.001;hitEnemy(o,.001);}else hitEnemy(o,b.dmg);}if(b.splash)explode(o.x,o.z,b.dmg,b.splash,o);
+        b.lastHit=o;if(!blocked&&b.pierce>0)b.pierce--;else hit=true;
+      }
+      if(hit)break;
+    }
+    if(hit||b.life<=0)releaseAt(L.bullets,i,bulletPool);else {b.x=nx;b.z=nz;}
+  }
+}
+function updateCrowd(dt){
+  const radius=squadRadius(L.soldiers.length);let width=Math.min(5.3,radius),centre=L.sx;
+  // A nearby wall or a telegraphed hazard leaves an interval for the formation.
+  let left=-5.7,right=5.7;
+  for(const o of L.solids)if(o.alive&&o.z<L.sz+radius&&o.z>L.sz-12&&!["airdrop","ammo","weaponCase","barrel","fuelTruck"].includes(o.kind)){
+  const mod = opts.modifier && MODIFIERS[opts.modifier] ? opts.modifier : null;
+  resetEngine(opts.seed ?? level * 9973 + 17);
+  L = opts.mission ? generateMission(opts.mission, opts) : generateLevel(level, { ...opts, seed: opts.seed ?? level * 9973 + 17, modifier: mod });
+  Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, popSfx: 0, reached: 0, winT: 0,
+    rateMult: mod === "swift" ? 1.25 : 1, speedMul: mod === "swift" ? 1.2 : 1, mode: opts.mode || "normal", modifier: mod, seed: opts.seed ?? level * 9973 + 17, scoreMult: mod ? MODIFIERS[mod].scoreMult : 1,
+    belt: [null, null], beltFx: [null, null], beltFxUntil: [0, 0], swap: null, coach: null,
+    tactics: { perfect: 0, used: 0, wasted: 0, misused: 0, banked: 0, surgePerfect: 0 }, threat: null, surgeReady: false, bankBonus: 0, bankLocked: false,
+    score: 0, kills: 0, combo: 0, comboT: 0, bestCombo: 0, surge: 0, surgeT: 0, surges: 0, idleT: 0, shieldT: 0, giantT: 0, giantK: 1,
+    peakSquad: 0, bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
+  time.scale = time.target = 1; time.slowT = time.stopT = 0; time.lastSlow = time.lastStop = -99;
+  L.tick = 0; L.lastCause = "attrition"; L.compression = 1;
+  L.bullets = pooledList(bulletPool); L.fx = pooledList(fxPool);
+  for (const e of L.enemies) initEnemy(e);
+  if (L.boss.def?.init) L.boss.def.init(L.boss);
+  addSoldiers(L.mission ? L.mission.start : mod === "lone" ? 1 : START_SQUAD);
+  hud.beltKey = null; hudCache.clear();
+  replay = { version: 1, seed: L.seed, level, mission: L.mission?.id || null, assist: L.missionState?.assisted || 0, elite: !!L.elite, inputs: [], initial: { jackDry: save.jackDry || 0 } };
+  beltChanged();
+  $("levelName").textContent = mod ? MODIFIERS[mod].name : levelName(level); $("levelNo").textContent = L.mode === "daily" ? "Daily Challenge" : `Level ${level}`;
+  setWeapon(mod === "arsenal" ? 4 : 0);
+  hud.score = 0; hud.best = L.mode === "normal" ? save.bestScore[level] || 0 : 0;
+  bus.emit("generate", { L, level, rng: rng((opts.seed ?? level) * 4241 + 7), length: L.length, theme: L.theme, mode: L.mode, modifier: mod });
+    else if(type==="scenery")out.solids.push(makeSolid(e.kind,(e.lane||0)*3.4,z,e.hp || (e.kind==="fuelTruck"?20:35)));
+    else if(type==="radio")out.radios.push({at:e.at,who:e.who,text:e.text,fired:false});
+  }
+  if(assist)out.solids.push(makeSolid("airdrop",0,-18,5,{powerup:"shield"}));
+  const def=m.boss?bossDefs[m.boss.type]:null,hp=(m.boss?.hp||def?.hp||1)*factor*(opts.elite?1.3:1);
+  out.boss={id:nextEntityId++,type:m.boss?.type||"none",def,x:0,z:-m.length-14,hp:m.boss?hp:0,maxHp:hp,r:def?.r||2.6,h:def?.h||9.5,state:"wait",t:0,flash:0,slamT:0,phase:-1,attackT:0};
+  out.expectedKills=out.enemies.length;
+  if(!m.boss)Obj3D.finishArch?.(-m.length);
+  return out;
+}
+function makeThreat(kind,z,id){return {id,kind,counter:THREAT_COUNTER[kind],z,announced:false,live:false,done:false,countered:false,lost:0,actors:[],age:0,shotT:0,shellT:0,gap:gameplayRng("layout")<.5?-1:1};}
+async function goMission(id,{assist=0,elite=false}={}) {
+  const m=window.Campaign?.missions?.[id];if(!m)return false;
+"use strict";
+// ---------- persistence ----------
+const SAVE_KEY = "squad-surge-v1";
+const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
+Object.assign(save, { level: 1, unlocked: 1, best: {}, stars: {}, bestSquad: {}, bestScore: {}, skin: "classic", tracer: "gold", sound: true, vibe: true, ...save });
+save.tacticsPerfect = Math.max(0, Number(save.tacticsPerfect) || 0);
+save.tacticsCounters = save.tacticsCounters && typeof save.tacticsCounters === "object" ? save.tacticsCounters : {};
+save.campaign = save.campaign && typeof save.campaign === "object" ? save.campaign : {};
+save.unlocked = Math.max(save.unlocked, save.level);
+for (const k of ["coins", "gems", "up"]) delete save[k]; // drop old shop data from earlier builds
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
+
+// ---------- constants ----------
+const ROAD = 6;               // road half-width
+const SPEED = 8.5;            // squad forward speed (units/s)
+const BULLET_SPEED = 72, BULLET_RANGE = 46;
+const MAX_SHOOTERS = 48;
+const START_SQUAD = 5;
+// Surge Update tuning (design/engagement.md; numbers from the design review)
+const COMBO_WINDOW = 3.0;                                          // seconds between kills before the combo drops
+const COMBO_TIERS = [[100, 4, "UNSTOPPABLE"], [50, 3, "SURGE!"], [25, 2, "GREAT"], [10, 1.5, "NICE"]]; // [combo, multiplier, callout]
+#!/usr/bin/env node
+// Headless check of the game: screenshots, console errors, fps and draw calls.
+// Starts its own static server for the game folder and serves three.js r128 from a local copy (cdnjs is blocked here).
+//
+//   node tools/shot.js [--levels 1,2,3] [--out DIR] [--views home,play,boss] [--play-ms 2500] [--w 390 --h 780] [--dpr 1]
+//
+// Writes DIR/L<level>-<view>.png and prints one JSON line per level plus any console errors.
+const http = require("http"), fs = require("fs"), path = require("path");
+const { chromium } = require("playwright");
+
+const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith("--") ? acc.concat([[a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : "1"]]) : acc), []));
+const ROOT = path.resolve(__dirname, "..");
+const THREE_LOCAL = process.env.THREE_LOCAL || "/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js";
+const levels = (args.levels || "1").split(",").map(Number);
+const views = (args.views || "home,play,boss").split(",");
+const OUT = path.resolve(args.out || path.join(ROOT, "design/qa"));
+const W = +(args.w || 390), H = +(args.h || 780), DPR = +(args.dpr || 1), PLAY_MS = +(args["play-ms"] || 2500);
+fs.mkdirSync(OUT, { recursive: true });
+
+const TYPES = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".css": "text/css" };
+const server = http.createServer((req, res) => {
+  const url = decodeURIComponent(req.url.split("?")[0]);
+  const file = path.join(ROOT, url === "/" ? "index.html" : url);
+  if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end("not found"); }
+  res.writeHead(200, { "content-type": TYPES[path.extname(file).toLowerCase()] || "application/octet-stream" });
+  fs.createReadStream(file).pipe(res);
+});
+
+(async () => {
+  await new Promise(r => server.listen(0, "127.0.0.1", r));
+  const port = server.address().port;
+  const browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"] });
+  const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: DPR });
+  const errors = [];
+  page.on("pageerror", e => errors.push("PAGEERROR " + e.message));
+  page.on("console", m => { if ((m.type() === "error" || m.type() === "warning") && !/GPU stall|GL Driver|ERR_FAILED|fonts\.g/.test(m.text())) errors.push(m.type() + " " + m.text()); });
+  page.on("requestfailed", r => { if (!/fonts\.g/.test(r.url())) errors.push("REQUEST FAILED " + r.url()); });
+  page.on("response", r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`); });
+  await page.route("**/three.min.js", r => r.fulfill({ path: THREE_LOCAL, contentType: "application/javascript" }));
+  await page.route("**fonts.g*/**", r => r.abort());
+  await page.addInitScript(() => { try { localStorage.setItem("squad-surge-v1", JSON.stringify({ level: 1, unlocked: 99, sound: false, vibe: false })); } catch (e) {} });
+  await page.goto(`http://127.0.0.1:${port}/index.html?hq`); // ?hq: keep full quality (swiftshader is always slow)
+  await page.waitForFunction(() => window.__game && __game.state === "home", null, { timeout: 60000 });
+
+  for (const lv of levels) {
+#!/usr/bin/env node
+"use strict";
+// Real browser balance run. No gameplay shortcuts: all policies share the same steering.
+// node tools/bot-tactics.js [--runs 3] [--levels 1-8] [--steering casual|perfect]
+//                         [--policies never,smart,random] [--three /path/three.min.js]
+// Use --engine simulation when a local browser/server cannot run (requires THREE_LOCAL).
+// THREE_LOCAL can provide offline three.js r128. Otherwise use the game's CDN.
+// Outputs each result as JSON, then wins, stars and retention summary tables. A timeout is an error, not a loss.
+const http = require("http"), fs = require("fs"), path = require("path");
+const ROOT = path.resolve(__dirname, "..");
+const args = {};
+for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].replace(/^--/, "")] = process.argv[i + 1];
+const runs = Math.max(1, Number(args.runs || 1)), policies = (args.policies || "never,smart,random").split(",");
+const range = args.levels || "1-8";
+const levels = range.includes("-") ? (() => { const [a, b] = range.split("-").map(Number); return Array.from({ length: b - a + 1 }, (_, i) => a + i); })() : range.split(",").map(Number);
+const steering = args.steering || "casual";
+if (!policies.every(p => ["never", "smart", "random"].includes(p)) || !["casual", "perfect"].includes(steering)) throw new Error("Invalid policy or steering");
+const local = args.three || process.env.THREE_LOCAL;
+if (args.engine && !["browser", "simulation"].includes(args.engine)) throw new Error("Invalid engine");
+if (local) process.env.THREE_LOCAL = path.resolve(local);
+if (local && !fs.existsSync(local)) throw new Error(`Missing THREE_LOCAL: ${local}`);
+const TYPES = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".woff2": "font/woff2" };
+const server = http.createServer((req, res) => {
+  let name;
+  try { name = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { res.writeHead(400); return res.end(); }
+  const file = path.resolve(ROOT, "." + (name === "/" ? "/index.html" : name));
+  if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream" }); fs.createReadStream(file).pipe(res);
+});
+async function setupBot({ level, policy, steering, seed }) {
+  const g = window.__game, C = g.ctx;
+  C.renderer.render = () => {};
+  await g.goLevel(level, "play");
+  let steerSeed = seed, actionSeed = seed ^ 0xaffe, nextDecision = 0, nextAction = 1, dodge = null, lastSlam = 0;
+  const choices = new Map(), counts = { threats: 0, ends: 0, got: 0, uses: 0, perfect: 0, maxLive: 0 }, live = new Set();
+  const sr = () => (steerSeed = (Math.imul(steerSeed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  const ar = () => (actionSeed = (Math.imul(actionSeed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  C.bus.on("threatLive", t => { counts.threats++; live.add(t.id); counts.maxLive = Math.max(counts.maxLive, live.size); });
+  C.bus.on("threatEnd", t => { counts.ends++; live.delete(t.id); });
+  C.bus.on("powerupGot", () => counts.got++);
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/enemies.js'
+s=open(p).read()
+start=s.index('  // Declarative phase tables:')
+end=s.index('  function bossInit',start)
+block=s[start:end]
+s=s[:start]+s[end:]
+pos=s.index('  const RED =')
+s=s[:pos]+'''  // Per-archetype tuning: [HP, contact radius, sprite height, speed, contact loss, fallback tint].
+  const ENEMY_DATA = {
+    shieldbearer: [18, 0.65, 2.05, 2.1, 3, 0x8ecbff],
+    charger: [10, 0.48, 1.8, 3.5, 2, 0xff7163],
+    bomber: [7, 0.46, 1.65, 2.8, 0, 0xffb251],
+    rifleman: [8, 0.44, 1.7, 2.5, 1, 0xc8a0ff],
+    medic: [9, 0.44, 1.7, 2.6, 1, 0x75ffb1],
+    splitter: [16, 0.65, 2.15, 2.5, 3, 0xd1a0ff],
+    splitter_mini: [3, 0.26, 0.9, 5.2, 1, 0xe3baff],
+    colossus_half: [700, 1.1, 4.5, 0, 0, 0xc4b5d3]
+  };
+'''+block+s[pos:]
+start=s.index('    addDefinition(\"shieldbearer\"')
+end=s.index('    const keys = Object.keys(BOSS_DATA);',start)
+s=s[:start]+'''    const enemies = Object.keys(ENEMY_DATA);
+    for (let i = 0; i < enemies.length; i++) {
+      const type = enemies[i], d = ENEMY_DATA[type];
+      addDefinition(type, d[0], d[1], d[2], d[3], d[4], d[5], false);
+    }
+'''+s[end:]
+open(p,'w').write(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+apply patch
+patch: completed
+/home/user/my-first-repo/squad-surge/js/enemies.js
+diff --git a/squad-surge/js/enemies.js b/squad-surge/js/enemies.js
+index bf1fa92880ad5bd47ec3132580e56a874180c14f..78ac207b7dc5d564891c778aa1ddc96e677282ef
+--- a/squad-surge/js/enemies.js
++++ b/squad-surge/js/enemies.js
+@@ -12,10 +12,51 @@
+     healRate: 0.06, healRange: 24, healSearch: 0.25,
+     bossWarn: 1.1, bossGap: 17, bossChargeSpeed: 24,
+     bossChargeCap: 12, bossSlamCap: 10, bossBarrageFraction: 0.08,
++    bossShieldDuration: 4.5, bossShieldCap: 6, bossOpeningDelay: 1.2,
++    bossRadius: 2.1, bossHeight: 8,
+     weakDuration: 1.4, weakMultiplier: 2.5, splitAt: 0.5,
+     // Fixed mesh budget. If exhausted, new damaging telegraphs wait for a slot.
+     telegraphs: 256, bossReserve: 12
+   });
++  // Per-archetype tuning: [HP, contact radius, sprite height, speed, contact loss, fallback tint].
++  const ENEMY_DATA = {
++    shieldbearer: [18, 0.65, 2.05, 2.1, 3, 0x8ecbff],
++    charger: [10, 0.48, 1.8, 3.5, 2, 0xff7163],
++    bomber: [7, 0.46, 1.65, 2.8, 0, 0xffb251],
++    rifleman: [8, 0.44, 1.7, 2.5, 1, 0xc8a0ff],
++    medic: [9, 0.44, 1.7, 2.6, 1, 0x75ffb1],
++    splitter: [16, 0.65, 2.15, 2.5, 3, 0xd1a0ff],
++    splitter_mini: [3, 0.26, 0.9, 5.2, 1, 0xe3baff],
++    colossus_half: [700, 1.1, 4.5, 0, 0, 0xc4b5d3]
++  };
++  // Declarative phase tables: thresholds are descending remaining-HP fractions.
++  const BOSS_DATA = {
++    ogre: { name: "Ogre Warlord", hp: 900, tint: 0xe8ac78,
++      phases: [{ at: 1, attacks: ["slam"], cadence: 2.6 },
++        { at: 0.5, attacks: ["slam", "summon"], cadence: 1.9, summonType: "grunt", summons: 4 }],
++      weak: { after: "slam", dur: TUNE.weakDuration, mult: TUNE.weakMultiplier } },
++    bulwark: { name: "Iron Bulwark", hp: 1400, tint: 0x8ac9e4,
++      phases: [{ at: 1, attacks: ["shieldWall", "slam"], cadence: 2.6 },
++        { at: 0.5, attacks: ["shieldWall", "slam", "summon"], cadence: 2.0, summonType: "shieldbearer", summons: 2 }],
++      weak: { after: "slam", dur: 1.4, mult: 2.5 } },
++    ravager: { name: "Dune Ravager", hp: 1800, tint: 0xffb268,
++      phases: [{ at: 1, attacks: ["charge"], cadence: 2.6, lanes: 1 },
++        { at: 0.5, attacks: ["charge", "charge", "slam"], cadence: 1.9, lanes: 2 }],
++      weak: { after: "charge", dur: 1.4, mult: 2.5 } },
++    gunner: { name: "Harbor Gunner", hp: 2200, tint: 0x9cabed,
++      phases: [{ at: 1, attacks: ["barrage", "summon"], cadence: 2.6, lanes: 1, summonType: "rifleman", summons: 2 },
++        { at: 0.5, attacks: ["barrage", "barrage", "summon"], cadence: 2.0, lanes: 2, summonType: "rifleman", summons: 3 }],
++      weak: { after: "barrage", dur: 1.4, mult: 2.5 } },
++    colossus: { name: "Scrap Colossus", hp: 2800, tint: 0xc4b5d3,
++      phases: [{ at: 1, attacks: ["slam", "shieldWall"], cadence: 2.6 },
++        { at: 0.5, attacks: ["slam", "barrage"], cadence: 1.9, lanes: 2, entry: "split" }],
++      weak: { after: "slam", dur: 1.4, mult: 2.5 } },
++    warlord: { name: "The Warlord, Reborn", hp: 3600, tint: 0xff7c8a,
++      phases: [{ at: 1, attacks: ["slam", "shieldWall", "summon"], cadence: 2.6, summonType: "shieldbearer", summons: 2 },
++        { at: 0.66, attacks: ["charge", "barrage", "summon"], cadence: 2.2, lanes: 2, summonType: "rifleman", summons: 2 },
++        { at: 0.33, attacks: ["shieldWall", "slam", "charge", "barrage", "summon"], cadence: 1.9, lanes: 2, summonType: "splitter", summons: 2 }],
++      weak: { after: "slam", dur: 1.4, mult: 2.5 } }
++  };
+   const RED = 0xff4036, AMBER = 0xffad32, GREEN = 0x64ff9c;
+   const CYAN = 0x62e8ff, GOLD = 0xffec73;
+   const EMPTY = [];
+@@ -28,13 +69,19 @@
+   function alive(e) { return !!e && e.hp > 0 && e.state !== "dead" && e.state !== "dying" && e.state !== "down"; }
+   function level() { try { return C && C.L; } catch (_) { return null; } }
+   function squad() {
+-    try { if (C && C.squad) return C.squad; } catch (_) { /* older engine */ }
+     const l = level();
+-    if (!l) return null;
+-    squadScratch.x = number(l.sx, 0); squadScratch.z = number(l.sz, 0);
+-    squadScratch.soldiers = l.soldiers || EMPTY; squadScratch.count = squadScratch.soldiers.length;
+-    squadScratch.radius = number(l.radius, 3);
+-    return squadScratch;
++    // Older ctx.squad getters construct an object on every read. Reuse a view of
++    // the existing level in that host; contract-only hosts supply ctx.squad directly.
++    if (l && typeof l.sx === "number" && typeof l.sz === "number") {
++      squadScratch.x = l.sx; squadScratch.z = l.sz;
++      squadScratch.soldiers = l.soldiers || EMPTY; squadScratch.count = squadScratch.soldiers.length;
++      squadScratch.radius = number(l.radius, 3);
++      try {
++        if (C && typeof C.squadRadius === "function") squadScratch.radius = C.squadRadius(squadScratch.count);
++      } catch (_) { /* retain conservative fallback */ }
++      return squadScratch;
++    }
++    try { return C && C.squad || null; } catch (_) { return null; }
+   }
+   // Never require a sibling module, and contain failures at each engine boundary.
+   function rect(x0, x1, z0, z1, cap, cause) {
+@@ -111,7 +158,7 @@
+   function releaseAttack(s) { release(s.a); release(s.b); s.a = s.b = null; }
+   function cleanup(s) {
+     releaseAttack(s); release(s.shield); release(s.marker); s.shield = s.marker = null;
+-    if (s.weak > 0) { s.weak = 0; s.weakEvent.on = false; emit("bossWeak", s.weakEvent); }
++    if (s.weak > 0) { s.weak = 0; s.e.weakT = 0; s.weakEvent.on = false; emit("bossWeak", s.weakEvent); }
+   }
+   function ground(p, x, z, width, depth, progress) {
+     if (!p) return;
+@@ -147,7 +194,7 @@
+       a: null, b: null, shield: null, marker: null, patient: null, search: 0,
+       targetX: 0, targetZ: 0, z0: 0, z1: 0, lane1: 0, lane2: 9, safeLane: 0,
+       losses: 0, detonated: false, dead: false, phase: -1, attackIndex: 0,
+-      attack: "", config: null, weak: 0, wall: 0, split: false, half1: null, half2: null,
++      attack: "", config: null, weak: 0, wall: 0, split: false, splitAttempted: false, half1: null, half2: null,
+       parent: null, halfOptions1: { hp: 1, maxHp: 1 }, halfOptions2: { hp: 1, maxHp: 1 },
+       teleEvent: { type, kind: "", x: 0, z: 0 },
+       phaseEvent: { type, phase: 0 }, weakEvent: { on: false }
+@@ -163,7 +210,9 @@
+   function walk(s, dt, q, contact) {
+     const e = s.e, oldZ = e.z;
+     e.state = "walk"; e.z += s.speed * dt;
+-    if (contact && rect(e.x - e.r, e.x + e.r, oldZ - e.r, e.z + e.r, e.dmg || 1, s.type) > 0) retire(s);
++    if (contact && rect(e.x - e.r, e.x + e.r, oldZ - e.r, e.z + e.r, e.dmg || 1, s.type) > 0) {
++      enemyDeath(e); retire(s);
++    }
+     if (e.z > q.z + Math.max(16, number(q.radius, 0) + 3)) retire(s);
+   }
+   function retire(s) { s.e.hp = 0; s.e.state = "dead"; s.dead = true; cleanup(s); }
+@@ -210,7 +259,9 @@
+         if (s.a) {
+           s.mode = "warn"; s.timer = TUNE.chargeWarn; s.targetX = e.x;
+           s.targetZ = q.z; s.z0 = e.z; s.z1 = q.z + number(q.radius, 3) + 5;
+-          signal(s, "charge");
++          signal(s, "charge"); stop(s); e.h = s.baseH * 0.58; e.crouch = true;
++          laneVisual(s.a, s.targetX, s.z0, s.z1, true, 0);
++          return true; // The warning begins now; its first full dt is the next tick.
+         } else { stop(s); return true; }
+       }
+       if (s.mode === "warn") {
+@@ -228,7 +279,11 @@
+     } else if (s.type === "bomber") {
+       if (s.mode === "walk" && distance <= TUNE.fuseRange && distance >= -TUNE.blastRadius) {
+         s.a = take(s, 2, AMBER, false);
+-        if (s.a) { s.mode = "fuse"; s.timer = TUNE.fuse; s.targetX = e.x; s.targetZ = e.z; signal(s, "fuse"); }
++        if (s.a) {
++          s.mode = "fuse"; s.timer = TUNE.fuse; s.targetX = e.x; s.targetZ = e.z; signal(s, "fuse");
++          stop(s); ground(s.a, e.x, e.z, TUNE.blastRadius * 2, TUNE.blastRadius * 2, 1);
++          return true;
++        }
+         else { stop(s); return true; }
+       }
+       if (s.mode === "fuse") {
+@@ -245,6 +300,7 @@
+           if (s.a) {
+             s.mode = "warn"; s.timer = TUNE.rifleWarn; s.targetX = lane(q.x) * TUNE.lane;
+             s.targetZ = q.z; s.z0 = e.z; s.z1 = q.z + number(q.radius, 3) + 8; signal(s, "laser");
++            laneVisual(s.a, s.targetX, s.z0, s.z1, false, 0); return true;
+           }
+         }
+         if (s.mode === "warn") {
+@@ -283,9 +339,9 @@
+     if (!s || s.type !== "shieldbearer" || bypass(b)) return true;
+     const q = squad(); if (!q) return true;
+     const dx = Math.abs(q.x - e.x), dz = q.z - e.z;
+-    // Front is +Z; shield graphic faces the squad. Both side distance and
+-    // the narrow frontal cone are checked, so distant frontal bullets cannot flank.
+-    return dz <= 0 || (dx > TUNE.shieldSide && Math.atan2(dx, dz) > TUNE.shieldAngle);
++    // Front is +Z. Moving >2.2m to the side exposes the body; the shield's
++    // narrow +/-25 degree frontal cone also leaves close side/rear shots open.
++    return dz <= 0 || dx > TUNE.shieldSide || Math.atan2(dx, dz) > TUNE.shieldAngle;
+   }
+   function enemyDeath(e) {
+     const s = e && e._campaignEnemy;
+@@ -297,37 +353,9 @@
+     }
+   }
+ 
+-  // Declarative phase tables: thresholds are descending remaining-HP fractions.
+-  const BOSS_DATA = {
+-    ogre: { name: "Ogre Warlord", hp: 900, tint: 0xe8ac78,
+-      phases: [{ at: 1, attacks: ["slam"], cadence: 2.6 },
+-        { at: 0.5, attacks: ["slam", "summon"], cadence: 1.9, summonType: "grunt", summons: 4 }],
+-      weak: { after: "slam", dur: TUNE.weakDuration, mult: TUNE.weakMultiplier } },
+-    bulwark: { name: "Iron Bulwark", hp: 1400, tint: 0x8ac9e4,
+-      phases: [{ at: 1, attacks: ["shieldWall", "slam"], cadence: 2.6 },
+-        { at: 0.5, attacks: ["shieldWall", "slam", "summon"], cadence: 2.0, summonType: "shieldbearer", summons: 2 }],
+-      weak: { after: "slam", dur: 1.4, mult: 2.5 } },
+-    ravager: { name: "Dune Ravager", hp: 1800, tint: 0xffb268,
+-      phases: [{ at: 1, attacks: ["charge"], cadence: 2.6, lanes: 1 },
+-        { at: 0.5, attacks: ["charge", "charge", "slam"], cadence: 1.9, lanes: 2 }],
+-      weak: { after: "charge", dur: 1.4, mult: 2.5 } },
+-    gunner: { name: "Harbor Gunner", hp: 2200, tint: 0x9cabed,
+-      phases: [{ at: 1, attacks: ["barrage", "summon"], cadence: 2.6, lanes: 1, summonType: "rifleman", summons: 2 },
+-        { at: 0.5, attacks: ["barrage", "barrage", "summon"], cadence: 2.0, lanes: 2, summonType: "rifleman", summons: 3 }],
+-      weak: { after: "barrage", dur: 1.4, mult: 2.5 } },
+-    colossus: { name: "Scrap Colossus", hp: 2800, tint: 0xc4b5d3,
+-      phases: [{ at: 1, attacks: ["slam", "shieldWall"], cadence: 2.6 },
+-        { at: 0.5, attacks: ["slam", "barrage"], cadence: 1.9, lanes: 2, entry: "split" }],
+-      weak: { after: "slam", dur: 1.4, mult: 2.5 } },
+-    warlord: { name: "The Warlord, Reborn", hp: 3600, tint: 0xff7c8a,
+-      phases: [{ at: 1, attacks: ["slam", "shieldWall", "summon"], cadence: 2.6, summonType: "shieldbearer", summons: 2 },
+-        { at: 0.66, attacks: ["charge", "barrage", "summon"], cadence: 2.2, lanes: 2, summonType: "rifleman", summons: 2 },
+-        { at: 0.33, attacks: ["shieldWall", "slam", "charge", "barrage", "summon"], cadence: 1.9, lanes: 2, summonType: "splitter", summons: 2 }],
+-      weak: { after: "slam", dur: 1.4, mult: 2.5 } }
+-  };
+   function bossInit(e, type) {
+     const s = makeState(e, type, true);
+-    if (s) { s.config = BOSS_DATA[type]; s.cooldown = 1.2; }
++    if (s) { s.config = BOSS_DATA[type]; s.cooldown = TUNE.bossOpeningDelay; }
+     return s;
+   }
+   function phaseFor(s) {
+@@ -346,7 +374,8 @@
+     // both neighboring exits while painting the squad's lane; dodge distance <= 3.4m.
+     s.lane1 = lane(q.x);
+     s.safeLane = s.lane1 === 0 ? (q.x < 0 ? -1 : 1) : 0;
+-    s.lane2 = (phase.lanes === 2 && (name === "charge" || name === "barrage" || (s.split && name === "slam"))) ? -s.lane1 - s.safeLane : 9;
++    const twoHalves = !s.split || (alive(s.half1) && alive(s.half2));
++    s.lane2 = (twoHalves && phase.lanes === 2 && (name === "charge" || name === "barrage" || (s.split && name === "slam"))) ? -s.lane1 - s.safeLane : 9;
+     s.targetX = s.lane1 * TUNE.lane; s.targetZ = q.z;
+     s.z0 = Math.min(s.e.z, q.z - TUNE.bossGap);
+     s.z1 = q.z + number(q.radius, 3) + 6;
+@@ -393,6 +422,7 @@
+   }
+   function splitBoss(s) {
+     if (s.split) return true;
++    s.splitAttempted = true;
+     const hp = Math.max(1, s.e.hp * 0.5);
+     s.halfOptions1.hp = s.halfOptions1.maxHp = hp;
+     s.halfOptions2.hp = s.halfOptions2.maxHp = hp;
+@@ -411,7 +441,10 @@
+       const hs = liveState(half, "colossus_half", false);
+       if (hs) hs.parent = s;
+     }
+-    s.e.hidden = true; s.e.h = 0; s.e.renderScale = 0;
++    s.e.hidden = true; s.e.h = 0; s.e.scale = 0; s.e.renderScale = 0; s.e.r = 0;
++    // h/scale are honoured by new registries. Moving the aggregate health carrier
++    // off-road also works in hosts whose legacy boss renderer uses a fixed size.
++    s.e.x = 1000;
+     release(s.shield); s.shield = null;
+     return true;
+   }
+@@ -427,12 +460,12 @@
+       const n = phase.summons || 3, type = phase.summonType || "grunt";
+       for (let i = 0; i < n; i++) {
+         const child = spawn(type, s.targetX + ((i % 3) - 1) * 0.65, s.z0 - 2 - Math.floor(i / 3) * 1.5, MINI_OPTIONS);
+-        // Summoned riflemen respect the boss's reserved dodge lane for their first shot.
++        // Give summons time to become readable before their first independent shot.
+         if (child && child._campaignEnemy) child._campaignEnemy.cooldown = TUNE.rifleCooldown;
+       }
+     } else if (name === "shieldWall") {
+-      s.wall = 4.5; shieldVisual(s, q);
+-      hitBossLanes(s, 6, "boss:shieldWall", s.z0, s.z1);
++      s.wall = TUNE.bossShieldDuration; shieldVisual(s, q);
++      hitBossLanes(s, TUNE.bossShieldCap, "boss:shieldWall", s.z0, s.z1);
+     } else if (name === "split") splitBoss(s);
+     finishAttack(s, phase);
+   }
+@@ -460,7 +493,8 @@
+       s.weak = Math.max(0, s.weak - dt); e.weakT = s.weak;
+       if (s.marker) {
+         const m = s.marker.mesh;
+-        m.position.set(e.x, s.split ? 3.4 : s.baseH * 0.57, e.z + 0.6); m.scale.set(2.2, 2.2, 1);
++        const core = s.split ? (alive(s.half1) ? s.half1 : s.half2) : e;
++        m.position.set(core.x, s.split ? 3.4 : s.baseH * 0.57, core.z + 0.6); m.scale.set(2.2, 2.2, 1);
+         if (C.camera && C.camera.quaternion && m.quaternion && typeof m.quaternion.copy === "function") m.quaternion.copy(C.camera.quaternion);
+         m.material.uniforms.progress.value = 0.5 + 0.5 * Math.sin(s.age * 12);
+       }
+@@ -469,7 +503,7 @@
+     if (!s.attack) {
+       e.z = Math.min(e.z, q.z - TUNE.bossGap - number(q.radius, 0));
+       s.cooldown -= dt;
+-      if (s.type === "colossus" && !s.split && e.hp / e.maxHp <= TUNE.splitAt) {
++      if (s.type === "colossus" && !s.splitAttempted && e.hp / e.maxHp <= TUNE.splitAt) {
+         beginAttack(s, "split", q, phase);
+       } else if (s.cooldown <= 0 && s.weak <= 0) {
+         const name = phase.attacks[s.attackIndex % phase.attacks.length];
+@@ -507,6 +541,7 @@
+     const s = e && e._campaignEnemy;
+     if (!s) return;
+     s.dead = true; cleanup(s);
++    if (s.split) { e.x = 0; e.z = s.half1 ? s.half1.z : e.z; }
+     if (s.half1) { s.half1.hp = 0; s.half1.state = "dead"; }
+     if (s.half2) { s.half2.hp = 0; s.half2.state = "dead"; }
+   }
+@@ -549,18 +584,15 @@
+   }
+   function defineAll() {
+     if (definitions.length) return;
+-    addDefinition("shieldbearer", 18, 0.65, 2.05, 2.1, 3, 0x8ecbff, false);
+-    addDefinition("charger", 10, 0.48, 1.8, 3.5, 2, 0xff7163, false);
+-    addDefinition("bomber", 7, 0.46, 1.65, 2.8, 0, 0xffb251, false);
+-    addDefinition("rifleman", 8, 0.44, 1.7, 2.5, 1, 0xc8a0ff, false);
+-    addDefinition("medic", 9, 0.44, 1.7, 2.6, 1, 0x75ffb1, false);
+-    addDefinition("splitter", 16, 0.65, 2.15, 2.5, 3, 0xd1a0ff, false);
+-    addDefinition("splitter_mini", 3, 0.26, 0.9, 5.2, 1, 0xe3baff, false);
+-    addDefinition("colossus_half", 700, 1.1, 4.5, 0, 0, 0xc4b5d3, false);
++    const enemies = Object.keys(ENEMY_DATA);
++    for (let i = 0; i < enemies.length; i++) {
++      const type = enemies[i], d = ENEMY_DATA[type];
++      addDefinition(type, d[0], d[1], d[2], d[3], d[4], d[5], false);
++    }
+     const keys = Object.keys(BOSS_DATA);
+     for (let i = 0; i < keys.length; i++) {
+       const type = keys[i], d = BOSS_DATA[type];
+-      addDefinition(type, d.hp, 2.1, 8, 0, 0, d.tint, true);
++      addDefinition(type, d.hp, TUNE.bossRadius, TUNE.bossHeight, 0, 0, d.tint, true);
+     }
+   }
+   function probe(record) {
+@@ -587,8 +619,15 @@
+     }
+   }
+   function reset() {
+-    for (let i = 0; i < actors.length; i++) cleanup(actors[i]);
+-    actors.length = 0; serial = 0;
++    const l = level(), enemies = l && l.enemies ? l.enemies : EMPTY;
++    let n = 0;
++    for (let i = 0; i < actors.length; i++) {
++      const s = actors[i]; cleanup(s);
++      // generate/missionStart may arrive AFTER the engine has called init on the
++      // new roster. Retain those actors so their later telegraphs are reclaimed.
++      if (alive(s.e) && l && (s.e === l.boss || enemies.indexOf(s.e) !== -1)) actors[n++] = s;
++    }
++    actors.length = n;
+     for (let i = 0; i < pool.length; i++) release(pool[i]);
+     refresh();
+   }
+
+exec
+/bin/bash -lc "node --check js/enemies.js
+node -e \"try { console.log(require.resolve('playwright')); } catch (_) { console.log('No Playwright dependency'); }\"
+rg --files /tmp -g 'three.min.js' -g 'three.cjs' 2>/dev/null | head -10" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+/opt/node-tools/node_modules/playwright/index.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js
+/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js
+
+codex
+The behavior checks passed: warning timing, death cancellation, the charger’s eight-soldier cap, healing, boss lane attacks, and split health. E1’s registry code is now visible, so I’m checking against it and attempting a browser smoke test with the fallback sheets.
+
+exec
+/bin/bash -lc "node <<'NODE'
+const http=require('http'),fs=require('fs'),path=require('path');
+const {chromium}=require('playwright');
+const root=process.cwd();
+const server=http.createServer((req,res)=>{const file=path.join(root,req.url.split('?')[0]==='/'?'index.html':req.url.split('?')[0]);if("'!fs.existsSync(file)){res.writeHead(404);res.end();return;}res.setHeader('"'Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.html')?'text/html':'application/octet-stream');fs.createReadStream(file).pipe(res);});
+(async()=>{let browser;try{
+await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-gl=swiftshader','--enable-webgl','--ignore-gpu-blocklist']});
+const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/three.min.js',r=>r.fulfill({path:'/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js',contentType:'application/javascript'}));
+await page.route('**fonts.g*/**',r=>r.abort());
+await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.__game&&__game.state==='home',null,{timeout:60000});
+const result=await page.evaluate(async()=>{
+ const g=window.__game,C=g.ctx; if("'!window.Enemies)throw Error('"'Enemies script not loaded yet');
+ const ids=Object.keys(window.Campaign?.missions||{}); const id=ids.find(k=>window.Campaign.missions[k].boss?.type==='colossus');
+ if("'!id)throw Error('"'Campaign Colossus mission not ready yet');
+ await C.goMission(id); const b=g.L.boss;g.L.sz=-g.L.length;g.setState('boss');b.state='walk';b.hp=b.maxHp/2;
+ const before=g.L.enemies.length; for(let i=0;i<100;i++)b.def.update(b,1/60);
+ const s=b._campaignEnemy;
+ const out={mission:id,split:s.split,halfHP:[s.half1?.hp,s.half2?.hp],pooledMeshes:C.telegraphGroup.children.length,visible:C.telegraphGroup.children.filter(m=>m.visible).length,spawned:g.L.enemies.length-before};
+ if("'!out.split||out.spawned!==2)throw Error(JSON.stringify(out));
+ s.half1.hp=0;s.half2.hp=0;b.def.update(b,1/60);out.bossState=b.state;return out;
+});
+console.log(JSON.stringify({result,errors}));if(errors.length)process.exitCode=1;
+}catch(e){console.error(e.message);process.exitCode=1;}finally{if(browser)await browser.close();server.close();}})();
+NODE' in /home/user/my-first-repo/squad-surge
+ exited 1 in 223ms:
+listen EPERM: operation not permitted 127.0.0.1
+
+exec
+/bin/bash -lc "node <<'NODE'
+const fs=require('fs'),path=require('path'),{chromium}=require('playwright');
+const root=process.cwd(), three='/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js';
+(async()=>{let browser;try{
+ browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-gl=swiftshader','--enable-webgl','--ignore-gpu-blocklist']});
+ const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/*',route=>{const u=new URL(route.request().url());let file=u.pathname.endsWith('/three.min.js')?three:path.join(root,u.pathname==='/'?'index.html':u.pathname);if(u.hostname"'!=='"'squad.local'&&"'!u.pathname.endsWith('"'/three.min.js'))return route.abort();if("'!fs.existsSync(file))return route.fulfill({status:404,body:'"''});const ext=path.extname(file);return route.fulfill({path:file,contentType:ext==='.js'?'application/javascript':ext==='.html'?'text/html':ext==='.webp'?'image/webp':'application/octet-stream'});});
+ await page.goto('http://squad.local/');await page.waitForFunction(()=>window.__game&&__game.state==='home',null,{timeout:60000});
+ const result=await page.evaluate(async()=>{
+ const g=window.__game,C=g.ctx; if("'!window.Enemies)throw Error('"'Enemies script not loaded yet');
+ const ids=Object.keys(window.Campaign?.missions||{}),id=ids.find(k=>window.Campaign.missions[k].boss?.type==='colossus');
+ if("'!id)throw Error('"'Campaign Colossus mission not ready yet');
+ await C.goMission(id);const b=g.L.boss;g.L.sz=-g.L.length;g.setState('boss');b.state='walk';b.hp=b.maxHp/2;
+ const before=g.L.enemies.length;for(let i=0;i<100;i++)b.def.update(b,1/60);const s=b._campaignEnemy;
+ const out={mission:id,split:s.split,halfHP:[s.half1?.hp,s.half2?.hp],pooledMeshes:C.telegraphGroup.children.length,spawned:g.L.enemies.length-before};
+ if("'!out.split||out.spawned!==2)throw Error(JSON.stringify(out));s.half1.hp=0;s.half2.hp=0;b.def.update(b,1/60);out.bossState=b.state;return out;
+ });console.log(JSON.stringify({result,errors}));if(errors.length)process.exitCode=1;
+ }catch(e){console.error(e.message);process.exitCode=1;}finally{if(browser)await browser.close();}})();
+NODE' in /home/user/my-first-repo/squad-surge
+ exited 1 in 258ms:
+browserType.launch: Target page, context or browser has been closed
+Browser logs:
+
+<launching> /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --no-sandbox --use-gl=swiftshader --enable-webgl --ignore-gpu-blocklist --user-data-dir=/tmp/playwright_chromiumdev_profile-0zIOGA --remote-debugging-pipe --no-startup-window
+<launched> pid=14
+[pid=14][err] [1107/202221.985166:FATAL:content/browser/sandbox_host_linux.cc:41] Check failed: . shutdown: Operation not permitted (1)
+Call log:
+[2m  - <launching> /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --no-sandbox --use-gl=swiftshader --enable-webgl --ignore-gpu-blocklist --user-data-dir=/tmp/playwright_chromiumdev_profile-0zIOGA --remote-debugging-pipe --no-startup-window[22m
+[2m  - <launched> pid=14[22m
+[2m  - [pid=14][err] [1107/202221.985166:FATAL:content/browser/sandbox_host_linux.cc:41] Check failed: . shutdown: Operation not permitted (1)[22m
+[2m  - [pid=14] <gracefully close start>[22m
+[2m  - [pid=14] <kill>[22m
+[2m  - [pid=14] <will force kill>[22m
+[2m  - [pid=14] exception while trying to kill process: Error: kill ESRCH[22m
+[2m  - [pid=14] <process did exit: exitCode=null, signal=SIGTRAP>[22m
+[2m  - [pid=14] starting temporary directories cleanup[22m
+[2m  - [pid=14] finished temporary directories cleanup[22m
+[2m  - [pid=14] <gracefully close end>[22m
+
+
+exec
+/bin/bash -lc "rg -n 'simulation|runInContext|createContext|THREE_LOCAL' tools/bot-tactics.js
+rg --files tools | tail -15
+sed -n '80,160p' js/enemies.js
+sed -n '530,665p' js/enemies.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+6:// Use --engine simulation when a local browser/server cannot run (requires THREE_LOCAL).
+7:// THREE_LOCAL can provide offline three.js r128. Otherwise use the game's CDN.
+18:const local = args.three || process.env.THREE_LOCAL;
+19:if (args.engine && !["browser", "simulation"].includes(args.engine)) throw new Error("Invalid engine");
+20:if (local) process.env.THREE_LOCAL = path.resolve(local);
+21:if (local && !fs.existsSync(local)) throw new Error(`Missing THREE_LOCAL: ${local}`);
+84:  if (args.engine === "simulation") {
+98:      await vm.runInContext(`(${setupBot.toString()})(${JSON.stringify(config)})`, sandbox);
+103:      const row = { level, policy, attempt: attempt + 1, steering, engine: "simulation",
+tools/codex_image.py
+tools/kit_tools.py
+tools/shot.js
+tools/__pycache__/kit_tools.cpython-313.pyc
+tools/check_kits.py
+tools/tactics-notes.md
+tools/codex_code.sh
+tools/check-tactics.js
+tools/bot-campaign.js
+tools/bot-tactics.js
+tools/recut_sprites.py
+tools/webpify.py
+        if (C && typeof C.squadRadius === "function") squadScratch.radius = C.squadRadius(squadScratch.count);
+      } catch (_) { /* retain conservative fallback */ }
+      return squadScratch;
+    }
+    try { return C && C.squad || null; } catch (_) { return null; }
+  }
+  // Never require a sibling module, and contain failures at each engine boundary.
+  function rect(x0, x1, z0, z1, cap, cause) {
+    try { return C && typeof C.killSoldiersInRect === "function" ? number(C.killSoldiersInRect(x0, x1, z0, z1, cap, cause), 0) : 0; } catch (_) { return 0; }
+  }
+  function circle(x, z, radius, cap, cause) {
+    try { return C && typeof C.killSoldiersInCircle === "function" ? number(C.killSoldiersInCircle(x, z, radius, cap, cause), 0) : 0; } catch (_) { return 0; }
+  }
+  function damageArea(x, z, radius, damage) {
+    try { if (C && typeof C.damageEnemiesInCircle === "function") C.damageEnemiesInCircle(x, z, radius, damage); } catch (_) { /* optional seam */ }
+  }
+  function spawn(type, x, z, opts) {
+    try { return C && typeof C.spawnEnemy === "function" ? C.spawnEnemy(type, x, z, opts) : null; } catch (_) { return null; }
+  }
+  function emit(name, event) {
+    try { if (C && C.bus && typeof C.bus.emit === "function") C.bus.emit(name, event); } catch (_) { /* optional bus */ }
+  }
+  function lane(x) { return x < -TUNE.lane / 2 ? -1 : x > TUNE.lane / 2 ? 1 : 0; }
+  function bypass(b) {
+    const l = level();
+    return !!b && (!!b.splash || b.pierce > 0 || b.piercer || b.kind === "piercer" ||
+      b.kind === "grenadier" || b.source === "airstrike" || b.source === "giant" || !!(l && l.giantT > 0));
+  }
+
+  // One shared quad geometry. Shader masks produce arrows, rings, lanes, shields,
+  // tethers and glowing weak cores without rebuilding geometry or allocating FX.
+  const VERT = "varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}";
+  const FRAG = "uniform vec3 color;uniform float mode;uniform float progress;uniform float opacity;varying vec2 vUv;" +
+    "void main(){vec2 p=vUv-0.5;float a=1.;float glow=1.;" +
+    "if(mode<0.5){float edge=step(0.44,abs(p.x));a=0.18+0.72*edge;}" +
+    "else if(mode<1.5){float shaft=step(abs(p.x),0.13)*step(vUv.y,0.70);float head=step(0.52,vUv.y)*step(abs(p.x),(1.-vUv.y)*0.95);a=max(shaft,head);}" +
+    "else if(mode<2.5){float r=length(p)*2.;float angle=atan(p.x,p.y)/6.2831853+0.5;float ring=smoothstep(0.78,0.84,r)*(1.-smoothstep(0.94,1.,r));a=ring*(angle<progress?1.:0.20)+0.06*step(r,0.78);}" +
+    "else if(mode<3.5){float edge=max(step(0.42,abs(p.x)),step(0.42,abs(p.y)));a=0.28+0.65*edge;}" +
+    "else if(mode<4.5){a=1.-smoothstep(0.1,0.5,abs(p.x));glow=1.4;}" +
+    "else{float r=length(p)*2.;a=(1.-smoothstep(0.1,1.,r))*(0.65+0.35*progress);glow=2.;}" +
+    "gl_FragColor=vec4(color*glow,a*opacity);}";
+
+  function buildPool() {
+    if (built || !C || !C.telegraphGroup || typeof C.telegraphGroup.add !== "function") return;
+    const t = C.THREE;
+    if (!t || typeof t.PlaneBufferGeometry !== "function" || typeof t.ShaderMaterial !== "function" ||
+        typeof t.Mesh !== "function" || typeof t.Color !== "function") return;
+    try {
+      const geo = new t.PlaneBufferGeometry(1, 1);
+      for (let i = 0; i < TUNE.telegraphs; i++) {
+        const material = new t.ShaderMaterial({
+          uniforms: { color: { value: new t.Color(RED) }, mode: { value: 0 },
+            progress: { value: 1 }, opacity: { value: 0.8 } },
+          vertexShader: VERT, fragmentShader: FRAG, transparent: true,
+          depthWrite: false, side: t.DoubleSide, toneMapped: false, fog: false
+        });
+        const mesh = new t.Mesh(geo, material);
+        mesh.visible = false; mesh.frustumCulled = false; mesh.renderOrder = 9;
+        C.telegraphGroup.add(mesh);
+        pool.push({ mesh, owner: null });
+      }
+      built = true;
+    } catch (_) { built = true; /* any successfully built slots remain usable */ }
+  }
+  function take(s, mode, color, boss) {
+    const end = boss ? pool.length : Math.max(0, pool.length - TUNE.bossReserve);
+    for (let i = 0; i < end; i++) {
+      const p = pool[i];
+      if (p.owner) continue;
+      p.owner = s;
+      const m = p.mesh, u = m.material.uniforms;
+      u.mode.value = mode; u.color.value.set(color); u.progress.value = 1; u.opacity.value = 0.8;
+      m.rotation.set(-Math.PI / 2, 0, 0); m.visible = true;
+      return p;
+    }
+    return null;
+  }
+  function release(p) { if (p) { p.mesh.visible = false; p.owner = null; } }
+  function releaseAttack(s) { release(s.a); release(s.b); s.a = s.b = null; }
+  function cleanup(s) {
+    releaseAttack(s); release(s.shield); release(s.marker); s.shield = s.marker = null;
+    if (s.wall > 0 && s.weak <= 0 && !bypass(b)) return false;
+    // Apply extra damage to this target, never mutate a pooled/piercing projectile.
+    if (s.weak > 0 && b) e.hp -= number(b.dmg, 0) * (s.config.weak.mult - 1);
+    return true;
+  }
+  function halfBullet(e, b) {
+    const s = e && e._campaignEnemy, parent = s && s.parent;
+    if (parent && parent.weak > 0 && b) e.hp -= number(b.dmg, 0) * (parent.config.weak.mult - 1);
+    return true;
+  }
+  function bossDeath(e) {
+    const s = e && e._campaignEnemy;
+    if (!s) return;
+    s.dead = true; cleanup(s);
+    if (s.split) { e.x = 0; e.z = s.half1 ? s.half1.z : e.z; }
+    if (s.half1) { s.half1.hp = 0; s.half1.state = "dead"; }
+    if (s.half2) { s.half2.hp = 0; s.half2.state = "dead"; }
+  }
+
+  // All exported callbacks are guarded once, at registration (no per-tick closures).
+  function guarded(fn, fallback) {
+    return function (a, b) { try { return fn(a, b); } catch (_) { return fallback; } };
+  }
+  function register(record) {
+    const method = record.boss ? "registerBoss" : "registerEnemy";
+    try {
+      if (!C || typeof C[method] !== "function") return false;
+      C[method](record.type, record.def); record.registered = true; return true;
+    } catch (_) { return false; }
+  }
+  function addDefinition(type, hp, r, h, sp, dmg, tint, boss) {
+    const fallback = boss || type === "shieldbearer" || type === "splitter" || type === "colossus_half" ? "assets/brute.webp" : "assets/grunt.webp";
+    const record = { type, boss, registered: false, probed: false, def: null };
+    const def = { sheet: fallback, fallbackSheet: fallback, cols: 4, rows: 2,
+      hp, r, h, sp, dmg, scale: 1, tint, fallbackTint: tint,
+      manualMovement: true, noContact: true,
+      init: guarded(function (e) { return boss ? bossInit(e, type) : makeState(e, type, false); }, null),
+      update: guarded(boss ? bossUpdate : enemyUpdate, true),
+      onBullet: guarded(boss ? bossBullet : type === "colossus_half" ? halfBullet : enemyBullet, true),
+      onDeath: guarded(boss ? bossDeath : enemyDeath, undefined)
+    };
+    if (boss) {
+      const data = BOSS_DATA[type];
+      def.name = data.name; def.phases = data.phases; def.weak = data.weak; def.attacks = {};
+      const names = ["slam", "summon", "charge", "barrage", "shieldWall", "split"];
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        def.attacks[name] = guarded(function (e) {
+          const s = e && e._campaignEnemy, q = squad();
+          return !!s && !!q && beginAttack(s, name, q, phaseFor(s));
+        }, false);
+      }
+    }
+    record.def = def; definitions.push(record);
+  }
+  function defineAll() {
+    if (definitions.length) return;
+    const enemies = Object.keys(ENEMY_DATA);
+    for (let i = 0; i < enemies.length; i++) {
+      const type = enemies[i], d = ENEMY_DATA[type];
+      addDefinition(type, d[0], d[1], d[2], d[3], d[4], d[5], false);
+    }
+    const keys = Object.keys(BOSS_DATA);
+    for (let i = 0; i < keys.length; i++) {
+      const type = keys[i], d = BOSS_DATA[type];
+      addDefinition(type, d.hp, TUNE.bossRadius, TUNE.bossHeight, 0, 0, d.tint, true);
+    }
+  }
+  function probe(record) {
+    if (record.probed || typeof window.Image !== "function") return;
+    record.probed = true;
+    try {
+      const img = new window.Image();
+      img.onload = function () {
+        if (!number(img.naturalWidth, img.width)) return;
+        record.def.sheet = img.src; record.def.cols = record.boss ? 3 : 4;
+        record.def.tint = 0xffffff; register(record);
+      };
+      // The already registered, correctly laid-out tinted fallback remains live.
+      img.onerror = function () {};
+      img.src = "assets/units2/" + record.type + ".webp";
+    } catch (_) { /* optional browser image loader */ }
+  }
+  function refresh() {
+    buildPool();
+    for (let i = 0; i < definitions.length; i++) {
+      const record = definitions[i];
+      if (!record.registered) register(record);
+      if (record.registered) probe(record);
+    }
+  }
+  function reset() {
+    const l = level(), enemies = l && l.enemies ? l.enemies : EMPTY;
+    let n = 0;
+    for (let i = 0; i < actors.length; i++) {
+      const s = actors[i]; cleanup(s);
+      // generate/missionStart may arrive AFTER the engine has called init on the
+      // new roster. Retain those actors so their later telegraphs are reclaimed.
+      if (alive(s.e) && l && (s.e === l.boss || enemies.indexOf(s.e) !== -1)) actors[n++] = s;
+    }
+    actors.length = n;
+    for (let i = 0; i < pool.length; i++) release(pool[i]);
+    refresh();
+  }
+  function sweep() {
+    // No map/filter/splice/temporary payloads in simulation callbacks.
+    let n = 0;
+    for (let i = 0; i < actors.length; i++) {
+      const s = actors[i];
+      if (!alive(s.e)) { cleanup(s); continue; }
+      actors[n++] = s;
+    }
+    actors.length = n;
+    // Registries/group can arrive after setup, including when another module is absent.
+    if (!built) buildPool();
+    for (let i = 0; i < definitions.length; i++) if (!definitions[i].registered) register(definitions[i]);
+  }
+  function setup(ctx) {
+    try {
+      if (!ctx || (C && C !== ctx)) return;
+      C = ctx; defineAll(); refresh();
+      if (!subscribed && C.bus && typeof C.bus.on === "function") {
+        subscribed = true;
+        C.bus.on("generate", guarded(reset));
+        C.bus.on("missionStart", guarded(reset));
+        C.bus.on("tick", guarded(sweep));
+        C.bus.on("enemyDie", guarded(function (ev) { if (ev && ev.e) enemyDeath(ev.e); }));
+        C.bus.on("bossDown", guarded(function (ev) { if (ev && ev.boss) bossDeath(ev.boss); }));
+        C.bus.on("win", guarded(reset)); C.bus.on("lose", guarded(reset));
+        C.bus.on("state", guarded(function (ev) { if (ev && (ev.to === "home" || ev.to === "levels")) reset(); }));
+      }
+    } catch (_) { /* Module is optional; a partial host must still boot. */ }
+  }
+  return { setup, tuning: TUNE, bosses: BOSS_DATA };
+})();
+
+exec
+/bin/bash -lc "sed -n '78,102p' tools/bot-tactics.js
+head -n 40 tools/bot-campaign.js
+rg -n 'module.exports|createHarness|loadGame|function.*sandbox|async function' tools/check-tactics.js tools/bot-campaign.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+    }
+  });
+}
+let browser;
+(async () => {
+  const results = [];
+  if (args.engine === "simulation") {
+    console.log("Simulation balance check: real core and bot policies; DOM/graphics stubbed, fixed 50 ms steps.");
+    const vm = require("vm");
+    process.chdir(ROOT);
+    // Reuse the behavioral checker's boot fixture, without executing its tests.
+    const fixture = fs.readFileSync(path.join(ROOT, "tools/check-tactics.js"), "utf8").split("const H=sandbox.H,events=[];")[0];
+    for (let attempt = 0; attempt < runs; attempt++) for (const level of levels) for (const policy of policies) {
+      const sandbox = new Function("require", fixture.replace(/^#!.*\n/, "") + "\nreturn sandbox;")(require);
+      const H = sandbox.H;
+      let randomSeed = level * 997 + attempt * 193 + 17;
+      sandbox.Math = Object.create(Math);
+      sandbox.Math.random = () => (randomSeed = (Math.imul(randomSeed, 1664525) + 1013904223) >>> 0) / 4294967296;
+      sandbox.__game = { ctx: H.ctx, get L() { return H.L; }, get state() { return H.state; }, goLevel(l) { H.startLevel(l); H.setState("play"); } };
+      const config = { level, policy, steering, seed: level * 173 + attempt * 697 + 11 };
+      await vm.runInContext(`(${setupBot.toString()})(${JSON.stringify(config)})`, sandbox);
+      for (let i = 0; i < 10000 && ["play", "boss", "bonus"].includes(H.state); i++) H.step(.05);
+      const L = H.L, errors = [];
+      if (sandbox.__tacticsCounts.maxLive > 1) errors.push("Overlapping live threats");
+      if (policy === "never" && sandbox.__tacticsCounts.uses) errors.push("Never policy activated a power-up");
+#!/usr/bin/env node
+"use strict";
+// node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 3
+// Optional: --three /path/three.min.js --engine simulation (CPU fixture; no GPU claims).
+const fs=require("fs"),path=require("path"),http=require("http"),vm=require("vm");
+const ROOT=path.resolve(__dirname,"..");
+const args={};for(let i=2;i<process.argv.length;i+=2){if(!process.argv[i+1])throw Error("Missing value: "+process.argv[i]);args[process.argv[i].replace(/^--/,"")]=process.argv[i+1];}
+const runs=Number(args.runs||1),policies=(args.policies||"never,smart").split(","),engine=args.engine||"browser";
+if(!Number.isInteger(runs)||runs<1||!policies.every(p=>["never","smart"].includes(p))||!["browser","simulation"].includes(engine))throw Error("Invalid runs, policy or engine");
+const ordinal=id=>{const m=/^c([1-6])m([1-6])$/.exec(id);if(!m)throw Error("Invalid mission: "+id);return (+m[1]-1)*6+(+m[2]-1);};
+const fromOrdinal=n=>`c${Math.floor(n/6)+1}m${n%6+1}`;
+const range=args.missions||"c1m1-c6m6";
+const missions=range.includes("-")?(()=>{const [a,b]=range.split("-").map(ordinal);if(b<a)throw Error("Reversed mission range");return Array.from({length:b-a+1},(_,i)=>fromOrdinal(a+i));})():range.split(",");missions.forEach(ordinal);
+const local=args.three||process.env.THREE_LOCAL;if(local)process.env.THREE_LOCAL=path.resolve(local);
+const mime={".html":"text/html",".js":"application/javascript",".webp":"image/webp",".png":"image/png",".jpg":"image/jpeg",".woff2":"font/woff2"};
+const server=http.createServer((req,res)=>{
+  let name;try{name=decodeURIComponent(new URL(req.url,"http://localhost").pathname);}catch{res.writeHead(400);return res.end();}
+  const file=path.resolve(ROOT,"."+(name==="/"?"/index.html":name));
+  if(!file.startsWith(ROOT+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);return res.end();}
+  res.writeHead(200,{"content-type":mime[path.extname(file)]||"application/octet-stream"});fs.createReadStream(file).pipe(res);
+});
+// This function is serialized into the browser/VM; all decisions use observed state.
+async function installBot({id,policy,seed}) {
+  const g=window.__game,C=g.ctx;
+  g.setTestMode(true);
+  let result=null;C.bus.on("missionEnd",d=>{result={...d};});
+  await C.goMission(id,{assist:0});g.resetProfile();
+  let random=seed>>>0,next=0;
+  const rnd=()=>((random=(Math.imul(random,1664525)+1013904223)>>>0)/4294967296);
+  const warnings=[];C.bus.on("enemyTelegraph",t=>warnings.push({...t,until:g.L.time+(t.kind==="fuse"?2.3:1.25)}));
+  function risk(x) {
+    const L=g.L;let r=0;
+    for(const e of L.enemies)if(e.hp>0&&L.sz-e.z<32&&L.sz-e.z>-4&&Math.abs(e.x-x)<1.8)r+=e.type==="rifleman"?5:e.type==="charger"||e.type==="bomber"?4:1;
+    for(const h of L.hazards||[])if(!h.done&&Math.abs(L.sz-h.z)<24&&Math.abs(h.x-x)<1.8)r+=12;
+    return r;
+  }
+  function decide(){
+    const L=g.L;if(L.time<next)return;next=L.time+.12+rnd()*.12;
+    let x=0,gate=null;
+    for(const q of L.gates)if(!q.used&&q.z<L.sz&&q.z>L.sz-32&&(!gate||q.z>gate.z))gate=q;
+tools/bot-campaign.js:23:async function installBot({id,policy,seed}) {
+
+exec
+/bin/bash -lc "sed -n '1,95p' tools/check-tactics.js
+rg -n 'fixture|sandbox|H=' tools/bot-campaign.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+#!/usr/bin/env node
+"use strict";
+// Browser-free behavioral checks using the real inline simulation, Powerups and Obj3D.
+// Stubs DOM, texture loading, PMREM and renderer only; does not validate pixels or GPU shaders.
+// Run from the repository root:
+//   THREE_LOCAL=/path/to/three-r128.min.js node tools/check-tactics.js
+// The Playwright bot remains the authoritative browser balance check.
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const THREE = require(process.env.THREE_LOCAL || 'three');
+THREE.TextureLoader.prototype.load = function(url, cb) { const t = new THREE.Texture({width:128,height:128}); if(cb) cb(t); return t; };
+const noop=()=>{};
+const elements = new Map();
+const paint = new Proxy({createLinearGradient:()=>({addColorStop:noop}),createRadialGradient:()=>({addColorStop:noop}),measureText:t=>({width:t.length*10})}, {get:(o,k)=>o[k]||noop});
+function el() { return {hidden:false,style:{},dataset:{},classList:{toggle:noop,add:noop,remove:noop},setAttribute:noop,appendChild:noop,remove:noop,addEventListener:noop,querySelector:()=>null,closest:()=>null,getBoundingClientRect:()=>({left:0,right:70,top:0,bottom:70}),getContext:()=>paint,clientWidth:390,clientHeight:780, firstElementChild:{hidden:true,src:''}}; }
+const document={getElementById:id=>{if(!elements.has(id))elements.set(id,el());return elements.get(id);},createElement:el,addEventListener:noop};
+
+const sandbox={console,THREE,document,Scenery:{build:noop,preload:async()=>{},update:noop},localStorage:{getItem:()=>JSON.stringify({sound:false,vibe:false}),setItem:noop},performance:{now:()=>10000},location:{search:''},devicePixelRatio:1,matchMedia:()=>({matches:true}),navigator:{},setTimeout:noop,clearTimeout:noop,addEventListener:noop,requestAnimationFrame:noop};
+sandbox.window=sandbox;
+THREE.PMREMGenerator = class { fromScene() { return {texture:new THREE.Texture()}; } dispose() {} };
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync('js/objects3d.js','utf8'),sandbox);
+vm.runInContext(fs.readFileSync('js/powerups.js','utf8'),sandbox);
+let src=fs.readFileSync('index.html','utf8').match(/<script>\s*"use strict";([\s\S]*?)<\/script>/)[1];
+src=src.slice(0,src.indexOf('// ---------- boot ----------'));
+src=src.replace('new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" })','({setPixelRatio(){},setSize(){},render(){},shadowMap:{enabled:false}})');
+vm.runInContext(src+'\nwindow.H={ctx,startLevel,setState,step,fillSurge,updateTactics,collectPowerup,usePowerup,useSurge,liveThreat,announceThreat,endThreat,damageBoss,bossDown,finishLevel,breakSolid,fireRate,damage,get L(){return L},get state(){return state},save,bus}; Obj3D.setup(ctx); Powerups.setup(ctx);',sandbox);
+const H=sandbox.H,events=[];for(const n of ['belt','powerupGot','swapOffer','swapDone','swapExpired','powerupUse','threat','threatLive','threatEnd','surgeReady','bank','win','tacticsCoach'])H.bus.on(n,d=>events.push([n,d]));
+function start(l=2){H.startLevel(l);H.setState('play');events.length=0;}
+start();H.collectPowerup('shield');H.collectPowerup('giant');assert.deepEqual(Array.from(H.ctx.belt),['shield','giant']);const before=H.L.soldiers.length;
+H.collectPowerup('airstrike');H.L.time+=3.1;H.updateTactics(.01);assert.equal(H.L.soldiers.length,before+8);assert.equal(H.ctx.belt[0],'shield');
+H.collectPowerup('airstrike');H.usePowerup(1);assert.equal(H.ctx.belt[1],'airstrike');assert.equal(H.ctx.tactics.used,0);
+H.L.threats=[];H.L.enemies=[];H.L.solids=[];H.usePowerup(1);assert.equal(H.ctx.tactics.wasted,1);assert.equal(H.ctx.belt[1],null);
+H.setState('paused');assert.equal(H.usePowerup(0),false);assert.equal(H.ctx.belt[0],'shield');H.setState('play');
+start();H.fillSurge(1);assert(H.ctx.surgeReady);const uses=H.L.surges;H.L.idleT=10;H.step(.05);assert.equal(H.L.surge,1);assert.equal(H.L.surges,uses);
+H.setState('boss');H.L.boss.z=H.L.sz-20;H.useSurge();assert.equal(H.ctx.surgeReady,false);assert.equal(H.L.tactics.surgePerfect,1);assert(events.some(e=>e[0]==='powerupUse'&&e[1].type==='surge'&&e[1].perfect));
+start(3);const t=H.L.threats[0];H.L.sz=t.z+24;H.updateTactics(.01);assert.equal(H.ctx.threat.kind,'barricade');H.collectPowerup('giant');const score=H.L.score;H.usePowerup(0);assert.equal(H.L.score-score,900);assert.equal(H.L.tactics.perfect,1);assert.equal(H.L.combo,10);H.L.sz=t.z+10;H.updateTactics(.01);assert(t.actors.every(o=>!o.alive));assert(t.done);
+start(4);const m=H.L.threats[0];H.ctx.addSoldiers(45);H.L.sz=m.z+24;H.updateTactics(.01);H.collectPowerup('shield');H.usePowerup(0);const protectedN=H.L.soldiers.length;for(let i=0;i<100;i++){H.L.sz-=.05*8.5;H.updateTactics(.05);}assert.equal(H.L.soldiers.length,protectedN);
+start(4);H.setState('boss');H.L.boss.z=H.L.sz-14;H.collectPowerup('airstrike');const hp=H.L.boss.hp;H.usePowerup(0);assert(Math.abs(H.L.boss.hp-hp*.82)<1e-7);
+start(3);H.collectPowerup('shield');H.collectPowerup('giant');H.setState('boss');H.damageBoss(H.L.boss.hp);assert.equal(H.L.bankBonus,1);assert.equal(H.ctx.tactics.banked,2);assert(H.ctx.belt.every(x=>x===null));H.finishLevel(3);assert.equal(H.L.mult,4);assert.equal(H.state,'win');H.finishLevel(3);assert.equal(H.L.mult,4);
+for(let level=2;level<=8;level++){start(level);assert.equal(H.L.threats.length,level>=6?3:2);assert.equal(H.L.gates.filter(g=>g.halves.some(h=>h.powerup)).length,level>=3?1:0);for(let i=1;i<H.L.threats.length;i++)assert(H.L.threats[i-1].z-H.L.threats[i].z>80);}
+console.log('PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.');
+// Pure simulation smoke: actual core and power-up module, stubbing only DOM/graphics.
+for(let level=1;level<=8;level++){start(level);for(let i=0;i<6000&&['play','boss'].includes(H.state);i++){const L=H.L;let target=0;for(const g of L.gates){if(g.used||g.z>L.sz||g.z<L.sz-30)continue;const val=h=>h.powerup?L.soldiers.length+8:h.op==='x'?L.soldiers.length*h.v:L.soldiers.length+h.v;target=val(g.halves[0])>val(g.halves[1])?g.halves[0].x:g.halves[1].x;break;}L.targetX=H.state==='boss'?(L.boss.slamT>1.5?(L.boss.x>0?-5:5):0):target;H.step(.05);}console.log(JSON.stringify({level,state:H.state,squad:H.L.bossSoldiers||H.L.soldiers.length,used:H.ctx.tactics.used,perfect:H.ctx.tactics.perfect}));assert.equal(H.state,'win');}
+
+// The three introductory supplies must be on the belt before their first encounter,
+// even if steering misses the crate. No button is pressed during this check.
+for (const level of [2, 3, 4]) {
+  start(level);
+  const first = H.L.threats[0];
+  for (let i = 0; i < 400 && !first.live && !first.done; i++) {
+    H.L.targetX = 4.5; H.step(.05);
+  }
+  assert(first.live || first.done);
+  assert(H.ctx.belt.includes(first.counter), `Level ${level} teaching counter missing`);
+  assert(events.some(e => e[0] === 'tacticsCoach' && e[1].kind === first.counter));
+}
+// MISUSED gives no PERFECT score; repeat starts discard both offers and held SURGE.
+start(3); H.L.sz = H.L.threats[0].z + 24; H.updateTactics(.01);
+H.collectPowerup('shield'); const misuseScore = H.L.score; H.usePowerup(0);
+assert.equal(H.ctx.tactics.misused, 1); assert.equal(H.L.score, misuseScore);
+H.collectPowerup('shield'); H.collectPowerup('giant'); H.collectPowerup('airstrike'); H.fillSurge(1);
+start(3); assert.equal(H.L.swap, null); assert.equal(H.ctx.surgeReady, false); assert(H.ctx.belt.every(x => x === null));
+console.log('PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.');
+// Bomb ticks must not secretly deal additional boss damage after the initial 18%.
+start(4); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+H.collectPowerup('airstrike'); H.usePowerup(0);
+const afterStrike = H.L.boss.hp;
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'boss' });
+assert.equal(H.L.boss.hp, afterStrike);
+// The same bullet does exactly twice the boss damage while GIANT is active.
+const bossHits = [];
+for (const giant of [false, true]) {
+  start(3); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+  if (giant) H.ctx.setGiant(6);
+  H.L.bullets.push({ x: 0, z: H.L.boss.z + 1, vx: 0, life: 1, dmg: 10, splash: 0, pierce: 0 });
+  const hp = H.L.boss.hp; H.step(.02); bossHits.push(hp - H.L.boss.hp);
+}
+assert.deepEqual(bossHits, [10, 20]);
+// Counter clears a dense SWARM; road threat losses stay bounded without a counter.
+start(2); const swarm = H.L.threats[0]; H.L.sz = swarm.z + 24; H.updateTactics(.01);
+H.collectPowerup('airstrike'); H.usePowerup(0);
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'play' });
+assert(swarm.actors.filter(e => e.hp <= 0).length >= swarm.actors.length * .8);
+start(4); const mortar = H.L.threats[0]; H.L.sz = mortar.z + 24; H.updateTactics(.01);
+for (let i = 0; i < 130; i++) H.updateTactics(.05);
+assert(mortar.done); assert(mortar.lost <= mortar.lossCap); assert(H.L.soldiers.length >= 3);
+// Per-level label resources are disposed; old warning meshes detach on restart.
+let disposed = false;
+mortar.vis.sign.children[1].material.addEventListener('dispose', () => { disposed = true; });
+start(2); assert(disposed); assert.equal(mortar.vis.sign.parent, null);
+console.log('PASS: no extra boss splash, double GIANT damage, SWARM clearance, bounded losses, per-level visual disposal.');
+4:// Optional: --three /path/three.min.js --engine simulation (CPU fixture; no GPU claims).
+82:  // Reuse the established DOM/texture fixture, without running its old balance assertions.
+83:  let fixture=fs.readFileSync(path.join(ROOT,"tools/check-tactics.js"),"utf8").split("const H=sandbox.H,events=[];")[0].replace(/^#!.*\n/,"");
+84:  fixture=fixture.replace("performance:{now:()=>10000}","performance:require('perf_hooks').performance");
+85:  fixture=fixture.replace("ctx,startLevel,setState,step,", "ctx,stateHash,advanceTicks,advanceClock,resetProfile,profileSnapshot,setTestMode:v=>testMode=!!v,queueInput,startLevel,setState,step,");
+86:  const sandbox=new Function("require",fixture+"\nreturn sandbox;")(require),H=sandbox.H;
+87:  sandbox.__game={ctx:H.ctx,get L(){return H.L;},get state(){return H.state;},stateHash:H.stateHash,advance:H.advanceTicks,advanceClock:H.advanceClock,input:H.queueInput,setTestMode:H.setTestMode,profile:H.profileSnapshot,resetProfile:H.resetProfile};
+88:  for(const file of ["js/enemies.js","js/campaign.js"])if(fs.existsSync(file))vm.runInContext(fs.readFileSync(file,"utf8"),sandbox);
+89:  sandbox.Enemies?.setup(H.ctx);return sandbox;
+103:        const sandbox=makeSimulation();await vm.runInContext(`(${installBot.toString()})(${JSON.stringify(config)})`,sandbox);
+104:        batch=()=>sandbox.__campaignBatch(120);
+
+codex
+The sandbox blocked the local server and Chromium launch, so I can’t verify the rendered visuals here. I’m using the repository’s simulation fixture to check the real registry, collision code, and boss defeat handling without a browser.
+
+exec
+/bin/bash -lc "THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node <<'NODE'
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+let fixture=fs.readFileSync('tools/check-tactics.js','utf8').split('const H=sandbox.H,events=[];')[0].replace(/"'^#!.*'"\\n/,'');
+fixture=fixture.replace('ctx,startLevel,setState,step,','ctx,updateBullets,enemyDefs,bossDefs,startLevel,setState,step,');
+const box=new Function('require',fixture+'\\nreturn sandbox;')(require),H=box.H;
+vm.runInContext(fs.readFileSync('js/enemies.js','utf8'),box);box.Enemies.setup(H.ctx);
+function start(type){const m={id:'test-'+type,chapter:6,n:6,tag:'boss',theme:'arena',length:200,start:100,seed:9,events:[],boss:{type,hp:2000}};H.startLevel(1,{mission:m});H.setState('boss');H.L.sz=-200;const b=H.L.boss;b.state='walk';b.z=-230;return b;}
+const rows=[];
+for(const type of Object.keys(H.bossDefs)){
+ const b=start(type);b.hp=type==='colossus'?1000:600;const phaseEvents=[];
+ H.bus.on('bossPhase',ev=>phaseEvents.push({...ev}));
+ for(let i=0;i<1200&&b.hp>0;i++){b.def.update(b,1/60);H.bus.emit('tick',{L:H.L,dt:1/60,state:'boss'});}
+ const s=b._campaignEnemy;assert(s.config);assert(s.phase>=1);assert(s.a||s.cooldown>0||s.weak>0);
+ if(type==='colossus'){assert(s.split);assert.equal(s.half1.hp+s.half2.hp,b.hp);s.half1.hp=0;s.half2.hp=0;b.def.update(b,1/60);assert.equal(b.state,'down');assert(H.L.bankLocked);}
+ rows.push({type,phase:s.phase+1,split:s.split,pooled:H.ctx.telegraphGroup.children.length});
+}
+// Real swept bullet path: normal and weak shots, shield counters, and lethal half hit.
+let b=start('ogre');b._campaignEnemy.weak=1;b.weakT=1;let hp=b.hp;
+H.L.bullets.push({x:b.x,z:b.z+0.6,vx:0,life:1,dmg:10,splash:0,pierce:0});H.updateBullets(1/60);assert.equal(hp-b.hp,25);
+b=start('bulwark');b._campaignEnemy.wall=2;hp=b.hp;H.L.bullets.push({x:b.x,z:b.z+0.6,vx:0,life:1,dmg:10,splash:0,pierce:0});H.updateBullets(1/60);assert.equal(b.hp,hp);
+H.L.bullets.push({x:b.x,z:b.z+0.6,vx:0,life:1,dmg:10,splash:0,pierce:0,piercer:true,shieldPierce:true});H.updateBullets(1/60);assert.equal(hp-b.hp,10);
+b=start('colossus');b.hp=1000;for(let i=0;i<80;i++)b.def.update(b,1/60);const s=b._campaignEnemy;s.weak=1;const half=s.half1;half.hp=1;
+H.L.bullets.push({x:half.x,z:half.z+0.6,vx:0,life:1,dmg:10,splash:0,pierce:0});H.updateBullets(1/60);assert.equal(half.state,'dying');
+const poolSize=H.ctx.telegraphGroup.children.length;start('ogre');assert.equal(H.ctx.telegraphGroup.children.length,poolSize);assert.equal(H.ctx.telegraphGroup.children.filter(m=>m.visible).length,0);
+console.log('PASS real-engine integration: '+JSON.stringify(rows));console.log('PASS real swept bullets: 2.5x weak damage, shield/piercer, lethal half death, restart pool reuse.');
+NODE
+node --check js/enemies.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 117ms:
+PASS real-engine integration: [{"type":"ogre","phase":2,"split":false,"pooled":256},{"type":"bulwark","phase":2,"split":false,"pooled":256},{"type":"ravager","phase":2,"split":false,"pooled":256},{"type":"gunner","phase":2,"split":false,"pooled":256},{"type":"colossus","phase":2,"split":true,"pooled":256},{"type":"warlord","phase":3,"split":false,"pooled":256}]
+PASS real swept bullets: 2.5x weak damage, shield/piercer, lethal half death, restart pool reuse.
+
+codex
+Implemented [js/enemies.js](/home/user/my-first-repo/squad-surge/js/enemies.js) with six archetypes, minis, six phased bosses, pooled telegraphs, dodge lanes, weak points, and tinted sprite fallbacks.
+
+Syntax and behavior checks passed, including real-engine collision and boss defeat tests. Browser visual checks were blocked by sandbox restrictions. No other files edited; no git commands run.
+tokens used
+79,797
+Implemented [js/enemies.js](/home/user/my-first-repo/squad-surge/js/enemies.js) with six archetypes, minis, six phased bosses, pooled telegraphs, dodge lanes, weak points, and tinted sprite fallbacks.
+
+Syntax and behavior checks passed, including real-engine collision and boss defeat tests. Browser visual checks were blocked by sandbox restrictions. No other files edited; no git commands run.
+codex exit 0

@@ -3030,3 +3030,836 @@ function togglePause() {
   if (state === "play" || state === "boss" || state === "bonus") { resumeState = state; setState("paused"); }
   else if (state === "paused") setState(resumeState);
 
+exec
+/bin/bash -lc "cat > js/story.js <<'EOF'
+/* Operation Homeward presentation. Engine events are authoritative; UI records live
+   in ctx.save.storyUI (never a separate storage key). setup is safe to call twice. */
+window.Story = (() => {
+  'use strict';
+  let ctx, game, overlay, panel, homeButton, focusBefore, pending = null;
+  let ended = false, currentId = null, timers = [], disabled = [];
+  const offers = {}, elite = {};
+  const esc = s => String(s == null ? '' : s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c]));
+  const campaign = () => window.Campaign;
+  const missions = () => campaign()?.missions || {};
+  const chapters = () => campaign()?.chapters || [];
+  const all = () => chapters().flatMap(c => c.missions || []).map(id => missions()[id]).filter(Boolean);
+  const ready = () => "'!!(all().length && typeof ctx?.goMission === '"'function');
+  const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  function data() {
+    if ("'!ctx.save) return null;
+    const s = ctx.save.storyUI ||= {};
+    s.records ||= {}; s.vignettes ||= {}; s.offers ||= {};
+    return s;
+  }
+  const persist = () => { try { ctx.persist?.(); } catch (_) { /* memory-only is usable */ } };
+  const record = id => data()?.records[id] || {};
+  function stars(id) {
+    const r = record(id), engine = ctx.save?.campaign;
+    const v = r.stars ?? engine?.stars?.[id] ?? engine?.missions?.[id]?.stars ?? 0;
+    return Array.isArray(v) ? v.filter(Boolean).length : Math.max(0, Math.min(3, Number(v) || 0));
+  }
+  const cleared = id => !!record(id).won || stars(id) > 0;
+  const next = () => all().find(m => !cleared(m.id)) || all().at(-1);
+  const open = id => { const list = all(), i = list.findIndex(m => m.id === id); return i === 0 || (i > 0 && cleared(list[i - 1].id)); };
+  const chapterStars = c => c.missions.reduce((n, id) => n + stars(id), 0);
+  const complete = c => c.missions.every(cleared);
+  const bossNames = ['"'Ogre Warlord', 'Iron Bulwark', 'Dune Ravager', 'Harbor Gunner', 'Scrap Colossus', 'The Warlord, Reborn'];
+  const enemies = ['Brute', 'Shieldbearer · flank its shield or use splash', 'Charger & Bomber · dodge the rush and fuse', 'Rifleman & Medic · move off lasers; target healers', 'Splitter · leave space for its minis', 'Every enemy · combine your counters'];
+  const objectives = m => ['Win the mission', 'Keep at least 65% of your peak squad', m.skill?.text || 'Win without Assist'];
+  const tag = m => m.tag === 'boss' ? '♛ BOSS' : m.tag === 'hard' ? '☠ HARD' : 'MISSION';
+  function portrait(who) {
+    const name = ['rook', 'mira', 'warlord'].includes(who) ? who : 'rook';
+    return "'`<span class="st-portrait" aria-hidden="true"><b>${name[0].toUpperCase()}</b><img src="assets/story/${name}.webp" alt=""></span>`;
+  }
+  function line(pair) { return `<div class="st-radio">${portrait(pair?.[0])}<div><b>${esc(pair?.[0] || '"'rook')}</b><p>"'${esc(pair?.[1] || '"'')}</p></div></div>"'`; }
+  function imageFallback(root) { root.querySelectorAll('"'.st-portrait img').forEach(img => { img.onerror = () => img.remove(); }); }
+  function close() {
+    timers.forEach(clearTimeout); timers = [];
+    overlay?.remove(); overlay = panel = null;
+    game?.classList.remove('story-open');
+    disabled.forEach(([el, was]) => { el.inert = was; }); disabled = [];
+    if (focusBefore?.isConnected) focusBefore.focus();
+  }
+  function sheet(title, kind) {
+    const oldFocus = overlay ? focusBefore : document.activeElement;
+    close(); focusBefore = oldFocus;
+    overlay = document.createElement('div'); overlay.className = 'st-overlay';
+    overlay.innerHTML = "'`<section class="st-panel ${kind || '"''}\" role=\"dialog\" aria-modal=\"true\" aria-label=\""'${esc(title)}" tabindex="-1"></section>`;
+    ['"'pointerdown', 'pointerup', 'click'].forEach(type => overlay.addEventListener(type, e => e.stopPropagation()));
+    [...game.children].forEach(el => { disabled.push([el, el.inert]); el.inert = true; });
+    game.appendChild(overlay); game.classList.add('story-open');
+    panel = overlay.firstChild; panel.focus(); return panel;
+  }
+  function button(root, text, action, primary = false) {
+    const b = document.createElement('button'); b.className = 'btn ' + (primary ? 'go' : 'alt'); b.textContent = text;
+    b.onclick = action; root.appendChild(b); return b;
+  }
+  function refreshHome() {
+    if ("'!homeButton) return;
+    homeButton.hidden = !ready();
+    const n = next(), started = data()?.started || all().some(m => cleared(m.id));
+    homeButton.textContent = started && n ? `CONTINUE · Chapter ${n.chapter}` : '"'STORY';
+    game.classList.toggle('story-ready', ready());
+    const play = document.getElementById('playBtn'); if (play && ready()) play.textContent = 'ARCADE';
+  }
+  function map(chapterId) {
+    if ("'!ready()) return;
+    const p = sheet('"'Operation Homeward chapter map', 'st-map');
+    p.innerHTML = '<h2 class=\"stroke\">OPERATION HOMEWARD</h2><p>Relight the valley. Bring everyone home.</p>';
+    button(p, 'BACK', close);
+    const target = next();
+    chapters().forEach((c, i) => {
+      const district = document.createElement('section'); district.className = 'st-district' + (complete(c) ? ' restored' : ''); district.id = "'`st-chapter-${c.id}`;
+      const rescued = c.missions.reduce((n, id) => n + (Number(record(id).rescued) || 0), 0);
+      district.innerHTML = `<h3 class="stroke">${complete(c) ? '"'☀ ' : ''}CHAPTER "'${esc(c.id)} · ${esc(c.name)}</h3><p>${rescued} settlers rescued · ${chapterStars(c)}/18 ★</p><p>♛ ${esc(c.bossName || bossNames[i] || c.boss)}</p>`;
+      if (chapterStars(c) >= 15) {
+        const toggle = button(district, '"'ELITE ' + (elite[c.id] ? 'ON' : 'OFF'), () => { elite[c.id] = "'!elite[c.id]; map(c.id); });
+        toggle.setAttribute('"'aria-pressed', "'!!elite[c.id]);
+      }
+      const path = document.createElement('"'div'); path.className = 'st-path'; district.appendChild(path);
+      c.missions.forEach(id => {
+        const m = missions()[id]; if ("'!m) return;
+        const unlocked = open(id), n = stars(id), b = document.createElement('"'button');
+        b.className = 'st-node' + (id === target?.id ? ' next' : ''); b.disabled = "'!unlocked;
+        b.innerHTML = `<strong>${unlocked ? esc(m.n) : '"'🔒'} "'${m.tag === '"'boss' ? '♛' : m.tag === 'hard' ? '☠' : ''}</strong><span>"'${esc(m.title)}</span><small>${'"'★'.repeat(n)}"'${'"'☆'.repeat(3 - n)}"'${record(id).assisted ? '"' · ASSISTED' : ''}</small>"'`;
+        b.setAttribute('"'aria-label', "'`${m.title}, ${tag(m)}, ${n} of 3 stars${unlocked ? '"'' : ', locked'}"'`);
+        b.onclick = () => briefing(id); path.appendChild(b);
+      });
+      p.appendChild(district);
+    });
+    const selected = p.querySelector(`#st-chapter-${Number(chapterId || target?.chapter || 1)}`);
+    if (selected) p.scrollTop = Math.max(0, selected.offsetTop - p.offsetTop - 100);
+  }
+  function assist(root, id) {
+    const level = offers[id] || data()?.offers[id];
+    const label = document.createElement('"'label'); label.className = 'st-assist'; label.hidden = "'!level;
+    const input = document.createElement('"'input'); input.type = 'checkbox';
+    label.append(input, document.createTextNode("'` Assist${level >= 2 ? '"'+' : ''} · "'${level >= 2 ? '"'35' : '20'}% fewer/weaker enemies + extra drop (max 2 stars)"'`)); root.appendChild(label);
+    return () => input.checked ? (offers[id] || data()?.offers[id] || 1) : 0;
+  }
+  function launch(id, assistLevel, retry) {
+    if (!ready()) { close(); return; }
+    const m = missions()[id]; if (!m) return;
+    close();
+    if (retry && !assistLevel && typeof ctx.restartSame === '"'function') ctx.restartSame();
+    else ctx.goMission(id, { assist: assistLevel, elite: "'!!elite[m.chapter] });
+  }
+  function briefing(id) {
+    const m = missions()[id]; if (!m || !open(id)) return;
+    const p = sheet(m.title);
+    p.innerHTML = `<small>${tag(m)} · CHAPTER ${esc(m.chapter)}${elite[m.chapter] ? '"' · ELITE' : ''}</small><h2 class=\"stroke\">"'${esc(m.title)}</h2>` +
+      (m.brief || [['"'rook', 'Squad, move out.'], ['mira', 'Bring our settlers home.']]).slice(0, 2).map(line).join('') +
+      "'`<ul class="st-objectives">${objectives(m).map(t => `<li>☆ ${esc(t)}</li>`).join('"'')}</ul>"'`;
+    imageFallback(p); const selection = assist(p, id);
+    button(p, '"'START', () => launch(id, selection()), true); button(p, 'MAP', () => map(m.chapter));
+  }
+  const tips = {
+    'threat:swarm': 'Save AIRSTRIKE for the swarm warning.', 'threat:barricade': 'Use GIANT to break the barricade or steer through its gap.',
+    'threat:mortars': 'Use SHIELD when mortars land, or leave the marked lane.', 'threat:mortar': 'Leave the mortar marker before impact.',
+    rifleman: 'Change lanes as soon as a rifleman paints a laser.', charger: 'Sidestep the red lane arrow before the charger rushes.',
+    bomber: 'Shoot bombers early or move outside their fuse ring.', 'boss:slam': 'Leave the slam marker; strike after the impact.',
+    'boss:summon': 'Clear the summoned enemies before they surround you.', 'boss:charge': 'Move into a lane outside the boss charge arrows.',
+    'boss:barrage': 'Move away from the marked barrage lanes.', 'boss:shieldWall': 'Flank the shield wall and fire when its core opens.',
+    'boss:split': 'Keep space from both halves and use splash damage.', gate: 'Choose the safer gate; avoid subtracting from a small squad.',
+    swarm: 'Use AIRSTRIKE before the swarm reaches your squad.', attrition: 'Take recruit gates and save counters for the next threat.'
+  };
+  function hint(cause) {
+    return tips[cause] || (String(cause).startsWith('boss:') ? 'Dodge the marked attack, then fire during the weak point window.' : String(cause).startsWith('threat:') ? 'Watch the threat warning and use its matching counter.' : tips.attrition);
+  }
+  function vignette(c, m) {
+    const p = sheet("'`${c.name} restored`, '"'st-vignette');
+    const reward = window.Meta?.unlockChapter?.(c.id);
+    p.innerHTML = "'`<div class="st-tower" aria-hidden="true">☀</div><h2 class="stroke">${esc(c.name)} LIGHTS UP!</h2>${line(m.win)}<p class="st-reward">ARMORY UNLOCKED<br>${esc(reward?.name || '"'Chapter cosmetic')}</p>"'`;
+    const i = chapters().findIndex(x => x.id === c.id), upcoming = chapters()[i + 1];
+    p.innerHTML += upcoming ? `<h3>NEXT: ${esc(upcoming.name)}</h3><p>${esc(enemies[i + 1])}</p>` : '"'<h3>THE VALLEY IS HOME AGAIN.</h3>';
+    imageFallback(p); const s = data(); if (s) { s.vignettes[c.id] = true; persist(); }
+    button(p, upcoming ? 'NEXT DISTRICT' : 'MAP', () => map(upcoming?.id || c.id), true);
+  }
+  function results(d) {
+    const m = missions()[d.id]; if ("'!m || ended) return; ended = true;
+    const won = d.result === '"'win' || d.result === 'won' || d.result === true;
+    const bits = Array.isArray(d.stars) ? d.stars.map(Boolean) : [won, won && d.keptPct >= 65, won && "'!!d.skillOk];
+    if (!won) bits.fill(false); if (d.assisted) bits[2] = false;
+    const s = data(), old = record(d.id), fails = won ? 0 : (old.fails || 0) + 1;
+    if (s) {
+      s.records[d.id] = { ...old, won: old.won || won, stars: Math.max(stars(d.id), bits.filter(Boolean).length),
+        rescued: Math.max(old.rescued || 0, won ? Number(d.rescued) || 0 : 0), fails,
+        assisted: won ? (old.won ? old.assisted && !!d.assisted : !!d.assisted) : old.assisted };
+      if (won) { delete s.offers[d.id]; delete offers[d.id]; }
+      else if (fails >= 2) s.offers[d.id] = fails >= 4 ? 2 : 1;
+      persist();
+    }
+    const c = chapters().find(c => c.id === m.chapter);
+    const p = sheet(won ? '"'Mission complete' : 'Squad wiped out');
+    p.innerHTML = "'`<small>${esc(m.title)} · ${tag(m)}</small><h2 class="stroke">${won ? '"'MISSION COMPLETE"'!'"' : 'SQUAD WIPED OUT'}</h2><ul class=\"st-objectives\" aria-live=\"polite\"></ul><h3>SETTLERS RESCUED +"'${Math.max(0, Number(d.rescued) || 0)}</h3>${d.assisted ? '"'<p>ASSISTED · third star unavailable</p>' : ''}"'${won ? line(m.win) : `<p class="st-tip">${esc(hint(d.cause))}</p>`}`;
+    const list = p.querySelector('"'ul');
+    objectives(m).forEach((text, i) => {
+      const row = document.createElement('li'); row.textContent = "'`☆ ${text}`; list.appendChild(row);
+      const reveal = () => { row.textContent = `${bits[i] ? '"'★ ✓' : '☆ —'} "'${text}`; row.classList.toggle('"'earned', bits[i]); };
+      if (reduced()) reveal(); else timers.push(setTimeout(reveal, 250 + i * 350));
+    });
+    imageFallback(p); const selection = assist(p, d.id);
+    const after = all()[all().findIndex(x => x.id === d.id) + 1];
+    const finish = action => { if (won && c && complete(c) && "'!data()?.vignettes[c.id]) vignette(c, m); else action(); };
+    if (won && after) button(p, '"'NEXT MISSION', () => finish(() => briefing(after.id)), true);
+    else if (won && c && complete(c) && "'!data()?.vignettes[c.id]) button(p, '"'DISTRICT RESTORED', () => vignette(c, m), true);
+    button(p, 'RETRY', () => launch(d.id, selection(), true), "'!won);
+    button(p, '"'MAP', () => finish(() => map(m.chapter)));
+    pending = { id: d.id, rerenderAssist: () => {
+      const label = p.querySelector('.st-assist'); if ("'!label) return;
+      const replacement = document.createElement('"'div'); assist(replacement, d.id);
+      // Keep the selection closure attached to the original checkbox.
+      label.hidden = false; label.lastChild.textContent = replacement.firstChild.lastChild.textContent;
+    } };
+    refreshHome();
+  }
+  function radio(d) {
+    if ("'!d.text || !['"'play', 'boss', 'bonus'].includes(ctx.state)) return;
+    const root = document.getElementById('storyRadio'); root.innerHTML = line([d.who, d.text]); root.hidden = false; imageFallback(root);
+    clearTimeout(radio.timer); radio.timer = setTimeout(() => { root.hidden = true; }, 4500);
+  }
+  const CSS = "'`
+#game.story-open{touch-action:pan-y}.st-overlay{position:absolute;inset:0;z-index:20;padding:12px;background:#0b1328df;display:grid;place-items:center;touch-action:pan-y}
+.st-panel{width:100%;max-width:420px;max-height:100%;overflow:auto;overscroll-behavior:contain;box-sizing:border-box;border:3px solid #0d1630;border-radius:24px;padding:18px;background:linear-gradient(#304e87,#172647);color:#fff;text-align:center;font:800 14px Nunito,sans-serif;box-shadow:0 6px 0 #0d1630;touch-action:pan-y}
+.st-panel h2,.st-panel h3{font-family:'"'Lilita One',sans-serif;font-weight:400;margin:10px 0}.st-panel h2{font-size:29px}.st-panel p{margin:7px 0}.st-panel .btn{font-size:20px;min-height:44px;margin-top:12px}.st-panel button:focus-visible,#storyHome:focus-visible{outline:3px solid #fff;outline-offset:3px}
+#storyHome{font-size:24px;margin:0 auto 10px;width:90%;display:block}#storyHome[hidden]{display:none}.story-ready #playBtn{font-size:22px;min-height:46px}.story-ready .hint{display:none}.story-ready #home>div:last-child{padding-bottom:12px}.story-ready #home .playbtn{margin-bottom:0}
+.st-map{background-image:var(--story-map,linear-gradient(150deg,#19273e,#485461));background-size:cover;background-position:center}.st-district{position:relative;margin:22px 0;padding:12px;border-radius:20px;border:2px solid #657283;background:linear-gradient(135deg,#3d4959ed,#243142ed);overflow:hidden}.st-district.restored{background:linear-gradient(135deg,#637d39ed,#238276ed);border-color:#ffdb68;box-shadow:inset 0 0 45px #ffc94b44}.st-district h3{font-size:23px}.st-district>p{font-size:12px}.st-path{position:relative;display:flex;flex-direction:column;align-items:center;gap:24px;padding:16px 0}.st-path:before{content:'';position:absolute;top:0;bottom:0;left:47%;width:6%;background:repeating-linear-gradient(#c8b88b 0 15px,#5e655f 15px 25px);border:4px solid #142339;transform:rotate(4deg)}
+.st-node{position:relative;width:72%;min-height:90px;border:3px solid #0d1630;border-radius:20px;background:linear-gradient(#57b9ff,#2565d6);box-shadow:0 5px 0 #0d1630;color:white;display:grid;gap:3px;padding:10px;font:15px 'Lilita One',sans-serif}.st-node:nth-child(odd){align-self:flex-start}.st-node:nth-child(even){align-self:flex-end}.st-node strong{font-size:24px}.st-node small{color:#ffe478;font-size:20px}.st-node:disabled{background:#4e586b;color:#c4cad6}.st-node.next{animation:st-pulse 1.4s ease-in-out infinite}.st-radio{display:flex;align-items:center;gap:10px;text-align:left;padding:9px;background:#101d35c9;border-radius:14px;margin:8px 0}.st-radio b{text-transform:uppercase;color:#ffdb68}.st-radio p{font:800 13px/1.35 Nunito,sans-serif}.st-portrait{position:relative;flex:none;width:48px;height:54px;border:2px solid #0d1630;border-radius:12px;background:linear-gradient(#6bbbf0,#274d90);overflow:hidden;display:grid;place-items:center}.st-portrait>b{font:32px 'Lilita One',sans-serif}.st-portrait img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.st-objectives{list-style:none;padding:0;text-align:left}.st-objectives li{padding:9px;border-bottom:1px solid #ffffff20;color:#b8c7de}.st-objectives .earned{color:#ffe278}.st-assist{display:flex;gap:9px;text-align:left;align-items:center;padding:12px;background:#263b60;border-radius:12px;font-size:12px}.st-assist[hidden]{display:none}.st-assist input{width:24px;height:24px;flex:none;accent-color:#ffc928}.st-tip,.st-reward{color:#ffdf84}.st-tower{font-size:90px;color:#ffdf69;text-shadow:0 0 45px #ffc928;animation:st-light 1.5s ease-out both}.st-vignette{background:radial-gradient(at top,#899f4b,#245865 65%,#182b49)}
+#storyRadio{position:absolute;left:5%;right:5%;top:158px;z-index:7;pointer-events:none;color:white}#storyRadio[hidden]{display:none}#storyRadio .st-radio{box-shadow:0 3px 0 #0d1630}#storyRadio .st-portrait{width:36px;height:40px}
+@keyframes st-pulse{50%{box-shadow:0 5px 0 #0d1630,0 0 0 6px #ffdb6877;filter:brightness(1.15)}}@keyframes st-light{from{filter:grayscale(1);opacity:.2}to{filter:none;opacity:1}}@media(prefers-reduced-motion:reduce){.st-node.next,.st-tower{animation:none}}@media(max-height:650px){.st-panel{padding:12px}.st-panel h2{font-size:24px}.st-radio{padding:6px}#storyHome{font-size:20px;min-height:44px}}
+"'`;
+  function setup(c) {
+    if (ctx || !c?.bus || !c.gameEl) return;
+    ctx = c; game = c.gameEl;
+    const style = document.createElement('"'style'); style.textContent = CSS; document.head.appendChild(style);
+    const play = document.getElementById('playBtn');
+    if (play) {
+      homeButton = document.createElement('button'); homeButton.id = 'storyHome'; homeButton.className = 'btn go stroke'; homeButton.hidden = true;
+      homeButton.onclick = () => map(); homeButton.addEventListener('pointerdown', e => e.stopPropagation()); play.before(homeButton);
+      const old = play.onclick; play.onclick = e => { if (typeof ctx.goArcade === 'function') ctx.goArcade(ctx.save?.level || 1); else old?.call(play, e); };
+    }
+    const toast = document.createElement('div'); toast.id = 'storyRadio'; toast.hidden = true; toast.setAttribute('aria-live', 'polite'); game.appendChild(toast);
+    const art = new Image(); art.onload = () => game.style.setProperty('--story-map', 'url(\"assets/story/map.webp\")'); art.src = 'assets/story/map.webp';
+    c.bus.on('missionStart', d => { close(); currentId = d.id; ended = false; pending = null; const s = data(); if (s) { s.started = true; persist(); } refreshHome(); });
+    c.bus.on('missionEnd', d => results(d));
+    c.bus.on('assistOffer', d => { offers[d.id] = d.level; const s = data(); if (s) { s.offers[d.id] = d.level; persist(); } if (pending?.id === d.id) pending.rerenderAssist(); });
+    c.bus.on('radio', radio);
+    c.bus.on('levelStart', () => { close(); toast.hidden = true; pending = null; ended = false; currentId = null; });
+    c.bus.on('state', d => { if (d.to === 'home') close(); if ("'!['"'play', 'boss', 'bonus'].includes(d.to)) toast.hidden = true; refreshHome(); });
+    window.addEventListener('keydown', e => {
+      if ("'!overlay) return;
+      e.stopImmediatePropagation();
+      if (e.key === '"'Escape') { e.preventDefault(); if (pending) map(missions()[pending.id]?.chapter); else close(); }
+      if (e.key === 'Tab') {
+        const nodes = [...panel.querySelectorAll('button:not(:disabled),input')].filter(el => "'!el.closest('"'[hidden]'));
+        const index = nodes.indexOf(document.activeElement), nextIndex = (index + (e.shiftKey ? -1 : 1) + nodes.length) % nodes.length;
+        e.preventDefault(); nodes[nextIndex]?.focus();
+      }
+    }, true);
+    refreshHome();
+  }
+  return { setup, map, briefing, hint, refreshHome };
+})();
+EOF" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "sed -n '588,615p' js/meta.js; sed -n '702,733p' js/meta.js; rg -n 'enqueue\\(' js/juice.js | head" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+function retryRun(d) {
+  const L = ctx.L || {};
+  const mode = d.mode || L.mode || "normal", level = d.level || L.level;
+  if (ctx.goMode) ctx.goMode({ mode, level, modifier: d.modifier != null ? d.modifier : L.modifier, seed: d.seed != null ? d.seed : L.seed, next: "play" });
+  else if (window.__game && __game.goLevel) __game.goLevel(level, "play");
+}
+function onWin(d) {
+  d = d || {};
+  const L = ctx.L || {};
+  const noLoss = run.lost === 0;
+  finishTactics(true);
+  S().wins++; S().bosses++; S().maxSquad = Math.max(S().maxSquad, d.n || 0);
+  const total = d.total != null ? d.total : d.score;
+  if (total != null) S().maxScore = Math.max(S().maxScore, total);
+  if (d.mult) S().maxMult = Math.max(S().maxMult, d.mult);
+  const bc = d.bestCombo != null ? d.bestCombo : L.bestCombo || run.combo; S().maxCombo = Math.max(S().maxCombo, bc || 0);
+  const kills = d.kills != null ? d.kills : run.kills;
+  S().maxRunKills = Math.max(S().maxRunKills, kills || 0);
+  if (noLoss) S().noLoss++;
+  const wasActive = active(); // level 2 clear unlocks the meta
+  let dinfo = null, drec = null;
+  if (d.mode === "daily") { dinfo = dailyInfo(); drec = recordDaily({ ...d, stars: d.stars }); }
+  if (wasActive) {
+    ensureMissions();
+    feed("win", 1); feed("star", d.stars || 0); feed("squadwin", d.n || 0);
+    if (total != null) feed("score", total);
+    if (d.mult > 1) feed("finale", d.mult);
+    if (noLoss) feed("noloss", 1);
+  if (d.newBestScore && false) burst(null);
+}
+function burst(el) {
+  if (!el) return;
+  el.innerHTML = Array.from({ length: 14 }, (_, i) => { const a = i / 14 * Math.PI * 2, r = 60 + Math.random() * 40; return `<i style="--dx:${Math.cos(a) * r}px;--dy:${Math.sin(a) * r * .7}px;background:${i % 2 ? "#ffd84a" : "#ff7a5a"}"></i>`; }).join("");
+  setTimeout(() => { el.innerHTML = ""; }, 900);
+}
+
+/* ---------------- near-miss (lose) ---------------- */
+function onLose(d) {
+  d = d || {};
+  finishTactics(false);
+  const L = ctx.L || {};
+  if (active()) { feed("combo", L.bestCombo || run.combo || 0); feed("runkills", run.kills); }
+  S().maxCombo = Math.max(S().maxCombo, L.bestCombo || run.combo || 0);
+  S().maxRunKills = Math.max(S().maxRunKills, run.kills);
+  persist(); checkTrophies();
+  const modal = $("loseModal"), pn = modal && q(".panel", modal); if (!pn) return;
+  q(".mm-near", pn) && q(".mm-near", pn).remove();
+  modal.classList.add("mm-on");
+  const lv = L.level || 1, bests = (gsave().bestScore || {}), bestS = bests[lv];
+  let head, sub;
+  if (d.atBoss && d.bossPct != null) { head = `Boss at ${Math.round(d.bossPct)}%!`; sub = d.bossPct <= 30 ? "So close. One more push." : "Hit it harder next time."; }
+  else { const p = d.pct != null ? d.pct : Math.floor((L.reached || 0) * 100); head = `${p}% of the way`; sub = p >= 70 ? "Almost there." : "Grab more gates to grow the squad."; }
+  const lines = [`<div class="ln">${sub}</div>`];
+  const near = d.atBoss ? d.bossPct != null && d.bossPct <= 30 : (d.pct != null ? d.pct : (L.reached || 0) * 100) >= 70;
+  const tip = near && tacticsTip();
+  if (tip) lines.push(`<div class="ln">${tip}</div>`);
+  const prevPct = gsave().best && gsave().best[lv];
+  if (bestS) lines.push(`<div class="ln">Best score ${fmt(bestS)}${d.score != null ? " · this run " + fmt(d.score) : ""}</div>`);
+  else if (d.score != null) lines.push(`<div class="ln">Score ${fmt(d.score)}</div>`);
+  if (prevPct && prevPct < 1 && !d.atBoss) lines.push(`<div class="ln">Best run ${Math.floor(prevPct * 100)}%</div>`);
+156:      if (d.perfect && type) enqueue("PERFECT " + type.toUpperCase() + "!", { color: "#ffd84a", size: 9, ring: true, priority: true });
+162:      } else if (d.misused) enqueue("MISFIRE", { color: "#a8b0be", size: 5 });
+167:      enqueue(`BANKED ×${count} → +${bonus.toFixed(1)}×`, { color: "#ffd84a", size: 7 });
+169:    on("surgeReady", () => { if (!readyShown) { readyShown = true; enqueue("SURGE READY!", { color: "#ffd84a", icon: "surge" }); } });
+212:    function enqueue(text, options = {}) {
+243:      enqueue(isBoss ? "BOSS!" : `LEVEL ${level ? level.level : (ctx.L ? ctx.L.level : 1)}`, {
+397:    on("gatePass", ({ before, after, half }) => { if (half && half.jackpot) { flash = 1; enqueue("JACKPOT!", { icon: "pu-jackpot", color: "#ffd84a" }); } if (after > before) fov(5, .35); else if (after < before) jolt(.2, .2); });
+405:      enqueue(["NICE", "GREAT", "SURGE!", "UNSTOPPABLE"][rank - 1], {
+413:      if (on) { if (!reduced) surgeKick = .8; enqueue("SURGE!", { icon: "surge", color: "#ffd84a", size: 10 }); }
+417:    on("airdrop", () => enqueue("SUPPLY DROP!", { icon: "airdrop", color: "#8bd9ff" }));
+
+codex
+The map, briefing, results, Assist controls, and district vignette are implemented. I’m now connecting chapter cosmetics to the armory and checking that the UI handles either result-event order without double-counting medals or trophies.
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/meta.js'
+s=open(p).read().replace('const active = () => (gsave().unlocked || 1) >= 3;', 'const active = () => (gsave().unlocked || 1) >= 3 || "'!!gsave().storyUI?.started;'"')
+s=s.replace('const totalStars = () => Object.values(gsave().stars || {}).reduce((a, b) => a + (+b || 0), 0);', 'const storyStars = () => Object.values(gsave().storyUI?.records || {}).map(r => Number(r.stars) || 0);\\nconst totalStars = () => Object.values(gsave().stars || {}).reduce((a, b) => a + (+b || 0), 0) + storyStars().reduce((a, b) => a + b, 0);')
+s=s.replace('Object.values(gsave().stars || {}).filter(v => v >= 3).length;', 'Object.values(gsave().stars || {}).filter(v => v >= 3).length + storyStars().filter(v => v >= 3).length;')
+s=s.replace('  return out;\\n}\\nfunction checkUnlocks()', '''  for (const it of out) if (gsave().storyUI?.cosmetics?.[it.kind + \":\" + it.id]) it.req = { ok: true, need: 0, text: \"Chapter reward\" };
+  return out;
+}
+// Chapter rewards use the same armory items, equip buttons and unlock toast.
+function unlockChapter(id) {
+  if ("'!ctx || !M || !ctx.save) return null;
+  const list = skins(), item = list[1 + ((Number(id) - 1) % Math.max(1, list.length - 1))] || list[0];
+  const s = ctx.save.storyUI ||= {}; s.cosmetics ||= {};
+  s.cosmetics["skin:" + item.id] = true;
+  ctx.persist?.(); checkUnlocks(); checkTrophies();
+  return item;
+}
+function checkUnlocks()'"''')
+s=s.replace('const on = (ctx.state === \"home\") && active() && "'!openedPanel;'"', 'const on = (ctx.state === \"home\") && (active() || (window.Campaign && ctx.goMission)) && "'!openedPanel;'"')
+s=s.replace('  c.hidden = false;\\n  c.style.display = \"\";', '  c.hidden = "'!active();'"\\n  c.style.display = \"\";')
+s=s.replace('  d = d || {};\\n  const L = ctx.L || {};\\n  const noLoss', '  d = d || {};\\n  if (run.resultRecorded) return;\\n  run.resultRecorded = true;\\n  const L = ctx.L || {};\\n  const noLoss',1)
+s=s.replace('  buildResults(d, { kills, bc, total, dinfo, drec });', '  if ("'!ctx.mission && d.mode !== "campaign" && d.mode !== "story") buildResults(d, { kills, bc, total, dinfo, drec });'"')
+s=s.replace('function onLose(d) {\\n  d = d || {};', 'function onLose(d) {\\n  d = d || {};\\n  if (run.resultRecorded) return;\\n  run.resultRecorded = true;')
+s=s.replace('  const modal = "'$("loseModal"), pn = modal && q(".panel", modal); if (!pn) return;'"', '  if (ctx.mission || d.mode === \"campaign\" || d.mode === \"story\") return;\\n  const modal = "'$("loseModal"), pn = modal && q(".panel", modal); if (!pn) return;'"')
+s=s.replace('  on(\"win\", onWin);', '''  on(\"missionStart\", () => { ensureMissions(); });
+  on(\"missionEnd\", d => {
+    // Defer until all missionEnd listeners and any legacy win/lose event finish.
+    const thisRun = run;
+    Promise.resolve().then(() => tryF(() => {
+      if (run "'!== thisRun || run.resultRecorded) return;
+      const won = d.result === "win" || d.result === "won" || d.result === true;
+      const result = { ...d, mode: "campaign", stars: Array.isArray(d.stars) ? d.stars.filter(Boolean).length : Number(d.stars) || 0,
+        n: ctx.L?.soldiers?.length || 0, score: ctx.L?.score || 0 };
+      if (won) onWin(result); else onLose(result);
+    }));
+  });
+  on("win", onWin);'"''')
+s=s.replace('    refreshHome();\\n    window.addEventListener(\"load\"', '    window.Story?.setup?.(ctx);\\n    refreshHome();\\n    window.addEventListener(\"load\"')
+s=s.replace('window.Meta = { setup,', 'window.Meta = { setup, unlockChapter,')
+open(p,'w').write(s)
+p='js/juice.js';s=open(p).read();s=s.replace('    on(\"bossEnrage\",', '''    on(\"bossPhase\", ({ phase } = {}) => {
+      enqueue("'`BOSS PHASE ${Number.isFinite(Number(phase)) ? Number(phase) : "SHIFT"}!`, { color: "#ff8563", icon: "boss", priority: true });
+      pulse();
+    });
+    on("bossWeak", ({ on: weak } = {}) => {
+      if (weak) enqueue("WEAK POINT!", { color: "#ffe478", size: 9, priority: true, ring: true });
+    });
+    on("bossEnrage",'"''');open(p,'w').write(s)
+PY
+node --check js/story.js
+node --check js/meta.js
+node --check js/juice.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "ls -la; rg -n 'campaign|missionEnd|goMission|storyUI' index.html | head -55; rg --files -g '*test*' -g 'package*' -g '*playwright*' -g 'AGENTS.md' .agents .codex tools 2>/dev/null" in /home/user/my-first-repo/squad-surge
+ exited 1 in 0ms:
+total 128
+drwxr-xr-x 11 root root  4096 Nov  7 20:16 .
+drwxr-xr-x  6 root root  4096 Nov  6 20:09 ..
+dr-xr-xr-x  2 root root    40 Nov  7 20:18 .agents
+dr-xr-xr-x  2 root root    40 Nov  7 20:18 .aws
+dr-xr-xr-x  2 root root    40 Nov  7 20:18 .codex
+dr-xr-xr-x  2 root root    40 Nov  7 20:18 .git
+-rw-r--r--  1 root root  4036 Nov  6 19:19 README.md
+drwxr-xr-x 16 root root  4096 Nov  7 20:16 art-src
+drwxr-xr-x  8 root root  4096 Nov  7 20:16 assets
+drwxr-xr-x  4 root root  4096 Nov  7 20:15 design
+-rw-r--r--  1 root root 97115 Nov  7 13:05 index.html
+drwxr-xr-x  2 root root  4096 Nov  7 20:17 js
+drwxr-xr-x  2 root root  4096 Nov  7 20:15 tools
+
+exec
+/bin/bash -lc "node -e \"for (const m of ['playwright','puppeteer','jsdom']) { try { console.log(m,require.resolve(m)); } catch {} }\"; rg -n 'SAVE_KEY|SKINS =' index.html; ls /tmp" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+playwright /opt/node-tools/node_modules/playwright/index.js
+199:const SAVE_KEY = "squad-surge-v1";
+200:const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
+206:function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
+227:const SKINS = {                                                    // squad colours: recolour the blue uniform and helmet in the sprite shader
+a2-bot-final.log
+a2-bot-first.log
+a2-check-tactics.js
+a2-check.log
+a2-inline-7.js
+a2-regression.js
+a2-sim-first.log
+a2-sim-second.log
+a2-sim-third.log
+a2-sim.js
+c1.png
+c2.png
+c3.png
+c4.png
+cc-socks
+check-tactics-visuals.js
+check-tactics.js
+chime.bak
+chk.js
+claude-0
+claude-append-system-prompt.txt
+claude-code-1034348734.diag.log
+claude-code-1368653717.diag.log
+claude-code-2355450372.diag.log
+claude-code-2463718541.diag.log
+claude-code-247197849.diag.log
+claude-code-3045239895.diag.log
+claude-code-4039711564.diag.log
+claude-code-4072892809.diag.log
+claude-code-589033736.diag.log
+claude-code-596412939.diag.log
+claude-code-807780561.diag.log
+claude-code-896049794.diag.log
+claude-code.log
+claude-command
+code-sign
+codesign-mcp-config.json
+codex-bwrap-synthetic-mount-targets-0
+codex-daemon-0
+e1-baseline.html
+e1-edit.py
+e1-objects-baseline.js
+e1-powerups-baseline.js
+env-manager.log
+environment-manager-106630266.diag.log
+environment-manager-1283055106.diag.log
+environment-manager-142058170.diag.log
+environment-manager-1825226991.diag.log
+environment-manager-1830460626.diag.log
+environment-manager-2173333106.diag.log
+environment-manager-2542601094.diag.log
+environment-manager-3535094293.diag.log
+environment-manager-3568184427.diag.log
+environment-manager-399380278.diag.log
+environment-manager-4148071494.diag.log
+environment-manager-767402411.diag.log
+environment-manager-cse_01KHq9E4PP77B82NWFRYgzJt.lock
+environment-manager-cse_01KHq9E5MBREE6g39ggw2JyL.lock
+environment-manager.out
+gen_.log
+gen_arena.log
+gen_bridge.log
+gen_desert.log
+gen_g.log
+gen_logo.log
+gen_p1.log
+gen_p2.log
+gen_pier.log
+gen_ruins.log
+gen_sa2.log
+gen_sb2.log
+gen_st.log
+gen_sw.log
+gen_town.log
+hero-new.js
+hsperfdata_root
+ic1.log
+ic2.log
+initgoogle_syslog_dir.0
+lamp.bak
+mat-debug-173.log
+mat-debug-954.log
+mcp-config-cse_01KHq9E4PP77B82NWFRYgzJt.json
+node-compile-cache
+playwright-artifacts-40IjVM
+playwright-artifacts-Ufukba
+playwright-artifacts-h8kyXy
+playwright-artifacts-umTazL
+playwright_chromiumdev_profile-LmvxWU
+playwright_chromiumdev_profile-e0Yw2Z
+playwright_chromiumdev_profile-gckbzO
+playwright_chromiumdev_profile-oSbPzq
+pu.log
+pulse-PKdhtXMmr18n
+ruby-build.20261027194449.544.log
+ruby-build.20261027194558.12508.log
+ruby-build.20261027194705.24690.log
+sky.log
+span.js
+squad-final-inline-7.js
+squad-inline-7.js
+tactics-core.py
+tactics-functions.txt
+tactics-powerups.py
+tactics-visuals.py
+title.bak
+uv-22a0e7931f9bd769.lock
+uv-266d0b89619b88f5.lock
+uv-2efeda42c0254870.lock
+uv-34f8a03ede367f42.lock
+uv-355b0858434c27c0.lock
+uv-4a82edf34c5d495d.lock
+uv-5ff565eb2d7e502e.lock
+uv-bcb837755ba79986.lock
+uv-e0680593bbb538ab.lock
+v8-compile-cache-0
+wick-numeric.js
+wick-qa.js
+x.png
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/story.js';s=open(p).read().replace('let ended = false, currentId = null, timers = [], disabled = [];', 'let ended = false, currentAssist = 0, lastResult = null, timers = [], disabled = [];')
+s=s.replace(\"button(p, 'BACK', close);\", \"button(p, 'BACK', () => { if (lastResult) results(lastResult, true); else close(); });\")
+s=s.replace(\"if (retry && "'!assistLevel && typeof ctx.restartSame === '"'function')\", \"if (retry && assistLevel === currentAssist && typeof ctx.restartSame === 'function')\")
+s=s.replace('function results(d) {\\n    const m = missions()[d.id]; if ("'!m || ended) return; ended = true;'"', 'function results(d, replay = false) {\\n    const m = missions()[d.id]; if ("'!m || (ended && !replay)) return; ended = true; lastResult = d;'"')
+s=s.replace('    if (s) {\\n      s.records[d.id]', '    if (s && "'!replay) {'"\\n      s.records[d.id]')
+s=s.replace('    const p = sheet(won ? \\'Mission complete\\' : \\'Squad wiped out\\');', \"    if (won && c && complete(c)) window.Meta?.unlockChapter?.(c.id);\\n    const p = sheet(won ? 'Mission complete' : 'Squad wiped out');\")
+s=s.replace('close(); currentId = d.id; ended = false; pending = null;', 'close(); currentAssist = Number(d.assist) || 0; ended = false; pending = null; lastResult = null;')
+s=s.replace('pending = null; ended = false; currentId = null;', 'pending = null; ended = false; lastResult = null;')
+s=s.replace(\"if (d.to === 'home') close();\", \"if (d.to === 'home') { close(); pending = null; lastResult = null; }\")
+# Home keyboard must activate focused buttons instead of the engine's implicit play shortcut.
+s=s.replace('      if ("'!overlay) return;'"\\n      e.stopImmediatePropagation();', \"      if ("'!overlay) {'"\\n        if (ctx.state === 'home' && ready() && document.activeElement?.tagName === 'BUTTON' && ['Enter', ' '].includes(e.key)) e.stopImmediatePropagation();\\n        return;\\n      }\\n      e.stopImmediatePropagation();\")
+open(p,'w').write(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat > /tmp/story-ui-check.cjs <<'EOF'
+const { chromium } = require('/opt/node-tools/node_modules/playwright');
+const fs = require('fs');
+(async () => {
+ const browser = await chromium.launch({headless:true,args:['--no-sandbox']});
+ const page = await browser.newPage({viewport:{width:390,height:844}}); const errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ let html=fs.readFileSync('index.html','utf8').replace(/<script[\\s\\S]*?<\\/script>/g,'');
+ await page.setContent(html);
+ await page.evaluate(()=>{
+  window.Campaign={chapters:[],missions:{}};
+  for(let c=1;c<=6;c++){let chapter={id:c,name:['Old Town','Red Bridge','Dust Road','The Pier','Broken Blocks','The Arena'][c-1],missions:[]}; Campaign.chapters.push(chapter);
+   for(let n=1;n<=6;n++){let id="'`c${c}m${n}`; chapter.missions.push(id); Campaign.missions[id]={id,chapter:c,n,title:`Mission ${c}.${n}`,tag:n===6?'"'boss':n===5?'hard':'normal',skill:{text:'No wasted power-ups'},brief:[['rook','Move out, squad.'],['mira','Settlers ahead.']],win:['rook','The tower is lit.']};}}
+  const bus={h:{},on(k,f){(this.h[k]||=[]).push(f)},emit(k,d){(this.h[k]||[]).forEach(f=>f(d))}};
+  window.testCtx={bus,gameEl:document.getElementById('game'),"'$:id=>document.getElementById(id),save:{level:1,unlocked:1,stars:{}},state:'"'home',L:{soldiers:[],mode:'campaign'},persist(){},goMission(id,opts){this.lastLaunch={id,opts};this.state='play';bus.emit('levelStart',{});bus.emit('missionStart',{id,assist:opts.assist});bus.emit('state',{to:'play'});},restartSame(){this.retried=true;this.goMission(this.lastLaunch.id,this.lastLaunch.opts)},goMode(){},setSkin(){}};
+ });
+ for(const path of ['js/meta.js','js/story.js']) await page.addScriptTag({path});
+ await page.evaluate(()=>{Meta.setup(testCtx); Story.setup(testCtx)});
+ const assert=async(condition,message)=>{if("'!await condition())throw Error(message)};
+ await assert(()=>page.locator('"'#storyHome').isVisible(),'Story visible');
+ await page.click('#storyHome');
+ await assert(()=>page.locator('.st-node').count().then(n=>n===36),'36 nodes');
+ await assert(()=>page.locator('.st-node:disabled').count().then(n=>n===35),'35 locked nodes');
+ await page.locator('.st-node').first().click();
+ await assert(()=>page.locator('.st-radio').count().then(n=>n===2),'2 brief lines');
+ await page.getByRole('button',{name:'START',exact:true}).click();
+ const end=async(d)=>page.evaluate(d=>testCtx.bus.emit('missionEnd',d),d);
+ await end({id:'c1m1',result:'lose',stars:[false,false,false],cause:'charger',rescued:0});
+ await assert(()=>page.locator('.st-tip').textContent().then(t=>t.includes('Sidestep')),'cause hint');
+ await page.getByRole('button',{name:'RETRY',exact:true}).click();
+ await assert(()=>page.evaluate(()=>testCtx.retried),'same seed retry');
+ await end({id:'c1m1',result:'lose',stars:[false,false,false],cause:'bomber',rescued:0});
+ await assert(()=>page.locator('.st-assist').isVisible(),'assist after 2 losses');
+ await page.locator('.st-assist input').check(); await page.getByRole('button',{name:'RETRY',exact:true}).click();
+ await assert(()=>page.evaluate(()=>testCtx.lastLaunch.opts.assist===1),'assist launch');
+ await end({id:'c1m1',result:'win',stars:[true,true,true],keptPct:80,skillOk:true,rescued:7,assisted:true});
+ await assert(()=>page.evaluate(()=>testCtx.save.storyUI.records.c1m1.stars===2),'assisted star cap');
+ await page.getByRole('button',{name:'MAP',exact:true}).click(); await page.getByRole('button',{name:'BACK',exact:true}).click();
+ await assert(()=>page.locator('h2').filter({hasText:'MISSION COMPLETE"'!'"'}).isVisible(),'map returns results');
+ await page.evaluate(()=>{for(let n=1;n<=6;n++)testCtx.save.storyUI.records["'`c1m${n}`]={won:true,stars:3,rescued:4};Story.map(1)});
+ await assert(()=>page.getByRole('"'button',{name:'ELITE OFF'}).isVisible(),'elite unlock');
+ await page.getByRole('button',{name:'ELITE OFF'}).click();
+ await page.locator('#st-chapter-1 .st-node').last().click(); await page.getByRole('button',{name:'START',exact:true}).click();
+ await assert(()=>page.evaluate(()=>testCtx.lastLaunch.opts.elite),'elite forwarded');
+ await end({id:'c1m6',result:'win',stars:[true,true,true],rescued:4});
+ await page.getByRole('button',{name:'NEXT MISSION',exact:true}).click();
+ await assert(()=>page.locator('.st-vignette').isVisible(),'chapter vignette');
+ await assert(()=>page.evaluate(()=>Object.keys(testCtx.save.storyUI.cosmetics).length===1),'cosmetic unlocked');
+ await page.screenshot({path:'/tmp/story-vignette.png'});
+ await page.getByRole('button',{name:'NEXT DISTRICT',exact:true}).click();
+ await page.screenshot({path:'/tmp/story-map.png'});
+ if(errors.length)throw Error(errors.join('\\n'));
+ console.log('PASS: map locks, briefings, retry, assist, star cap, navigation, elite, vignette and main-save cosmetic.');
+ await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});
+EOF
+node /tmp/story-ui-check.cjs" in /home/user/my-first-repo/squad-surge
+ exited 1 in 328ms:
+browserType.launch: Target page, context or browser has been closed
+Browser logs:
+
+<launching> /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-MZI3fH --remote-debugging-pipe --no-startup-window
+<launched> pid=14
+[pid=14][err] [1107/201903.154852:FATAL:content/browser/sandbox_host_linux.cc:41] Check failed: . shutdown: Operation not permitted (1)
+Call log:
+[2m  - <launching> /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-MZI3fH --remote-debugging-pipe --no-startup-window[22m
+[2m  - <launched> pid=14[22m
+[2m  - [pid=14][err] [1107/201903.154852:FATAL:content/browser/sandbox_host_linux.cc:41] Check failed: . shutdown: Operation not permitted (1)[22m
+[2m  - [pid=14] <gracefully close start>[22m
+[2m  - [pid=14] <kill>[22m
+[2m  - [pid=14] <will force kill>[22m
+[2m  - [pid=14] <process did exit: exitCode=null, signal=SIGTRAP>[22m
+[2m  - [pid=14] starting temporary directories cleanup[22m
+[2m  - [pid=14] finished temporary directories cleanup[22m
+[2m  - [pid=14] <gracefully close end>[22m
+
+    at /tmp/story-ui-check.cjs:4:33
+    at Object.<anonymous> (/tmp/story-ui-check.cjs:54:3) {
+  log: [
+    '  - <launching> /opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-MZI3fH --remote-debugging-pipe --no-startup-window',
+    '  - <launched> pid=14',
+    '  - [pid=14][err] [1107/201903.154852:FATAL:content/browser/sandbox_host_linux.cc:41] Check failed: . shutdown: Operation not permitted (1)',
+    '  - [pid=14] <gracefully close start>',
+    '  - [pid=14] <kill>',
+    '  - [pid=14] <will force kill>',
+    '  - [pid=14] <process did exit: exitCode=null, signal=SIGTRAP>',
+    '  - [pid=14] starting temporary directories cleanup',
+    '  - [pid=14] finished temporary directories cleanup',
+    '  - [pid=14] <gracefully close end>'
+  ]
+}
+
+exec
+/bin/bash -lc "ls /opt/node-tools/node_modules | rg 'dom|happy|cheerio'; rg -n 'story|campaign|missionEnd' index.html | head -30; sed -n '20,40p' js/meta.js; sed -n '245,281p' js/meta.js; sed -n '930,980p' js/meta.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+  let m = null;
+  try { m = JSON.parse(localStorage.getItem(KEY)); } catch (e) { m = null; }
+  const f = fresh();
+  if (!m || typeof m !== "object") return f;
+  // Merge nested defaults before replacing their parent (also migrates pre-tactics saves).
+  const daily = Object.assign({}, f.daily, m.daily || {}), stats = Object.assign({}, f.stats, m.stats || {});
+  m = Object.assign(f, m, { daily, stats });
+  for (const k of ["perfect", "wasted", "banked", "threatsCountered", "bankLevels", "cleanWins"])
+    if (!Number.isFinite(m.stats[k]) || m.stats[k] < 0) m.stats[k] = 0;
+  if (!Array.isArray(m.missions)) m.missions = [];
+  return m;
+}
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(M)); } catch (e) { /* storage unavailable: fine */ } }
+const gsave = () => (ctx && ctx.save) || {};
+const active = () => (gsave().unlocked || 1) >= 3 || !!gsave().storyUI?.started;
+const storyStars = () => Object.values(gsave().storyUI?.records || {}).map(r => Number(r.stars) || 0);
+const totalStars = () => Object.values(gsave().stars || {}).reduce((a, b) => a + (+b || 0), 0) + storyStars().reduce((a, b) => a + b, 0);
+const stars3 = () => Object.values(gsave().stars || {}).filter(v => v >= 3).length + storyStars().filter(v => v >= 3).length;
+
+/* ---------------- icons ---------------- */
+const SV = {
+function reqState(r) {
+  if (!r) return { ok: true, need: 0, text: "" };
+  if (r.m) return { ok: M.medals >= r.m, need: r.m - M.medals, text: `${r.m} medals`, unit: "medal" };
+  if (r.s) return { ok: totalStars() >= r.s, need: r.s - totalStars(), text: `${r.s} total stars`, unit: "star" };
+  return { ok: M.daily.bestStreak >= r.st, need: r.st - M.daily.bestStreak, text: `${r.st}-day daily streak`, unit: "streak" };
+}
+function armoryItems() {
+  const out = [];
+  skins().forEach((s, i) => out.push({ kind: "skin", i, ...s, req: reqState(reqOf(SKIN_REQ, i)) }));
+  tracers().forEach((t, i) => out.push({ kind: "tracer", i, ...t, req: reqState(reqOf(TRACER_REQ, i)) }));
+  for (const it of out) if (gsave().storyUI?.cosmetics?.[it.kind + ":" + it.id]) it.req = { ok: true, need: 0, text: "Chapter reward" };
+  return out;
+}
+// Chapter rewards use the same armory items, equip buttons and unlock toast.
+function unlockChapter(id) {
+  if (!ctx || !M || !ctx.save) return null;
+  const list = skins(), item = list[1 + ((Number(id) - 1) % Math.max(1, list.length - 1))] || list[0];
+  const s = ctx.save.storyUI ||= {}; s.cosmetics ||= {};
+  s.cosmetics["skin:" + item.id] = true;
+  ctx.persist?.(); checkUnlocks(); checkTrophies();
+  return item;
+}
+function checkUnlocks() {
+  if (!active()) return;
+  const fresh = armoryItems().filter(it => it.req.ok && !M.seenUnlock[it.kind + ":" + it.id] && it.i > 0);
+  if (!fresh.length) return;
+  for (const it of fresh) M.seenUnlock[it.kind + ":" + it.id] = 1;
+  persist();
+  toast(`${ico("helmet-plus")}<span><b>ARMORY UNLOCKED</b><small>${fresh.length === 1 ? fresh[0].name + (fresh[0].kind === "skin" ? " squad" : " tracers") : fresh.length + " new items"}</small></span>`, "ar");
+}
+function skinFilter(it) {
+  if (it.hue != null) return `hue-rotate(${Math.round(it.hue * 360 - 217)}deg) saturate(${(0.5 + it.sat * 0.9).toFixed(2)}) brightness(${(it.val || 1).toFixed(2)})`;
+  if (it.i === 0) return "none";
+  const hex = it.color;
+  const m = /^#?([0-9a-f]{6})/i.exec(hex || ""); if (!m) return "none";
+  const r = parseInt(m[1].slice(0, 2), 16) / 255, g = parseInt(m[1].slice(2, 4), 16) / 255, b = parseInt(m[1].slice(4, 6), 16) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  addEventListener("keydown", e => {
+    if (!openedPanel) return;
+    if (e.key === "Escape") closePanel();
+    e.stopImmediatePropagation(); e.preventDefault();
+  }, true);
+}
+function closeStale() { if (openedPanel && ctx.state !== "home") closePanel(); }
+
+/* ---------------- setup ---------------- */
+function setup(c) {
+  ctx = c; bus = c.bus; $ = c.$ || (id => document.getElementById(id)); game = c.gameEl || $("game");
+  M = load(); newRun();
+  try {
+    if (!$("meta-css")) { const st = document.createElement("style"); st.id = "meta-css"; st.textContent = CSS; document.head.appendChild(st); }
+    toastBox = document.createElement("div"); toastBox.id = "metaToasts"; game.appendChild(toastBox);
+    buildHome(); ensureWinButtons();
+    wire(); probeIcons();
+    if (M.skin != null || M.tracer != null) applySkin();
+    if (active()) { ensureMissions(); for (const it of armoryItems()) if (it.req.ok) M.seenUnlock[it.kind + ":" + it.id] = M.seenUnlock[it.kind + ":" + it.id] || 1; persist(); }
+    window.Story?.setup?.(ctx);
+    refreshHome();
+    window.addEventListener("load", () => tryF(layoutHome));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => tryF(layoutHome));
+    const li = $("logoImg"); if (li) li.addEventListener("load", () => tryF(layoutHome));
+    const grid = $("lvgrid"); if (grid) new MutationObserver(() => tryF(decorateLevels)).observe(grid, { childList: true });
+  } catch (e) { console.error("meta setup", e); }
+}
+window.Meta = { setup, unlockChapter, _state: () => M, _dailyInfo: dailyInfo, _open: openPanel, _feed: feed, _toast: toast, _onWin: onWin, _onLose: onLose };
+})();
+
+codex
+Syntax checks pass. Chromium could not launch under this environment’s process sandbox, so I can’t verify the UI visually here. I’m finishing static checks for retries, Assist star limits, result navigation, and the missing-module fallbacks.
+
+exec
+/bin/bash -lc "sed -n '78,98p' index.html; sed -n '895,934p' js/meta.js; sed -n '208,228p' js/juice.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+.logo{margin:calc(max(10px,env(safe-area-inset-top)) + 58px) auto 0;text-align:center;line-height:.9;transform:rotate(-4deg)}
+.logo img{display:block;width:80%;max-width:340px;margin:0 auto;filter:drop-shadow(0 8px 12px #0d163066)}
+.logo.has-img{transform:none}.logo.has-img b{display:none}
+.logo b{display:block;font:clamp(44px,15vw,72px) 'Lilita One',sans-serif;color:#fff;background:linear-gradient(#fff 30%,#bfe3ff 60%,#5fb4ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 4px 0 #0d1630) drop-shadow(0 -2px 0 #0d1630) drop-shadow(2px 0 0 #0d1630) drop-shadow(-2px 0 0 #0d1630)}
+.hint{align-self:center;display:grid;justify-items:center;gap:6px;pointer-events:none}
+.hint .pill{display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:8px;background:#0d1630cc;font:15px 'Lilita One',sans-serif}
+.hint .arrows{display:flex;gap:4px}.hint .arrows i{width:20px;height:20px;border-radius:4px;background:#fff;color:#0d1630;display:grid;place-items:center;font-style:normal;font-size:13px}
+.hint .line{width:170px;height:2px;background:#fff;position:relative}.hint .line:before,.hint .line:after{content:'';position:absolute;top:-4px;border:5px solid transparent}.hint .line:before{left:-6px;border-right-color:#fff}.hint .line:after{right:-6px;border-left-color:#fff}
+.hand{width:34px;height:34px;animation:swipe 1.4s ease-in-out infinite;margin-top:-4px}
+@keyframes swipe{0%,100%{transform:translateX(-70px)}50%{transform:translateX(70px)}}
+.btn.playbtn{width:min(62%,250px);margin:14px auto calc(max(150px,20vh) + env(safe-area-inset-bottom));font-size:32px;padding:10px 0 14px;animation:pulse 1.2s ease-in-out infinite} /* sits above the squad */
+@keyframes pulse{50%{transform:scale(1.08)}}
+/* Modals */
+.modal{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:20px;background:#0b1328b0}
+.panel{width:100%;max-width:340px;border-radius:22px;background:linear-gradient(#2b4a9a,#1b2a52);border:3px solid #0d1630;box-shadow:0 6px 0 #0d1630,0 20px 50px #0008;padding:18px 18px 20px;text-align:center}
+.panel h2{margin:0 0 4px;font:34px/1 'Lilita One',sans-serif}
+.panel .sub{color:#bcd0ff;font-weight:800;margin:6px 0 12px}
+.stars{display:flex;justify-content:center;gap:4px;margin:6px 0 4px}
+.stars svg{width:54px;height:54px}.stars svg:nth-child(2){transform:translateY(-10px);width:64px;height:64px}
+.btn{display:block;width:100%;padding:14px;border-radius:14px;font-size:22px;color:#fff;margin-top:10px;min-height:52px}
+.btn.go{background:linear-gradient(#5be07a,#2bb64c);box-shadow:0 5px 0 #157a2f;border:2px solid #0d1630}
+  on("tick", d => {
+    const L = d.L || ctx.L; if (!L || L.combo == null) return;
+    run.combo = Math.max(run.combo, L.combo || 0);
+    run.cTick += d.dt || 0.016;
+    if (run.cTick > 0.3) { run.cTick = 0; feed("combo", L.combo || 0); S().maxCombo = Math.max(S().maxCombo, L.combo || 0); }
+  });
+  on("powerup", d => {
+    S().airdrops++; if (d.type) S().pu[d.type] = 1; feed("pu", 1); if (d.type) feed("pu_" + d.type, 1);
+    checkTrophies();
+  });
+  on("solidBreak", d => {
+    const k = d.o && d.o.kind;
+    if (k === "barrel") { S().barrels++; feed("barrel", 1); }
+    else if (k === "blockYellow") feed("block", 1);
+    else if (k === "crate") feed("crate", 1);
+    else if (k === "weaponCase") feed("case", 1);
+  });
+  on("bossSlam", d => { if (!d.killed) { S().slams++; feed("dodge", 1); } });
+  on("bonusEnd", d => { if (d.mult) { S().maxMult = Math.max(S().maxMult, d.mult); feed("finale", d.mult); } });
+  on("missionStart", () => { ensureMissions(); });
+  on("missionEnd", d => {
+    // Defer until all missionEnd listeners and any legacy win/lose event finish.
+    const thisRun = run;
+    Promise.resolve().then(() => tryF(() => {
+      if (run !== thisRun || run.resultRecorded) return;
+      const won = d.result === "win" || d.result === "won" || d.result === true;
+      const result = { ...d, mode: "campaign", stars: Array.isArray(d.stars) ? d.stars.filter(Boolean).length : Number(d.stars) || 0,
+        n: ctx.L?.soldiers?.length || 0, score: ctx.L?.score || 0 };
+      if (won) onWin(result); else onLose(result);
+    }));
+  });
+  on("win", onWin);
+  on("lose", onLose);
+  addEventListener("resize", () => tryF(layoutHome));
+  // keep the keyboard from starting a run while one of our panels is open
+  addEventListener("keydown", e => {
+    if (!openedPanel) return;
+    if (e.key === "Escape") closePanel();
+    e.stopImmediatePropagation(); e.preventDefault();
+  }, true);
+      el.setAttribute("aria-hidden", "true"); game.appendChild(el);
+      return { el, value: 0 };
+    });
+    let flash = 0;
+    function enqueue(text, options = {}) {
+      if (!inRun()) return;
+      const item = Object.assign({ text, color: "#fff", size: 7, sub: "", icon: "", stamp: false }, options);
+      if (item.priority) {
+        if (current) callouts.unshift(current);
+        callouts.unshift(item); nextCallout();
+        banner.style.opacity = "1";
+      } else callouts.push(item);
+    }
+    function nextCallout() {
+      current = callouts.shift() || null; calloutAge = 0;
+      clearTimeout(toastRelease);
+      if (!current) {
+        banner.hidden = true;
+        toastRelease = setTimeout(() => game.classList.remove("juice-callout"), 1200);
+        return;
+      }
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='js/meta.js';s=open(p).read();s=s.replace('  const hint = q(\".hint\", game) ? q(\".hint\", game).getBoundingClientRect() : play;', '  const story = "'$("storyHome");'"\\n  const hint = story && "'!story.hidden ? story.getBoundingClientRect() : q(".hint", game) ? q(".hint", game).getBoundingClientRect() : play;'"')
+s=s.replace('function onWin(d) {\\n  d = d || {};', 'function onWin(d) {\\n  d = d || {};\\n  if (Array.isArray(d.stars)) d = { ...d, stars: d.stars.filter(Boolean).length };')
+s=s.replace('  on(\"missionStart\", () => { ensureMissions(); });', '  on(\"missionStart\", () => { Promise.resolve().then(() => tryF(ensureMissions)); });')
+s=s.replace('      if (run "'!== thisRun || run.resultRecorded) return;'"', '      if (run "'!== thisRun) return;'"\\n      if (run.resultRecorded) { checkUnlocks(); checkTrophies(); return; }')
+s=s.replace('      if (won) onWin(result); else onLose(result);', '      if (d.assisted) result.stars = Math.min(2, result.stars);\\n      if (won) onWin(result); else onLose(result);')
+open(p,'w').write(s)
+PY
+node --check js/story.js
+node --check js/meta.js
+node --check js/juice.js
+node <<'EOF'
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const box={window:{}};vm.createContext(box);vm.runInContext(fs.readFileSync('js/story.js','utf8'),box);
+box.window.Story.setup();box.window.Story.setup({});
+for(const cause of ['threat:swarm','threat:barricade','threat:mortars','rifleman','charger','bomber','boss:slam','boss:summon','boss:charge','boss:barrage','boss:shieldWall','boss:split','gate','swarm','attrition','boss:unknown','threat:unknown',undefined]) assert(box.window.Story.hint(cause).length>20);
+assert(box.window.Story.hint('charger').includes('Sidestep'));
+assert(box.window.Story.hint('threat:swarm').includes('AIRSTRIKE'));
+console.log('PASS: missing-ctx setup and all decisive-cause hints; all three files pass node --check.');
+EOF" in /home/user/my-first-repo/squad-surge
+ succeeded in 3ms:
+PASS: missing-ctx setup and all decisive-cause hints; all three files pass node --check.
+
+codex
+Implemented story home controls, chapter map, briefings, radio/boss callouts, results, Assist, Elite, and chapter cosmetic vignettes in the three allowed files.
+
+All three pass `node --check`; cause-hint and missing-context checks pass. Browser verification was blocked by the environment sandbox. No git commands run.
+tokens used
+68,385
+Implemented story home controls, chapter map, briefings, radio/boss callouts, results, Assist, Elite, and chapter cosmetic vignettes in the three allowed files.
+
+All three pass `node --check`; cause-hint and missing-context checks pass. Browser verification was blocked by the environment sandbox. No git commands run.
+codex exit 0

@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>units2 sheets</title>
+<style>body{margin:8px;background:#46607a;font:12px sans-serif;color:#fff}.row{display:flex;align-items:flex-end;gap:2px;margin:4px 0 10px;flex-wrap:wrap}
+.f{position:relative;border-bottom:1px solid #f0f;outline:1px solid #ffffff22;background-repeat:no-repeat}</style>
+<div id="o"></div>
+<script>
+const H=110; // display height of the tallest frame cell, px
+const sheets=[["../assets/grunt.webp",4,2,"grunt (scale ref)"],
+...["shieldbearer","charger","bomber","rifleman","medic","splitter","splitter-mini"].map(n=>[`../assets/units2/${n}.webp`,4,2,n]),
+...["bulwark","ravager","gunner","colossus","warlord"].map(n=>[`../assets/units2/boss-${n}.webp`,3,2,"boss-"+n])];
+const o=document.getElementById("o");
+for(const [src,c,r,name] of sheets){const im=new Image();im.onload=()=>{
+ const cw=im.width/c,ch=im.height/r,k=(name.startsWith("boss")?1.6:1)*H/ch,d=document.createElement("div");
+ d.innerHTML=`<b>${name}</b> ${im.width}x${im.height} cell ${cw}x${ch}`;const row=document.createElement("div");row.className="row";
+ for(let i=0;i<c*r;i++){const f=document.createElement("div");f.className="f";f.style.cssText=`width:${cw*k}px;height:${ch*k}px;background-image:url(${src});background-size:${im.width*k}px ${im.height*k}px;background-position:${-(i%c)*cw*k}px ${-Math.floor(i/c)*ch*k}px`;row.appendChild(f)}
+ d.appendChild(row);o.appendChild(d)};im.src=src}
+</script>

@@ -31,9 +31,10 @@ function load() {
 }
 function persist() { try { localStorage.setItem(KEY, JSON.stringify(M)); } catch (e) { /* storage unavailable: fine */ } }
 const gsave = () => (ctx && ctx.save) || {};
-const active = () => (gsave().unlocked || 1) >= 3;
-const totalStars = () => Object.values(gsave().stars || {}).reduce((a, b) => a + (+b || 0), 0);
-const stars3 = () => Object.values(gsave().stars || {}).filter(v => v >= 3).length;
+const active = () => (gsave().unlocked || 1) >= 3 || !!gsave().storyUI?.started;
+const storyStars = () => Object.values(gsave().storyUI?.records || {}).map(r => Number(r.stars) || 0);
+const totalStars = () => Object.values(gsave().stars || {}).reduce((a, b) => a + (+b || 0), 0) + storyStars().reduce((a, b) => a + b, 0);
+const stars3 = () => Object.values(gsave().stars || {}).filter(v => v >= 3).length + storyStars().filter(v => v >= 3).length;
 
 /* ---------------- icons ---------------- */
 const SV = {
@@ -251,7 +252,17 @@ function armoryItems() {
   const out = [];
   skins().forEach((s, i) => out.push({ kind: "skin", i, ...s, req: reqState(reqOf(SKIN_REQ, i)) }));
   tracers().forEach((t, i) => out.push({ kind: "tracer", i, ...t, req: reqState(reqOf(TRACER_REQ, i)) }));
+  for (const it of out) if (gsave().storyUI?.cosmetics?.[it.kind + ":" + it.id]) it.req = { ok: true, need: 0, text: "Chapter reward" };
   return out;
+}
+// Chapter rewards use the same armory items, equip buttons and unlock toast.
+function unlockChapter(id) {
+  if (!ctx || !M || !ctx.save) return null;
+  const list = skins(), item = list[1 + ((Number(id) - 1) % Math.max(1, list.length - 1))] || list[0];
+  const s = ctx.save.storyUI ||= {}; s.cosmetics ||= {};
+  s.cosmetics["skin:" + item.id] = true;
+  ctx.persist?.(); checkUnlocks(); checkTrophies();
+  return item;
 }
 function checkUnlocks() {
   if (!active()) return;
@@ -482,7 +493,7 @@ function startDaily() {
 }
 function refreshHome() {
   if (!home) return;
-  const on = (ctx.state === "home") && active() && !openedPanel;
+  const on = (ctx.state === "home") && (active() || (window.Campaign && ctx.goMission)) && !openedPanel;
   home.hidden = !on;
   if (!on) return;
   ensureMissions();
@@ -497,13 +508,14 @@ function refreshHome() {
 function layoutHome() {
   if (!home || home.hidden) return;
   const gr = game.getBoundingClientRect(), logo = $("logo").getBoundingClientRect(), play = $("playBtn").getBoundingClientRect();
-  const hint = q(".hint", game) ? q(".hint", game).getBoundingClientRect() : play;
+  const story = $("storyHome");
+  const hint = story && !story.hidden ? story.getBoundingClientRect() : q(".hint", game) ? q(".hint", game).getBoundingClientRect() : play;
   const top = Math.max(0, logo.bottom - gr.top - 4), limit = hint.top - gr.top - 6;
   const d = homeParts.daily, c = homeParts.card;
   d.style.top = top + "px";
   const room = limit - (top + 36 + 8);
   c.style.top = top + 44 + "px";
-  c.hidden = false;
+  c.hidden = !active();
   c.style.display = "";
   const full = c.scrollHeight;
   // if the card does not fit, drop rows (CSS hides x2/x3 on short screens); hide it entirely when there is no room
@@ -593,6 +605,9 @@ function retryRun(d) {
 }
 function onWin(d) {
   d = d || {};
+  if (Array.isArray(d.stars)) d = { ...d, stars: d.stars.filter(Boolean).length };
+  if (run.resultRecorded) return;
+  run.resultRecorded = true;
   const L = ctx.L || {};
   const noLoss = run.lost === 0;
   finishTactics(true);
@@ -619,7 +634,7 @@ function onWin(d) {
   persist();
   checkUnlocks(); checkTrophies();
   if (!wasActive && active()) ensureMissions();
-  buildResults(d, { kills, bc, total, dinfo, drec });
+  if (!ctx.mission && d.mode !== "campaign" && d.mode !== "story") buildResults(d, { kills, bc, total, dinfo, drec });
 }
 function buildResults(d, x) {
   cleanupResults();
@@ -710,12 +725,15 @@ function burst(el) {
 /* ---------------- near-miss (lose) ---------------- */
 function onLose(d) {
   d = d || {};
+  if (run.resultRecorded) return;
+  run.resultRecorded = true;
   finishTactics(false);
   const L = ctx.L || {};
   if (active()) { feed("combo", L.bestCombo || run.combo || 0); feed("runkills", run.kills); }
   S().maxCombo = Math.max(S().maxCombo, L.bestCombo || run.combo || 0);
   S().maxRunKills = Math.max(S().maxRunKills, run.kills);
   persist(); checkTrophies();
+  if (ctx.mission || d.mode === "campaign" || d.mode === "story") return;
   const modal = $("loseModal"), pn = modal && q(".panel", modal); if (!pn) return;
   q(".mm-near", pn) && q(".mm-near", pn).remove();
   modal.classList.add("mm-on");
@@ -895,6 +913,20 @@ function wire() {
   });
   on("bossSlam", d => { if (!d.killed) { S().slams++; feed("dodge", 1); } });
   on("bonusEnd", d => { if (d.mult) { S().maxMult = Math.max(S().maxMult, d.mult); feed("finale", d.mult); } });
+  on("missionStart", () => { Promise.resolve().then(() => tryF(ensureMissions)); });
+  on("missionEnd", d => {
+    // Defer until all missionEnd listeners and any legacy win/lose event finish.
+    const thisRun = run;
+    Promise.resolve().then(() => tryF(() => {
+      if (run !== thisRun) return;
+      if (run.resultRecorded) { checkUnlocks(); checkTrophies(); return; }
+      const won = d.result === "win" || d.result === "won" || d.result === true;
+      const result = { ...d, mode: "campaign", stars: Array.isArray(d.stars) ? d.stars.filter(Boolean).length : Number(d.stars) || 0,
+        n: ctx.L?.soldiers?.length || 0, score: ctx.L?.score || 0 };
+      if (d.assisted) result.stars = Math.min(2, result.stars);
+      if (won) onWin(result); else onLose(result);
+    }));
+  });
   on("win", onWin);
   on("lose", onLose);
   addEventListener("resize", () => tryF(layoutHome));
@@ -918,6 +950,7 @@ function setup(c) {
     wire(); probeIcons();
     if (M.skin != null || M.tracer != null) applySkin();
     if (active()) { ensureMissions(); for (const it of armoryItems()) if (it.req.ok) M.seenUnlock[it.kind + ":" + it.id] = M.seenUnlock[it.kind + ":" + it.id] || 1; persist(); }
+    window.Story?.setup?.(ctx);
     refreshHome();
     window.addEventListener("load", () => tryF(layoutHome));
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => tryF(layoutHome));
@@ -925,5 +958,5 @@ function setup(c) {
     const grid = $("lvgrid"); if (grid) new MutationObserver(() => tryF(decorateLevels)).observe(grid, { childList: true });
   } catch (e) { console.error("meta setup", e); }
 }
-window.Meta = { setup, _state: () => M, _dailyInfo: dailyInfo, _open: openPanel, _feed: feed, _toast: toast, _onWin: onWin, _onLose: onLose };
+window.Meta = { setup, unlockChapter, _state: () => M, _dailyInfo: dailyInfo, _open: openPanel, _feed: feed, _toast: toast, _onWin: onWin, _onLose: onLose };
 })();

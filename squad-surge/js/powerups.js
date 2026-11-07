@@ -148,6 +148,7 @@ window.Powerups = (() => {
   }
   function onGenerate(ev) {
     L = ev.L; reset(); S.plan = []; S.barrels = [];
+    if (L.mission) return; // Authored drops and scenery belong to the campaign interpreter.
     if (ev.level === 1) planAirdrops(ev.rng, ev.level, ev.length);
     else for (let i = 0; i < L.threats.length; i++) {
       const t = L.threats[i]; if (t.tool) continue;
@@ -204,12 +205,12 @@ window.Powerups = (() => {
     else if (type === "jackpot") {
       C.addSoldiers(20 + 10 * L.level); C.floatText(x, 3.2, z, "JACKPOT!", "#ffd84a");
       ring(x, z, 1, 9, 0.7, 0xffd84a, true, 1); ring(x, z, 0.5, 6, 0.55, 0xfff1a8, true, 1);
-      for (let i = 0; i < 16; i++) L.fx.push({ x: x + (Math.random() - 0.5) * 6, y: 0.6 + Math.random() * 3.2, z: z + (Math.random() - 0.5) * 4, f: 14, t: -Math.random() * 0.35, dur: 0.6, size: 1.3 + Math.random() * 1.4 });
+      for (let i = 0; i < 16; i++) L.fx.push({ x: x + (C.rng("powerups") - 0.5) * 6, y: 0.6 + C.rng("powerups") * 3.2, z: z + (C.rng("powerups") - 0.5) * 4, f: 14, t: -C.rng("powerups") * 0.35, dur: 0.6, size: 1.3 + C.rng("powerups") * 1.4 });
     }
   }
   function startStrike() {
     const st = { t: 0, zs: L.sz, bombs: [], jetDone: false, threat: C.threat, boss: C.state === "boss" };
-    for (let i = 0; i < 8; i++) st.bombs.push({ rt: 0.55 + 1.2 * i / 7, ahead: 10 + 35 * i / 7 + (Math.random() - 0.5) * 3, x: (i % 2 ? 1 : -1) * (0.8 + Math.random() * 3.4), z: 0, rel: false, done: false, mesh: S.bombs[i] });
+    for (let i = 0; i < 8; i++) st.bombs.push({ rt: 0.55 + 1.2 * i / 7, ahead: 10 + 35 * i / 7 + (C.rng("powerups") - 0.5) * 3, x: (i % 2 ? 1 : -1) * (0.8 + C.rng("powerups") * 3.4), z: 0, rel: false, done: false, mesh: S.bombs[i] });
     S.strike = st; C.sfx("boom", 2); L.shake = Math.max(L.shake, 0.12);
   }
   function updateStrike(dt) {
@@ -233,7 +234,7 @@ window.Powerups = (() => {
         // damageArea option so the boss always takes exactly the promised fraction.
         C.damageArea(b.x, b.z, st.threat && st.threat.kind === "swarm" ? 10 : 4, 40 + 8 * L.level, { skipBoss: true });
         L.fx.push({ x: b.x, y: 0.7, z: b.z, f: 9, t: 0, dur: 0.5, size: 8.5 }, { x: b.x + 1.2, y: 1.6, z: b.z - 0.8, f: 9, t: -0.06, dur: 0.45, size: 5.5 }, { x: b.x - 1.4, y: 0.9, z: b.z + 0.6, f: 4, t: 0, dur: 0.3, size: 4 });
-        ring(b.x, b.z, 1, 6.5, 0.45, 0xffa040, true, 0.9); C.sfx("boom", 0.9 + Math.random() * 0.3); L.shake = Math.max(L.shake, 0.2);
+        ring(b.x, b.z, 1, 6.5, 0.45, 0xffa040, true, 0.9); C.sfx("boom", 0.9 + C.rng("powerups") * 0.3); L.shake = Math.max(L.shake, 0.2);
       }
     }
     if (!alive && st.t > 2.5) { S.strike = null; for (const j of jets) j.visible = false; }
@@ -328,5 +329,10 @@ window.Powerups = (() => {
     b.on("state", ev => { if (ev.to === "home" || ev.to === "levels") hideSquadFx(); });
   }
   // test hooks: Powerups.force("shield" | "airstrike" | "giant" | "jackpot")
-  return { setup, activate: type => { if (C && C.L) { L = C.L; usePower(type); } }, force: type => { if (C && C.L) { L = C.L; usePower(type); } } };
+  function snapshot() {
+    const st=S.strike;
+    return { plan:S.plan.map(p=>({x:p.x,z:p.z,fired:p.fired,powerup:p.powerup})), drop:S.drop?{t:S.drop.t,ct:S.drop.ct,chute:S.drop.chute,landed:S.drop.landed,x:S.drop.p.x,z:S.drop.p.z}:null,
+      strike:st?{t:st.t,zs:st.zs,bombs:st.bombs.map(({rt,ahead,x,z,rel,done})=>({rt,ahead,x,z,rel,done}))}:null };
+  }
+  return { setup, snapshot, activate: type => { if (C && C.L) { L = C.L; usePower(type); } }, force: type => { if (C && C.L) { L = C.L; usePower(type); } } };
 })();

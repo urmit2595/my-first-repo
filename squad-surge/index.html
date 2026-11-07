@@ -123,7 +123,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
   <canvas id="view" aria-label="Squad Surge game view"></canvas>
   <div class="flash" id="flash"></div>
   <div class="floats" id="floats"></div>
-  <div class="count" id="count" hidden><img src="assets/i-helmet.png" alt=""><span id="countN">1</span><em class="combo stroke" id="combo" hidden></em><i class="surge" id="surgeBar"><i id="surgeFill"></i></i></div>
+  <div class="count" id="count" hidden><img src="assets/i-helmet.png" alt=""><span id="countN">1</span><small id="specialists" style="font-size:12px;white-space:nowrap"></small><em class="combo stroke" id="combo" hidden></em><i class="surge" id="surgeBar"><i id="surgeFill"></i></i></div>
   <div class="scorebox" id="scoreBox" hidden><div class="score stroke" id="scoreN">0</div><div class="best" id="scoreBest"></div></div>
 
   <div class="hud" id="hud">
@@ -193,6 +193,9 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 <script src="js/powerups.js"></script>
 <script src="js/finale.js"></script>
 <script src="js/meta.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/campaign.js"></script>
+<script src="js/story.js"></script>
 <script>
 "use strict";
 // ---------- persistence ----------
@@ -201,6 +204,7 @@ const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) ||
 Object.assign(save, { level: 1, unlocked: 1, best: {}, stars: {}, bestSquad: {}, bestScore: {}, skin: "classic", tracer: "gold", sound: true, vibe: true, ...save });
 save.tacticsPerfect = Math.max(0, Number(save.tacticsPerfect) || 0);
 save.tacticsCounters = save.tacticsCounters && typeof save.tacticsCounters === "object" ? save.tacticsCounters : {};
+save.campaign = save.campaign && typeof save.campaign === "object" ? save.campaign : {};
 save.unlocked = Math.max(save.unlocked, save.level);
 for (const k of ["coins", "gems", "up"]) delete save[k]; // drop old shop data from earlier builds
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
@@ -410,16 +414,16 @@ const bus = {
 const spriteTint = new THREE.Color(1, 1, 1);
 function setSpriteTint(color) { spriteTint.set(color); for (const l of spriteLayers) if (!l.additive) l.mesh.material.uniforms.tint.value.copy(spriteTint); }
 const ctx = {
-  THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng,
+  THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng: gameplayRng,
   get WEAPONS() { return WEAPONS; }, get L() { return L; }, get state() { return state; }, get layers() { return layers; },
   sfx: (...a) => sfx(...a), vibe: ms => vibe(ms), floatText: (...a) => floatText(...a),
-  get belt() { return L.belt; }, usePowerup: slot => usePowerup(slot), collectPowerup: type => collectPowerup(type),
-  get tactics() { return L.tactics; }, get threat() { return L.threat; }, get surgeReady() { return !!L.surgeReady; },
-  useSurge: () => useSurge(), damageBoss: n => damageBoss(n),
+  get belt() { return L?.belt || [null,null]; }, usePowerup: slot => queueInput("powerup", slot), collectPowerup: type => collectPowerup(type),
+  get tactics() { return L?.tactics; }, get threat() { return L?.threat; }, get surgeReady() { return !!L?.surgeReady; },
+  useSurge: () => queueInput("surge"), damageBoss: n => damageBoss(n),
   // Surge Update seams (design/engagement.md section 3)
   slowMo: (...a) => slowMo(...a), hitStop: s => hitStop(s), addScore: (p, o) => addScore(p, o),
   spawnSolid: (...a) => spawnSolid(...a), damageArea: (...a) => damageArea(...a),
-  addSoldiers: n => addSoldiers(n), killSoldiers: (n, nearX = null, force = true) => killSoldiers(n, nearX, force),
+  addSoldiers: n => addSoldiers(n), killSoldiers: (n, nearX = null, force = true, cause = "attrition") => killSoldiers(n, nearX, force, cause),
   setShield: s => setShield(s), setGiant: s => setGiant(s), finishLevel: m => finishLevel(m), goMode: o => goMode(o),
   setSkin: (a, b) => setSkin(a, b), squadRadius: n => squadRadius(n), persist: () => persist(), MODIFIERS, SKINS, TRACERS, SPEED, COMBO_TIERS,
 };
@@ -443,6 +447,8 @@ function themeFor(level) { return THEMES[(level - 1) % THEMES.length]; }
 const THREAT_COUNTER = { swarm: "airstrike", barricade: "giant", mortars: "shield", slam: "shield" };
 function updateBeltHUD() {
   if (!L || !L.belt) return;
+  const key = [L.belt.join(), L.beltFx.map((v,i) => L.beltFxUntil[i] > L.time ? v : "").join(), L.threat?.counter, save.tacticsPerfect < 3, L.swap?.type, L.surgeReady, L.bankLocked, hud.externalSwap?.hidden].join("|");
+  if (hud.beltKey === key) return; hud.beltKey = key;
   for (let i = 0; i < 2; i++) {
     const b = beltButtons[i], type = L.belt[i], fx = L.beltFxUntil[i] > L.time ? L.beltFx[i] : null, icon = type || fx;
     if (b.dataset.icon !== (icon || "")) {
@@ -526,7 +532,7 @@ function usePowerup(slot) {
   bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
   window.Powerups?.activate(type); return true;
 }
-function threatLossLeft(t) { if (t.countered) return 0; return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }
+function threatLossLeft(t) { if (t.countered) return 0; if (!onboarding()) return L.soldiers.length; return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }
 function announceThreat(t) {
   t.announced = true; Obj3D.threatSign(t);
   bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
@@ -534,7 +540,7 @@ function announceThreat(t) {
 function liveThreat(t) {
   t.live = true; L.threat = t;
   t.startSquad = L.soldiers.length;
-  t.lossCap = Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));
+  t.lossCap = !onboarding() ? Infinity : Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));
   if (t.kind === "swarm") {
     const count = Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3)));
     for (let i = 0; i < count; i++) {
@@ -563,7 +569,7 @@ function updateTactics(dt) {
   if (L.swap && L.time >= L.swap.until) expireSwap();
   coachCounter();
   if (L.bankLocked) return;
-  if (state === "boss" && !L.threat && L.boss.hp > 0) {
+  if (state === "boss" && !L.boss.def && !L.threat && L.boss.hp > 0) {
     const t = { id: `slam-${L.slamId = (L.slamId || 0) + 1}`, kind: "slam", counter: "shield", z: L.boss.z, actors: [], age: 0, lost: 0, countered: false };
     announceThreat(t); liveThreat(t);
   }
@@ -579,13 +585,13 @@ function updateTactics(dt) {
   if (t.kind === "mortars") {
     if (t.shellT > 0) {
       t.shellT -= dt;
-      const u = Math.min(1, 1 - t.shellT / 0.65);
+      const u = Math.min(1, 1 - t.shellT / 0.9);
       t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.fromZ + (t.targetZ - t.fromZ) * u);
       if (t.shellT <= 0) {
         t.vis.shell.visible = t.vis.ring.visible = false;
-        if (L.shieldT <= 0 && Math.abs(L.sx - t.targetX) < 2.8) {
+        if (L.shieldT <= 0) {
           const loss = Math.min(Math.max(2, Math.ceil(L.soldiers.length * 0.03)), threatLossLeft(t));
-          killSoldiers(loss, t.targetX, true); t.lost += loss;
+          t.lost += killSoldiersInCircle(t.targetX, t.targetZ, 2.8, loss, "threat:mortars");
         }
         bus.emit("explosion", { x: t.targetX, z: t.targetZ, radius: 2.8 });
         L.fx.push({ x: t.targetX, y: 0.3, z: t.targetZ, f: 9, t: 0, dur: 0.4, size: 4 });
@@ -595,7 +601,7 @@ function updateTactics(dt) {
     if (t.shotT <= 0 && t.age < 5.3) {
       let tower = null; for (const o of t.actors) if (o.alive) { tower = o; break; }
       if (tower) {
-        t.shotT = 0.7; t.shellT = 0.65; t.fromX = tower.x; t.fromZ = tower.z; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.65;
+        t.shotT = 1.6; t.shellT = 0.9; t.fromX = tower.x; t.fromZ = tower.z; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.9;
         t.vis.ring.position.set(t.targetX, 0.09, t.targetZ); t.vis.ring.visible = t.vis.shell.visible = true;
       }
     }
@@ -606,16 +612,21 @@ function updateTactics(dt) {
 }
 
 // ---------- level generation ----------
-const isGood = h => h.powerup ? true : h.op === "x" ? h.v >= 1 : h.v >= 0;
-const gateText = h => h.powerup ? "" : h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
+const isGood = h => h.powerup || h.recruit || h.rescue ? true : h.op === "x" ? h.v >= 1 : h.v >= 0;
+const gateText = h => h.recruit ? `${SPECIALISTS[h.recruit]?.icon || "★"} +${h.n}` : h.rescue ? `RESCUE ${h.rescue} / −${h.cost}` : h.powerup ? "" : h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
 function makeGate(z, left, right) {
   const gate = { kind: "gate", z, used: false, halves: [] };
-  for (const [s, spec] of [[-1, left], [1, right]]) gate.halves.push({ x: s * ROAD / 2, hw: ROAD / 2, op: spec[0], v: spec[1], side: s, jackpot: !!(spec[2] && spec[2].jackpot), powerup: spec[0] === "tool" ? spec[1] : null });
+  for (const [side, spec] of [[-1, left], [1, right]]) {
+    const h = { x: side * ROAD / 2, baseX: side * ROAD / 2, hw: ROAD / 2, side, op: "+", v: 0 };
+    if (Array.isArray(spec)) Object.assign(h, { op: spec[0] === "-" ? "+" : spec[0], v: spec[0] === "-" ? -Math.abs(spec[1]) : spec[1], jackpot: !!spec[2]?.jackpot, powerup: spec[0] === "tool" ? spec[1] : null });
+    else Object.assign(h, spec);
+    h.initialV = h.v; gate.halves.push(h);
+  }
   Obj3D.gate(gate); refreshGate(gate); return gate;
 }
 function refreshGate(gate) { for (const h of gate.halves) Obj3D.gateHalf(gate, h, isGood(h), gateText(h)); }
 // solid shootable objects: blocks, crates, tyres, weapon cases, ammo boxes (hw = half-width for bullets and collisions)
-const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3, airdrop: 1.2, barrel: 0.8, barricade: 1.8, mortar: 0.8 };
+const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3, airdrop: 1.2, barrel: 0.8, barricade: 1.8, mortar: 0.8, fuelTruck: 1.5, shortcut: 1.6 };
 function makeSolid(kind, x, z, hp, extra = {}) {
   const o = { kind, x, z, hw: SOLID_HW[kind], hp, maxHp: hp, alive: true, ...extra };
   Obj3D.solid(o); labelSolid(o); return o;
@@ -624,10 +635,10 @@ function labelSolid(o) {
   if (o.kind === "blockBlue" || o.kind === "blockYellow") Obj3D.solidLabel(o, `+${o.reward}`, "#fff");
   else Obj3D.solidLabel(o, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" || o.kind === "airdrop" ? "#ffe066" : o.kind === "ammo" ? "#9dff7a" : o.kind === "barrel" ? "#ff9a7a" : "#fff");
 }
-function enemy(type, x, z, level) {
-  const hpScale = 1 + (level - 1) * 0.1;
-  const def = { zombie: { hp: 2, r: 0.42, h: 1.45, sp: 2.6, dmg: 1 }, grunt: { hp: 2, r: 0.42, h: 1.45, sp: 3.2, dmg: 1 }, brute: { hp: 22, r: 0.85, h: 2.3, sp: 2.2, dmg: 5 } }[type];
-  return { type, x, z, hp: def.hp * hpScale, maxHp: def.hp * hpScale, r: def.r, h: def.h, sp: def.sp * (0.85 + Math.random() * 0.3), dmg: def.dmg, state: "idle", t: Math.random() * 4, flash: 0, dieT: 0 };
+function enemy(type, x, z, level, opts = {}) {
+  const def = enemyDefs[type] || BASE_ENEMIES[type] || BASE_ENEMIES.grunt;
+  const hp = (opts.hp ?? def.hp ?? 2) * (opts.authored ? 1 : 1 + (level - 1) * 0.1);
+  return { id: nextEntityId++, type, x, z, hp, maxHp: hp, r: def.r || 0.42, h: def.h || 1.45, sp: (def.sp || 3) * (0.85 + gameplayRng("enemies") * 0.3), dmg: def.dmg || 1, state: "idle", t: 0, flash: 0, dieT: 0, def: enemyDefs[type] || null, ...opts };
 }
 function generateLevel(level, opts = {}) {
   const theme = themeFor(level), seeded = opts.seed !== undefined;
@@ -725,28 +736,57 @@ function generateLevel(level, opts = {}) {
 }
 
 // ---------- squad ----------
-function slot(i) { const r = 0.5 * Math.sqrt(i), a = i * 2.39996; return [Math.cos(a) * r, Math.sin(a) * r * 0.85]; }
+const formationSlots = Array.from({length: 600}, (_, i) => { const r = 0.5 * Math.sqrt(i), a = i * 2.39996; return [Math.cos(a) * r, Math.sin(a) * r * 0.85]; });
+function slot(i) { return formationSlots[i % formationSlots.length]; }
 function squadRadius(n) { return 0.5 * Math.sqrt(Math.max(1, n)) + 0.35; }
-function addSoldiers(n) {
+function addSoldiers(n, specialist = null) {
   let added = 0;
-  for (let i = 0; i < n && L.soldiers.length < 600; i++, added++) {
+  for (let i = 0; i < n && L.soldiers.length < (L.mission ? 300 : 600); i++, added++) {
     const [ox, oz] = slot(L.soldiers.length);
-    L.soldiers.push({ x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, ph: Math.random() * 4, born: L.time });
+    L.soldiers.push({ id: nextEntityId++, x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, vx: 0, vz: 0, ph: gameplayRng("animation") * 4, born: L.time, specialist, armor: specialist === "defender" ? 1 : 0 });
   }
-  if (L.boss.state === "wait") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
+  L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
   if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
+  return added;
 }
-function killSoldiers(n, nearX = null, force = false) {
-  if (L.bankLocked && state === "boss") return; // victory is locked during the pre-finale celebration
-  if (!force && (L.shieldT > 0 || L.giantT > 0)) return; // SHIELD / GIANT power-ups
-  for (let k = 0; k < n && L.soldiers.length; k++) {
-    let idx = L.soldiers.length - 1;
-    if (nearX !== null) { let best = 1e9; L.soldiers.forEach((s, i) => { const d = Math.abs(s.x - nearX); if (d < best) { best = d; idx = i; } }); }
-    const s = L.soldiers[idx]; L.fx.push({ x: s.x, y: 0.6, z: s.z, f: 4, t: 0, dur: 0.35, size: 1.1 });
-    L.soldiers.splice(idx, 1);
+function removeSoldier(i) {
+  const s = L.soldiers[i];
+  spawnFx({ x: s.x, y: 0.6, z: s.z, f: 4, t: 0, dur: 0.55, size: 1.1, vx: (s.x - L.sx) * 1.2, vz: 3, vy: 3 });
+  L.soldiers[i] = L.soldiers[L.soldiers.length - 1]; L.soldiers.pop();
+}
+function lostSoldiers(n, cause = "attrition") {
+  if (!n) return 0;
+  if (!["rifleman","charger","bomber","gate","swarm","attrition"].includes(cause) && !cause.startsWith("threat:") && !cause.startsWith("boss:")) cause = "swarm";
+  L.lastCause = cause;
+  if (L.missionState) { L.missionState.causes[cause] = (L.missionState.causes[cause] || 0) + n; if (state === "boss") L.missionState.bossLosses += n; }
+  bus.emit("soldiersLost", { n, total: L.soldiers.length, cause }); return n;
+}
+function killSoldiers(n, nearX = null, force = false, cause = "attrition") {
+  if ((L.bankLocked && state === "boss") || (!force && (L.shieldT > 0 || L.giantT > 0))) return 0;
+  // Uniform losses need no search; geometric attacks use the contact helpers below.
+  const count = Math.min(L.soldiers.length, Math.max(0, Math.ceil(n)));
+  for (let k = 0; k < count; k++) removeSoldier(L.soldiers.length - 1);
+  return lostSoldiers(count, cause);
+}
+function killContacts(test, max = Infinity, cause = "attrition") {
+  if (L.bankLocked || L.shieldT > 0 || L.giantT > 0) return 0;
+  let killed = 0, hits = 0;
+  const ranged = /rifleman|barrage|mortars/.test(cause);
+  for (let i = L.soldiers.length - 1; i >= 0 && hits < max; i--) {
+    const s = L.soldiers[i]; if (!test(s)) continue;
+    hits++;
+    if (ranged) {
+      const guard = L.soldiers.find(d => d.armor > 0 && Math.abs(d.x - s.x) < 3.4);
+      if (guard) { guard.armor--; continue; }
+    }
+    removeSoldier(i); killed++;
   }
-  if (n > 0) bus.emit("soldiersLost", { n, total: L.soldiers.length });
+  return lostSoldiers(killed, cause);
 }
+function killSoldiersInRect(x0, x1, z0, z1, max = Infinity, cause = "attrition") {
+  return killContacts(s => s.x >= Math.min(x0,x1) && s.x <= Math.max(x0,x1) && s.z >= Math.min(z0,z1) && s.z <= Math.max(z0,z1), max, cause);
+}
+function killSoldiersInCircle(x, z, r, max = Infinity, cause = "attrition") { return killContacts(s => (s.x-x)**2 + (s.z-z)**2 <= r*r, max, cause); }
 
 // ---------- floating text ----------
 function floatText(x, y, z, text, color) {
@@ -763,34 +803,45 @@ let resumeState = "play";
 function startLevel(level, opts = {}) {
   floatsEl.innerHTML = "";
   const mod = opts.modifier && MODIFIERS[opts.modifier] ? opts.modifier : null;
-  L = generateLevel(level, { ...opts, modifier: mod });
+  resetEngine(opts.seed ?? level * 9973 + 17);
+  L = opts.mission ? generateMission(opts.mission, opts) : generateLevel(level, { ...opts, seed: opts.seed ?? level * 9973 + 17, modifier: mod });
   Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, popSfx: 0, reached: 0, winT: 0,
-    rateMult: mod === "swift" ? 1.25 : 1, speedMul: mod === "swift" ? 1.2 : 1, mode: opts.mode || "normal", modifier: mod, seed: opts.seed, scoreMult: mod ? MODIFIERS[mod].scoreMult : 1,
+    rateMult: mod === "swift" ? 1.25 : 1, speedMul: mod === "swift" ? 1.2 : 1, mode: opts.mode || "normal", modifier: mod, seed: opts.seed ?? level * 9973 + 17, scoreMult: mod ? MODIFIERS[mod].scoreMult : 1,
     belt: [null, null], beltFx: [null, null], beltFxUntil: [0, 0], swap: null, coach: null,
     tactics: { perfect: 0, used: 0, wasted: 0, misused: 0, banked: 0, surgePerfect: 0 }, threat: null, surgeReady: false, bankBonus: 0, bankLocked: false,
     score: 0, kills: 0, combo: 0, comboT: 0, bestCombo: 0, surge: 0, surgeT: 0, surges: 0, idleT: 0, shieldT: 0, giantT: 0, giantK: 1,
     peakSquad: 0, bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
   time.scale = time.target = 1; time.slowT = time.stopT = 0; time.lastSlow = time.lastStop = -99;
-  addSoldiers(mod === "lone" ? 1 : START_SQUAD);
+  L.tick = 0; L.lastCause = "attrition"; L.compression = 1;
+  L.bullets = pooledList(bulletPool); L.fx = pooledList(fxPool);
+  for (const e of L.enemies) initEnemy(e);
+  if (L.boss.def?.init) L.boss.def.init(L.boss);
+  addSoldiers(L.mission ? L.mission.start : mod === "lone" ? 1 : START_SQUAD);
+  hud.beltKey = null; hudCache.clear();
+  replay = { version: 1, seed: L.seed, level, mission: L.mission?.id || null, assist: L.missionState?.assisted || 0, elite: !!L.elite, inputs: [], mode:L.mode, modifier:L.modifier, initial: { jackDry: save.jackDry || 0 } };
   beltChanged();
   $("levelName").textContent = mod ? MODIFIERS[mod].name : levelName(level); $("levelNo").textContent = L.mode === "daily" ? "Daily Challenge" : `Level ${level}`;
   setWeapon(mod === "arsenal" ? 4 : 0);
   hud.score = 0; hud.best = L.mode === "normal" ? save.bestScore[level] || 0 : 0;
   bus.emit("generate", { L, level, rng: rng((opts.seed ?? level) * 4241 + 7), length: L.length, theme: L.theme, mode: L.mode, modifier: mod });
-  bus.emit("levelStart", { level, name: levelName(level), theme: L.theme, mode: L.mode, modifier: mod });
+  bus.emit("levelStart", { level, name: L.mission?.title || levelName(level), theme: L.theme, mode: L.mode, modifier: mod });
+  if (L.mission) {
+    const progress = missionProgress(L.mission.id); progress.attempts++; persist();
+    bus.emit("missionStart", { id: L.mission.id, assist: L.missionState.assisted });
+  }
 }
 // switch level once its theme's art is loaded (shows the loading screen only if that takes a moment)
 async function goLevel(level, next, opts = {}) {
   const slow = setTimeout(() => show("loading", true), 200);
-  await Scenery.preload(themeFor(level)).catch(e => console.warn("preload failed", e));
+  await Scenery.preload(opts.mission ? missionTheme(opts.mission) : themeFor(level)).catch(e => console.warn("preload failed", e));
   clearTimeout(slow); show("loading", false);
   startLevel(level, opts); setState(next);
 }
 function goMode(o = {}) { return goLevel(o.level || save.level, o.next || "play", o); } // e.g. {mode: "daily", level, modifier, seed}
-const sameRun = () => ({ mode: L.mode, modifier: L.modifier, seed: L.seed });
+const sameRun = () => ({ mode: L.mode, modifier: L.modifier, seed: L.seed, mission: L.mission, elite: L.elite });
 function setWeapon(i) { L.weapon = i; $("weaponImg").src = WEAPONS[i].img; weaponLabel(); bus.emit("weapon", { index: i, name: WEAPONS[i].name }); }
 function weaponLabel() { $("weaponName").textContent = WEAPONS[L.weapon].name + (L.rateMult > 1 ? ` · RATE x${L.rateMult.toFixed(1)}` : ""); }
-function show(id, on) { $(id).hidden = !on; }
+function show(id, on) { if ($(id).hidden === on) $(id).hidden = !on; }
 function setState(s) {
   const from = state; state = s;
   const playing = s === "play" || s === "boss" || s === "bonus";
@@ -818,11 +869,11 @@ for (const el of controlButtons) {
   el.addEventListener("pointerdown", e => e.stopPropagation());
   el.addEventListener("pointerup", e => e.stopPropagation());
 }
-beltButtons.forEach((el, i) => el.onclick = e => { e.stopPropagation(); usePowerup(i); });
-$("surgeButton").onclick = $("surgeBar").onclick = e => { e.stopPropagation(); useSurge(); };
+beltButtons.forEach((el, i) => el.onclick = e => { e.stopPropagation(); queueInput("powerup", i); });
+$("surgeButton").onclick = $("surgeBar").onclick = e => { e.stopPropagation(); queueInput("surge"); };
 $("surgeBar").setAttribute("role", "button"); $("surgeBar").setAttribute("aria-label", "Activate SURGE when ready");
 $("surgeBar").tabIndex = 0;
-$("surgeBar").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); useSurge(); } };
+$("surgeBar").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); queueInput("surge"); } };
 gameEl.addEventListener("pointerdown", e => {
   if (e.target.closest("button,.panel,#surgeBar") || overControl(e)) return;
   if (state === "home") { setState("play"); sfx("gate"); }
@@ -833,7 +884,7 @@ gameEl.addEventListener("pointermove", e => {
   if (!dragging || !L || e.pointerId !== dragId) return;
   if (overControl(e)) { lastX = e.clientX; return; }
   const dx = (e.clientX - lastX) / gameEl.clientWidth; lastX = e.clientX;
-  L.targetX += dx * ROAD * 2.6;
+  queueInput("steer", (pendingTarget ?? L.targetX) + dx * ROAD * 2.6);
 });
 addEventListener("pointerup", () => dragging = false);
 addEventListener("pointercancel", () => dragging = false);
@@ -842,9 +893,9 @@ addEventListener("keydown", e => {
   keys[e.key] = true;
   if ((state === "play" || state === "boss") && !e.repeat) {
     const k = e.key.toLowerCase();
-    if (k === "1" || k === "q") { e.preventDefault(); usePowerup(0); }
-    if (k === "2" || k === "e") { e.preventDefault(); usePowerup(1); }
-    if (e.code === "Space") { e.preventDefault(); useSurge(); }
+    if (k === "1" || k === "q") { e.preventDefault(); queueInput("powerup", 0); }
+    if (k === "2" || k === "e") { e.preventDefault(); queueInput("powerup", 1); }
+    if (e.code === "Space") { e.preventDefault(); queueInput("surge"); }
   }
   if (state === "home" && ["ArrowLeft", "ArrowRight", "a", "d", " ", "Enter"].includes(e.key)) setState("play");
   if (state === "levels" && e.key === "Escape") { setState("home"); return; }
@@ -861,7 +912,7 @@ $("levelsBtn").onclick = () => setState("levels"); $("levelsClose").onclick = ()
 $("resumeBtn").onclick = () => setState(resumeState);
 $("quitBtn").onclick = () => goLevel(L.level, "home", sameRun());
 $("nextBtn").onclick = () => goLevel(save.level, "home");
-$("retryBtn").onclick = () => goLevel(L.level, "play", sameRun());
+$("retryBtn").onclick = () => restartSame();
 function syncToggles() {
   for (const [id, k] of [["soundBtn", "sound"], ["vibeBtn", "vibe"]]) { $(id).setAttribute("aria-pressed", save[k]); $(id).textContent = save[k] ? "ON" : "OFF"; }
 }
@@ -877,12 +928,12 @@ function damage() { return WEAPONS[L.weapon].dmg * (L.surgeT > 0 ? 2 : 1); } // 
 // ---------- time feel: hit-stop and slow motion (sim only; UI and camera shake keep real time) ----------
 const time = { scale: 1, target: 1, slowT: 0, stopT: 0, lastSlow: -99, lastStop: -99 };
 function slowMo(scale, seconds, force = false) {
-  const now = performance.now() / 1000;
+  const now = L ? L.time : 0;
   if (!force && (now - time.lastSlow < 4 || (L && L.slowMos >= 3))) return; // rare peaks only
   time.lastSlow = now; time.slowT = seconds; time.target = scale; if (L) L.slowMos++;
 }
 function hitStop(seconds) {
-  const now = performance.now() / 1000;
+  const now = L ? L.time : 0;
   if (now - time.lastStop < 0.4) return;
   time.lastStop = now; time.stopT = Math.max(time.stopT, seconds);
 }
@@ -935,19 +986,20 @@ function spawnSolid(kind, x, z, hp, extra = {}) { const o = makeSolid(kind, x, z
 function damageArea(x, z, radius, dmg, opts = {}) { // explosions from modules (barrels, airstrikes): enemies, solids and the boss
   for (const e of L.enemies) if (e.hp > 0 && e.state !== "dead" && e.state !== "dying" && Math.hypot(e.x - x, e.z - z) < radius + e.r) hitEnemy(e, dmg);
   for (const o of L.solids) if (o.alive && Math.hypot(o.x - x, o.z - z) < radius + o.hw) hitSolid(o, dmg);
-  const b = L.boss; if (!opts.skipBoss && state === "boss" && b.hp > 0 && Math.hypot(b.x - x, b.z - z) < radius + 2.6) { b.hp -= dmg; b.flash = 0.08; if (b.hp <= 0) bossDown(); }
+  const b = L.boss; if (!opts.skipBoss && state === "boss" && b.hp > 0 && Math.hypot(b.x - x, b.z - z) < radius + 2.6) { damageBoss(dmg); }
   bus.emit("explosion", { x, z, radius });
 }
 function finishLevel(mult) { if (state !== "bonus" && state !== "boss") return; L.finaleMult = Math.max(1, mult || 1); L.mult = L.finaleMult + L.bankBonus; win(); } // called by js/finale.js
 function endBoss() { // after the boss falls: hand over to the finale if there is one
+  if (L.mission) { win(); return; }
   if (window.Finale && Finale.start && Finale.start(ctx)) { L.bonusT = 0; setState("bonus"); bus.emit("bonusState", {}); }
   else finishLevel(1);
 }
 function bonusStep(dt) { // finale: js/finale.js moves the squad and breaks walls; the game keeps formation and effects running
   L.soldiers.forEach((s, i) => { const [ox, oz] = slot(i); s.x += (L.sx + ox - s.x) * Math.min(1, dt * 10); s.z += (L.sz + oz - s.z) * Math.min(1, dt * 10); s.x = Math.max(-ROAD + 0.3, Math.min(ROAD - 0.3, s.x)); });
-  for (let i = L.fx.length - 1; i >= 0; i--) { const f = L.fx[i]; f.t += dt; if (f.t >= f.dur) L.fx.splice(i, 1); }
+  updateFx(dt);
   L.shake = Math.max(0, L.shake - dt);
-  $("countN").textContent = L.soldiers.length;
+  hudSet("countN", "textContent", L.soldiers.length); updateSpecialistHUD();
   bus.emit("tick", { dt, L, state });
   L.bonusT += dt; if (state === "bonus" && L.bonusT > 9) finishLevel(L.mult || 1); // safety net if the finale never reports
 }
@@ -964,18 +1016,23 @@ function applySkin() {
 
 function step(dt) {
   L.time += dt;
+  L.giantK += ((L.giantT > 0 ? 1.7 : 1) - L.giantK) * Math.min(1, dt * 8);
+  updateCampaign(dt);
   const n = L.soldiers.length;
   // steering
   const kx = (keys.ArrowLeft || keys.a ? -1 : 0) + (keys.ArrowRight || keys.d ? 1 : 0);
   L.targetX += kx * dt * 9;
-  const lim = Math.max(0.6, ROAD - Math.min(squadRadius(n) * 0.8, ROAD - 0.6));
+  const lim = L.mission ? 5.2 : Math.max(0.6, ROAD - Math.min(squadRadius(n) * 0.8, ROAD - 0.6));
   L.targetX = Math.max(-lim, Math.min(lim, L.targetX));
   L.sx += (L.targetX - L.sx) * Math.min(1, dt * 12);
   if (state === "bonus") { bonusStep(dt); return; }
   const prevZ = L.sz;
   if (state === "play") {
-    L.sz -= SPEED * L.speedMul * dt;
+    L.sz -= SPEED * L.speedMul * (L.rescueSlow > 0 ? 0.55 : 1) * dt;
+    L.rescueSlow = Math.max(0, (L.rescueSlow || 0) - dt);
     if (L.sz <= -L.length) {
+      if (L.noBoss) { if (!L.soldiers.length) lose(); else { L.bossSoldiers = L.soldiers.length; win(); } return; }
+      L.bossEntryCount = L.soldiers.length;
       L.sz = -L.length; setState("boss"); L.boss.state = "walk"; vibe(80);
       L.boss.z = Math.min(L.boss.z, L.sz - squadRadius(L.soldiers.length) - 10); // fair fight window for any squad size
       if (L.threat) endThreat(L.threat); // belt effects carry into the boss fight
@@ -994,39 +1051,36 @@ function step(dt) {
     L.milestone = m; bus.emit("squadMilestone", { n: m });
     floatText(L.sx, 3.4, L.sz, m >= 500 ? "ULTRA SQUAD!" : m >= 250 ? "MEGA SQUAD!" : "BIG SQUAD!", "#7fd0ff");
   }
-  // soldiers follow formation
-  L.soldiers.forEach((s, i) => {
-    const [ox, oz] = slot(i);
-    s.x += (L.sx + ox - s.x) * Math.min(1, dt * 10); s.z += (L.sz + oz - s.z) * Math.min(1, dt * 10);
-    s.x = Math.max(-ROAD + 0.3, Math.min(ROAD - 0.3, s.x));
-  });
+  updateCrowd(dt);
   // gates
   for (const g of L.gates) {
     if (g.used || !(prevZ > g.z && L.sz <= g.z)) continue;
     g.used = true;
-    const h = g.halves.find(h => (L.sx < 0) === (h.side < 0));
+    const h = g.halves.reduce((a,b) => Math.abs(a.x-L.sx) <= Math.abs(b.x-L.sx) ? a : b);
     const before = L.soldiers.length;
-    const after = h.powerup ? before : h.op === "x" ? Math.round(before * h.v) : before + h.v;
+    const after = h.powerup || h.recruit ? before : h.rescue ? Math.max(0, before - (h.cost || 0)) : h.op === "x" ? Math.round(before * h.v) : before + h.v;
     if (h.powerup) collectPowerup(h.powerup);
+    if (h.recruit && SPECIALISTS[h.recruit]) { const n = addSoldiers(h.n || 1, h.recruit); L.missionState && (L.missionState.recruits += n); bus.emit("recruit", {kind:h.recruit,n}); }
+    if (h.rescue) { if (L.missionState) { L.missionState.rescued += h.rescue; L.missionState.rescueTaken++; L.missionState.rescueSlowdowns++; } L.rescueSlow = 1.2; bus.emit("rescue", {n:h.rescue,cost:h.cost || 0}); addScore(h.rescue * 25, {reason:"rescue"}); }
     if (after > before) {
       const gain = after - before;
       addSoldiers(gain); sfx("gate"); floatText(L.sx, 2, L.sz, h.op === "x" ? `x${h.v}` : `+${gain}`, h.jackpot ? "#ffd84a" : "#7fd0ff");
       addScore(gain * POINTS.soldier, { raw: true, x: L.sx, z: L.sz, reason: "gate" }); fillSurge(Math.min(0.15, gain / 200));
       if (h.jackpot || (h.op === "x" && h.v >= 3)) slowMo(0.4, 0.45); else if (gain >= Math.max(10, before * 0.4)) hitStop(0.07);
     }
-    else if (after < before) { killSoldiers(before - after, null, true); breakCombo(); sfx("bad"); vibe(60); flashRed(); floatText(L.sx, 2, L.sz, `${after - before}`, "#ff6a5a"); }
+    else if (after < before) { killSoldiers(before - after, null, true, "gate"); breakCombo(); sfx("bad"); vibe(60); flashRed(); floatText(L.sx, 2, L.sz, `${after - before}`, "#ff6a5a"); }
     Obj3D.gateUsed(g, h);
     bus.emit("gatePass", { gate: g, half: h, before, after });
   }
   // squad runs into unbroken solids: soldiers in that column die, object breaks
   for (const o of L.solids) {
-    if (!o.alive || !(prevZ > o.z + 0.4 && L.sz <= o.z + 0.4)) continue;
-    const hit = L.soldiers.filter(s => Math.abs(s.x - o.x) < o.hw + 0.2).length;
+    if (!o.alive || Math.abs(L.sz-o.z) > squadRadius(L.soldiers.length)+3) continue;
+    const hit = L.soldiers.reduce((n,s) => n + (Math.abs(s.x-o.x) < o.hw+0.2 && Math.abs(s.z-o.z)<0.8 ? 1 : 0), 0);
     if (!hit) continue;
     const guarded = L.shieldT > 0 || L.giantT > 0;
     let lose = guarded || o.kind === "airdrop" ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);
     if (o.threat) lose = Math.min(o.kind === "barricade" && !guarded ? o.threat.lossCap : lose, threatLossLeft(o.threat));
-    if (lose) { killSoldiers(lose, o.x); breakCombo(); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a"); }
+    if (lose) { lose = killSoldiersInRect(o.x-o.hw-0.2, o.x+o.hw+0.2, o.z-0.8, o.z+0.8, lose, o.threat ? `threat:${o.threat.kind}` : "attrition"); breakCombo(); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a"); }
     if (o.threat) o.threat.lost += lose;
     breakSolid(o, L.giantT > 0 || o.kind === "airdrop"); // a GIANT squad smashes things and keeps the reward
   }
@@ -1038,46 +1092,17 @@ function step(dt) {
     L.fireAcc += dt * shooters * fireRate();
     while (L.fireAcc >= 1) {
       L.fireAcc -= 1;
-      const s = L.soldiers[Math.floor(Math.random() * n)];
+      const s = L.soldiers[Math.floor(gameplayRng("shooting") * n)];
       for (let k = 0; k < wp.spread; k++) {
         const vx = wp.spread > 1 ? (k - 1) * 4 : 0;
-        L.bullets.push({ x: s.x + 0.12, z: s.z - 0.4, vx, life: BULLET_RANGE / BULLET_SPEED, dmg: damage() * per, splash: wp.splash || 0, pierce: L.surgeT > 0 ? 1 : 0 });
+        L.bullets.push({ x: s.x + 0.12, z: s.z - 0.4, vx, life: BULLET_RANGE / BULLET_SPEED, dmg: damage() * per, splash: s.specialist === "grenadier" ? Math.max(2, wp.splash || 0) : wp.splash || 0, shieldPierce: s.specialist === "piercer", piercer: s.specialist === "piercer", specialist: s.specialist, pierce: L.surgeT > 0 ? 1 : 0 });
       }
-      if (Math.random() < 0.15) L.fx.push({ x: s.x + 0.12, y: 1.15, z: s.z - 0.5, f: 1, t: 0, dur: 0.08, size: 0.7 });
+      if (visualRandom() < 0.15) L.fx.push({ x: s.x + 0.12, y: 1.15, z: s.z - 0.5, f: 1, t: 0, dur: 0.08, size: 0.7 });
     }
     L.shotSfx -= dt; if (L.shotSfx <= 0) { sfx(wp.splash ? "rocket" : "shot"); L.shotSfx = wp.splash ? 0.2 : 0.11; }
   }
-  // bullets
-  const active = L.enemies.filter(e => e.state !== "dead" && e.state !== "dying" && e.z > L.sz - BULLET_RANGE - 4 && e.z < L.sz + 6);
-  const solidsNear = L.solids.filter(o => o.alive && o.z > L.sz - BULLET_RANGE - 4 && o.z < L.sz + 2);
-  const gatesNear = L.gates.filter(g => !g.used && g.z > L.sz - BULLET_RANGE - 4 && g.z < L.sz);
+  updateBullets(dt);
   const b0 = L.boss;
-  for (let i = L.bullets.length - 1; i >= 0; i--) {
-    const b = L.bullets[i], oz = b.z;
-    b.z -= BULLET_SPEED * dt; b.x += b.vx * dt; b.life -= dt;
-    let hit = false;
-    for (const o of solidsNear) {
-      if (o.alive && Math.abs(b.x - o.x) < o.hw && oz >= o.z && b.z <= o.z) { hitSolid(o, b.dmg); if (b.splash) explode(b.x, o.z, b.dmg, b.splash); hit = true; break; }
-    }
-    if (!hit) for (const g of gatesNear) {
-      if (oz >= g.z && b.z <= g.z) {
-        const h = g.halves.find(h => Math.abs(b.x - h.x) < h.hw);
-        if (h && h.op === "+") { h.acc = (h.acc || 0) + b.dmg * 0.35; if (h.acc >= 1) { const inc = Math.floor(h.acc); h.acc -= inc; h.v = Math.min(h.v + inc, 99); refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
-        else if (h && h.op === "x") { h.acc = (h.acc || 0) + b.dmg * 0.02; if (h.acc >= 1 && h.v < 3) { h.acc = 0; h.v++; refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
-        hit = true; break;
-      }
-    }
-    if (!hit) for (const e of active) {
-      if (e.hp > 0 && Math.abs(b.x - e.x) < e.r + 0.08 && oz >= e.z - 0.3 && b.z <= e.z + 0.3) { hitEnemy(e, b.dmg); if (b.splash) explode(e.x, e.z, b.dmg, b.splash, e); if (b.pierce > 0) { b.pierce--; b.z -= 0.7; } else hit = true; break; }
-    }
-    if (!hit && state === "boss" && b0.hp > 0 && Math.abs(b.x - b0.x) < 2.6 && b.z <= b0.z + 0.5) {
-      b0.hp -= b.dmg * (b.splash ? 1.2 : 1) * (L.giantT > 0 ? 2 : 1); b0.flash = 0.08; hit = true;
-      if (b.splash) L.fx.push({ x: b.x, y: 1.5 + Math.random() * 3, z: b0.z + 1, f: 9, t: 0, dur: 0.4, size: 2.6 });
-      else if (Math.random() < 0.3) L.fx.push({ x: b.x, y: 2 + Math.random() * 3, z: b0.z + 1, f: 4, t: 0, dur: 0.2, size: 1.3 });
-      if (b0.hp <= 0) bossDown();
-    }
-    if (hit || b.life <= 0) L.bullets.splice(i, 1);
-  }
   // enemies
   L.boomSfx -= dt;
   const R = squadRadius(L.soldiers.length);
@@ -1086,15 +1111,16 @@ function step(dt) {
     e.t += dt; e.flash = Math.max(0, e.flash - dt);
     if (e.state === "dying") { e.dieT += dt; if (e.dieT > 0.9) e.state = "dead"; continue; }
     if (e.state === "idle" && e.z > L.sz - 48) e.state = "walk";
+    if (e.def?.update && e.state !== "idle") { e.def.update(e, dt); continue; }
     if (e.state !== "walk") continue;
     e.z += e.sp * dt;
     const dx = L.sx - e.x; e.x += Math.sign(dx) * Math.min(Math.abs(dx), dt * e.sp * 0.35);
     // separation
-    if (L.soldiers.length && Math.hypot(e.x - L.sx, (e.z - L.sz) * 1.2) < R * (L.giantT > 0 ? 1.4 : 1) + e.r) {
+    if (L.soldiers.length && L.soldiers.some(s => Math.hypot(e.x-s.x, e.z-s.z) < e.r+0.35)) {
       const guarded = L.shieldT > 0 || L.giantT > 0;
       if (!guarded) {
         const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
-        killSoldiers(loss, e.x); if (e.threat) e.threat.lost += loss;
+        const lost = killSoldiersInCircle(e.x, e.z, e.r + 0.65, loss, e.threat ? `threat:${e.threat.kind}` : "swarm"); if (e.threat) e.threat.lost += lost;
       }
       e.hp = 0; e.state = "dying"; e.dieT = 0.3;
       if (guarded) onKill(e); // trampled by a GIANT squad or bounced off the SHIELD
@@ -1103,8 +1129,11 @@ function step(dt) {
     }
     if (e.z > L.sz + 12) e.state = "dead";
   }
+  compactEnemies();
+  // Registered bosses own movement; the engine schedules data-only definitions.
+  if (state === "boss" && b0.hp > 0 && b0.def) updateRegisteredBoss(b0, dt);
   // boss
-  if (state === "boss" && b0.hp > 0) {
+  if (state === "boss" && b0.hp > 0 && !b0.def) {
     b0.t += dt; b0.flash = Math.max(0, b0.flash - dt);
     b0.z += 1.1 * dt;
     if (b0.slamT < SLAM_WARN) b0.x += (L.sx - b0.x) * dt * 0.4; // the boss stops aiming once the warning ring shows: dodge sideways
@@ -1114,40 +1143,39 @@ function step(dt) {
     if (b0.slamT > SLAM_AT) {
       b0.slamT = 0; L.shake = 0.4; sfx("boom"); vibe(120);
       const [cx, cz] = slamCenter(b0), cap = 2 + L.level;
-      let k = 0;
-      if (L.shieldT <= 0 && L.giantT <= 0) for (let i = L.soldiers.length - 1; i >= 0 && k < cap; i--) {
-        const sd = L.soldiers[i];
-        if (Math.hypot(sd.x - cx, sd.z - cz) < SLAM_R) { L.fx.push({ x: sd.x, y: 0.6, z: sd.z, f: 4, t: 0, dur: 0.35, size: 1.1 }); L.soldiers.splice(i, 1); k++; }
-      }
-      if (k) bus.emit("soldiersLost", { n: k, total: L.soldiers.length });
+      const k = killSoldiersInCircle(cx, cz, SLAM_R, cap, "boss:slam");
       bus.emit("bossSlam", { boss: b0, killed: k });
       if (L.threat && L.threat.kind === "slam") { L.threat.lost += k; endThreat(L.threat); }
       if (k) { flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); } else if (L.sz - b0.z < 14) floatText(L.sx, 2.5, L.sz, "DODGED!", "#7fd0ff");
       L.fx.push({ x: cx, y: 0.3, z: cz, f: 9, t: 0, dur: 0.5, size: SLAM_R * 1.6 });
     }
-    if (b0.z + 2.6 > L.sz - R) killSoldiers(L.soldiers.length, null, true);
-    $("bossFill").style.width = `${Math.max(0, b0.hp / b0.maxHp) * 100}%`;
+    if (b0.z + 2.6 > L.sz - R) killSoldiersInCircle(b0.x, b0.z, 3, Infinity, "boss:contact");
+    hudSet("bossFill", "width", `${Math.round(Math.max(0, b0.hp / b0.maxHp) * 100)}%`);
   }
   if (L.winT > 0) { L.winT -= dt; if (L.winT <= 0) endBoss(); }
   // fx
-  for (let i = L.fx.length - 1; i >= 0; i--) { const f = L.fx[i]; f.t += dt; if (f.t >= f.dur) L.fx.splice(i, 1); }
+  updateFx(dt);
   L.shake = Math.max(0, L.shake - dt);
   // progress & end
   const prog = Math.min(1, -L.sz / L.length); L.reached = Math.max(L.reached, prog);
-  $("progFill").style.width = `${prog * 100}%`; $("progPct").textContent = `${Math.floor(prog * 100)}%`;
-  $("countN").textContent = L.soldiers.length;
+  hudSet("progFill", "width", `${Math.floor(prog * 100)}%`); hudSet("progPct", "textContent", `${Math.floor(prog * 100)}%`);
+  hudSet("countN", "textContent", L.soldiers.length); updateSpecialistHUD();
   bus.emit("tick", { dt, L, state });
   if (L.soldiers.length === 0 && (state === "play" || state === "boss")) lose();
 }
 function hitSolid(o, dmg) {
+  if (!o.alive) return;
   o.hp -= dmg; Obj3D.solidHit(o); bus.emit("solidHit", { o });
-  if (Math.random() < 0.25) L.fx.push({ x: o.x + (Math.random() - 0.5) * o.hw, y: 1 + Math.random(), z: o.z + 0.3, f: 4, t: 0, dur: 0.15, size: 0.8 });
+  if (visualRandom() < 0.25) L.fx.push({ x: o.x + (visualRandom() - 0.5) * o.hw, y: 1 + visualRandom(), z: o.z + 0.3, f: 4, t: 0, dur: 0.15, size: 0.8 });
   if (o.hp <= 0) breakSolid(o, true); else labelSolid(o);
 }
 function breakSolid(o, earned) {
+  if (!o.alive) return;
   o.alive = false; Obj3D.solidBreak(o); bus.emit("solidBreak", { o, earned });
   L.fx.push({ x: o.x, y: 1, z: o.z, f: 9, t: 0, dur: 0.45, size: 3 });
   if (!earned) return;
+  if (o.kind === "fuelTruck") damageArea(o.x, o.z, 8, 160 + L.level*15);
+  if (o.kind === "shortcut") { const h = L.hazards?.find(h => !h.done && h.z < o.z); if (h) { h.done = true; if(h.vis) h.vis.visible=false; } }
   sfx("hit");
   addScore(POINTS[o.kind] || 0, { x: o.x, z: o.z, reason: o.kind });
   if (o.kind === "blockYellow" || o.kind === "crate" || o.kind === "weaponCase" || o.kind === "airdrop") hitStop(0.05);
@@ -1156,29 +1184,32 @@ function breakSolid(o, earned) {
   if (o.weapon) { if (o.weapon > L.weapon) setWeapon(o.weapon); floatText(o.x, 2.6, o.z, WEAPONS[L.weapon].name + "!", "#ffe066"); sfx("win"); vibe(60); }
 }
 function hitEnemy(e, dmg) {
+  if (e.hp <= 0 || e.state === "dying" || e.state === "dead") return;
   // Dense swarms resist ordinary fire; the matching airstrike removes that resistance.
   if (e.threat && e.threat.kind === "swarm" && !e.threat.countered) dmg *= 0.2;
   e.hp -= dmg; e.flash = 0.07; bus.emit("enemyHit", { e });
   if (e.hp <= 0) {
-    e.state = "dying"; e.dieT = 0; bus.emit("enemyDie", { e }); onKill(e);
+    e.state = "dying"; e.dieT = 0; checkMedicOrder(e); e.def?.onDeath?.(e); bus.emit("enemyDie", { e }); onKill(e);
     if (e.type === "brute") { L.fx.push({ x: e.x, y: 0.5, z: e.z, f: 9, t: 0, dur: 0.45, size: 3 }); L.shake = 0.2; sfx("boom"); }
-    else if (Math.random() < 0.3) L.fx.push({ x: e.x, y: 0.9, z: e.z, f: 6, t: 0, dur: 0.3, size: 1 });
+    else if (visualRandom() < 0.3) L.fx.push({ x: e.x, y: 0.9, z: e.z, f: 6, t: 0, dur: 0.3, size: 1 });
   }
 }
-function damageBoss(n) {
+function damageBoss(n, raw = false) {
   if (state !== "boss" || L.boss.hp <= 0) return;
-  L.boss.hp -= n; L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
+  L.boss.hp -= n * (raw ? 1 : bossWeakMultiplier(L.boss)); L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
 }
 function bossDown() {
   if (L.bankLocked) return;
   if (L.threat) endThreat(L.threat);
+  checkMedicOrder(L.boss);
+  L.boss.def?.onDeath?.(L.boss);
   L.bankLocked = true;
   const count = (L.belt[0] ? 1 : 0) + (L.belt[1] ? 1 : 0);
   L.tactics.banked = count; L.bankBonus = count * 0.5;
   bus.emit("bank", { count, bonus: L.bankBonus });
   L.swap = null; L.belt[0] = L.belt[1] = null; beltChanged();
   L.boss.state = "down"; L.shake = 0.6; sfx("boom"); vibe(200);
-  for (let k = 0; k < 6; k++) L.fx.push({ x: L.boss.x + (Math.random() - 0.5) * 4, y: Math.random() * 4, z: L.boss.z + 1, f: 9, t: -k * 0.08, dur: 0.6, size: 4 });
+  for (let k = 0; k < 6; k++) L.fx.push({ x: L.boss.x + (visualRandom() - 0.5) * 4, y: visualRandom() * 4, z: L.boss.z + 1, f: 9, t: -k * 0.08, dur: 0.6, size: 4 });
   L.bossSoldiers = L.soldiers.length; // stars are decided here; the finale cannot lower them
   addScore(400 + 100 * L.level, { x: L.boss.x, z: L.boss.z, reason: "boss" });
   slowMo(0.3, 0.6, true);
@@ -1203,21 +1234,23 @@ function renderLevels() {
   grid.querySelector(".cur")?.scrollIntoView({ block: "nearest" });
 }
 function win() {
-  if (state !== "boss" && state !== "bonus") return;
+  if (state !== "boss" && state !== "bonus" && !(L.mission && state === "play")) return;
   const n = L.bossSoldiers || L.soldiers.length, kept = Math.min(1, n / Math.max(1, L.peakSquad));
-  const keptPct = Math.floor(kept * 100), stars = n >= 30 + L.level * 10 && kept >= 0.65 ? 3 : n >= 10 + L.level * 3 && kept >= 0.35 ? 2 : 1;
+  const keptPct = Math.floor(kept * 100), stars = L.mission ? missionStars(true, keptPct).filter(Boolean).length : n >= 30 + L.level * 10 && kept >= 0.65 ? 3 : n >= 10 + L.level * 3 && kept >= 0.35 ? 2 : 1;
   const normal = L.mode === "normal", total = Math.round(L.score * (L.mult || 1));
   const newBest = normal && n > (save.bestSquad[L.level] || 0), bestScore = normal ? save.bestScore[L.level] || 0 : 0, newBestScore = normal && total > bestScore;
   if (normal) {
     save.best[L.level] = 1; save.stars[L.level] = Math.max(save.stars[L.level] || 0, stars);
     if (newBest) save.bestSquad[L.level] = n;
     if (newBestScore) save.bestScore[L.level] = total;
-    save.level = L.level + 1; save.unlocked = Math.max(save.unlocked, save.level); persist();
+    save.level = L.level + 1; save.campaign = save.campaign && typeof save.campaign === "object" ? save.campaign : {};
+save.unlocked = Math.max(save.unlocked, save.level); persist();
   }
   $("stars").innerHTML = starIcons(stars);
   $("winSub").textContent = `${total.toLocaleString()} POINTS${L.mult > 1 ? ` · x${L.mult} FINALE` : ""} · ${n} soldiers${newBestScore ? " · NEW BEST!" : ""}`;
   sfx("win"); setState("win");
   bus.emit("win", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars, keptPct, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
+  if (L.mission) endMission("win", keptPct);
   if (normal) Scenery.preload(themeFor(L.level + 1)).catch(() => {}); // fetch the next theme while the player looks at the stars
 }
 function explode(x, z, dmg, radius, skip = null) {
@@ -1230,7 +1263,7 @@ function explode(x, z, dmg, radius, skip = null) {
 }
 function lose() {
   const pct = Math.floor(L.reached * 100);
-  const prev = save.best[L.level] || 0; save.best[L.level] = Math.max(prev, L.reached); persist();
+  const prev = save.best[L.level] || 0; if (!L.mission) { save.best[L.level] = Math.max(prev, L.reached); persist(); }
   $("losePct").textContent = state === "boss" ? "BOSS" : `${pct}%`;
   $("loseBest").textContent = prev && prev < 1 ? `Best: ${Math.floor(prev * 100)}%` : "";
   const atBoss = state === "boss", bossPct = atBoss ? Math.max(1, Math.round(L.boss.hp / L.boss.maxHp * 100)) : null;
@@ -1238,6 +1271,7 @@ function lose() {
   if (L.threat) endThreat(L.threat);
   L.belt[0] = L.belt[1] = null; L.swap = null; beltChanged();
   sfx("bad"); vibe(200); setState("lose");
+  if (L.mission) endMission("lose", Math.floor(L.soldiers.length / Math.max(1,L.peakSquad)*100));
   bus.emit("lose", { tactics: { ...L.tactics }, pct, atBoss, bossPct, score: L.score, mode: L.mode, modifier: L.modifier, level: L.level });
 }
 
@@ -1270,7 +1304,7 @@ function adaptQuality(dt) {
 function popScale(t) { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); } // ease-out-back 0..1
 function render(dt) {
   const n = L.soldiers.length, R = squadRadius(n);
-  const shake = L.shake > 0 && !matchMedia("(prefers-reduced-motion: reduce)").matches ? (Math.random() - 0.5) * L.shake * 0.8 : 0;
+  const shake = L.shake > 0 && !matchMedia("(prefers-reduced-motion: reduce)").matches ? (visualRandom() - 0.5) * L.shake * 0.8 : 0;
   const camH = CAM.h + Math.min(6, R * 1.2), camBack = CAM.back + Math.min(6, R);
   camera.position.set(L.sx * 0.45 + shake, camH, L.sz + camBack);
   lookAt.set(L.sx * 0.45, 0, L.sz - CAM.ahead); camera.lookAt(lookAt);
@@ -1279,12 +1313,14 @@ function render(dt) {
   camera.updateProjectionMatrix();
   const { sold, enem, brute, boss, fx, shadow } = layers;
   sold.begin(); enem.begin(); brute.begin(); boss.begin(); fx.begin(); shadow.begin();
+  for (const layer of Object.values(registeredLayers)) layer.begin();
+  for (const layer of Object.values(specialistLayers)) layer.begin();
   const firing = state === "play" || state === "boss";
-  L.giantK += ((L.giantT > 0 ? 1.7 : 1) - L.giantK) * Math.min(1, dt * 8); // GIANT power-up grows the squad
+  // Giant scale is advanced on simulation ticks.
   for (const s of L.soldiers) {
-    s.ph += dt * 11; const f = Math.floor(s.ph) % 4 + (firing ? 4 : 0);
+    const f = Math.floor(s.ph + L.time * 11) % 4 + (firing ? 4 : 0);
     const age = s.born === undefined ? 1 : (L.time - s.born) / 0.25, k = (age >= 1 ? 1 : popScale(Math.max(0, age))) * L.giantK;
-    sold.push(s.x, 0, s.z, SOLDIER_H * 0.512 * k, SOLDIER_H * k, f); shadow.push(s.x + SHADOW_DX, s.z + SHADOW_DZ, 1.0 * k);
+    (specialistLayers[s.specialist] || sold).push(s.x, 0, s.z, SOLDIER_H * 0.512 * k, SOLDIER_H * k, f); shadow.push(s.x + SHADOW_DX, s.z + SHADOW_DZ, 1.0 * k);
   }
   const eTex = L.theme.enemy;
   for (const e of L.enemies) {
@@ -1292,18 +1328,18 @@ function render(dt) {
     let f, a = 1;
     if (e.state === "dying") { f = 4 + Math.min(3, Math.floor(e.dieT / 0.15)); a = e.dieT > 0.6 ? 1 - (e.dieT - 0.6) / 0.3 : 1; }
     else f = e.state === "walk" ? Math.floor(e.t * 8) % 4 : 0;
-    const layer = e.type === "brute" ? brute : enem;
+    const layer = registeredLayers[e.type] || (e.type === "brute" ? brute : enem);
     layer.push(e.x, 0, e.z, e.h * CHAR_K * ENEMY_ASPECT[e.type === "brute" ? "brute" : eTex], e.h * CHAR_K, f, a, e.flash > 0 ? 0.7 : 0);
     if (e.state !== "dying") shadow.push(e.x + SHADOW_DX, e.z + SHADOW_DZ, e.r * 2.5);
   }
   const b = L.boss;
-  if (state !== "bonus" && (b.hp > 0 || b.state === "down")) { // the fallen boss leaves the stage for the finale
+  if (!b.hidden && state !== "bonus" && (b.hp > 0 || b.state === "down")) { // the fallen boss leaves the stage for the finale
     let f = b.state === "down" ? 5 : b.slamT > 2.2 ? 4 : b.slamT > 1.8 ? 3 : Math.floor(b.t * 4) % 3;
     if (b.state === "wait") f = 3;
     // boss flickers when hit instead of washing out white under heavy fire
     const bt = layers.boss.mesh.material.uniforms.tint.value.copy(spriteTint); // an enraged boss pulses red
     if (b.enraged && b.hp > 0) { const p = 0.5 + 0.5 * Math.sin(L.time * 9); bt.g *= 0.72 + 0.18 * p; bt.b *= 0.62 + 0.2 * p; }
-    boss.push(b.x, 0, b.z, BOSS_H, BOSS_H, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); shadow.push(b.x + SHADOW_DX * 3, b.z + SHADOW_DZ * 3, 8);
+    (registeredLayers["boss:"+b.type] || boss).push(b.x, 0, b.z, b.h || BOSS_H, b.h || BOSS_H, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); shadow.push(b.x + SHADOW_DX * 3, b.z + SHADOW_DZ * 3, 8);
   }
   const tr = TRACERS[save.tracer] || TRACERS.gold, tu = layers.fx.mesh.material.uniforms.tracer.value, sk = L.surgeT > 0 ? 1.45 : 1;
   if (tr.rainbow) { const c = rainbowColor.setHSL((L.time * 0.6) % 1, 1, 0.6); tu.set(c.r * 1.6, c.g * 1.6, c.b * 1.6); }
@@ -1316,7 +1352,9 @@ function render(dt) {
     fx.push(f.x, f.y - f.size / 2, f.z, f.size, f.size, frame, base >= 14 ? 1 - p : 1);
   }
   sold.end(); enem.end(); brute.end(); boss.end(); fx.end(); shadow.end();
-  const warn = state === "boss" && L.boss.hp > 0 && L.boss.slamT >= SLAM_WARN;
+  for (const layer of Object.values(registeredLayers)) layer.end();
+  for (const layer of Object.values(specialistLayers)) layer.end();
+  const warn = state === "boss" && !L.boss.def && L.boss.hp > 0 && L.boss.slamT >= SLAM_WARN;
   slamRing.visible = slamFill.visible = warn;
   if (warn) {
     const [cx, cz] = slamCenter(L.boss), p = (L.boss.slamT - SLAM_WARN) / (SLAM_AT - SLAM_WARN);
@@ -1326,38 +1364,320 @@ function render(dt) {
   Obj3D.update(dt);
   Scenery.update(dt);
   renderer.render(scene, camera);
+  sampleRenderer();
   // HUD: score count-up, best, combo and SURGE meter on the squad badge (real time, not slowed)
   const rdt = hud.realDt || dt;
   if (!$("scoreBox").hidden) {
     hud.score += (L.score - hud.score) * Math.min(1, rdt * 10); if (Math.abs(L.score - hud.score) < 1) hud.score = L.score;
-    $("scoreN").textContent = Math.round(hud.score).toLocaleString();
+    hudSet("scoreN", "textContent", Math.round(hud.score).toLocaleString());
     const bestEl = $("scoreBest"), beat = hud.best > 0 && L.score > hud.best;
-    bestEl.textContent = hud.best > 0 ? (beat ? "NEW BEST!" : `BEST ${hud.best.toLocaleString()}`) : ""; bestEl.classList.toggle("new", beat);
+    hudSet("scoreBest", "textContent", hud.best > 0 ? (beat ? "NEW BEST!" : `BEST ${hud.best.toLocaleString()}`) : ""); bestEl.classList.toggle("new", beat);
   }
   const cEl = $("combo"), tier = L.combo >= 10 ? comboTier() : null;
-  cEl.hidden = L.combo < 5;
-  if (!cEl.hidden) { cEl.textContent = `x${L.combo}`; cEl.className = "combo stroke" + (tier ? ` t${COMBO_TIERS.length - COMBO_TIERS.indexOf(tier)}` : ""); }
+  hudSet("combo", "hidden", L.combo < 5);
+  if (!cEl.hidden) { hudSet("combo", "textContent", `x${L.combo}`); hudSet("combo", "className", "combo stroke" + (tier ? ` t${COMBO_TIERS.length - COMBO_TIERS.indexOf(tier)}` : "")); }
   updateBeltHUD();
-  $("surgeFill").style.width = `${Math.round(L.surge * 100)}%`; $("count").classList.toggle("surging", L.surgeT > 0);
+  hudSet("surgeFill", "width", `${Math.round(L.surge * 100)}%`); $("count").classList.toggle("surging", L.surgeT > 0);
   // squad count badge above the squad
   if (!$("count").hidden) {
     tmpV.set(L.sx, (1.95 + R * 0.3) * L.giantK, L.sz).project(camera);
-    const c = $("count"); c.style.left = `${(tmpV.x * 0.5 + 0.5) * 100}%`; c.style.top = `${(-tmpV.y * 0.5 + 0.5) * 100}%`;
+    const c = $("count"); hudSet("count", "left", `${((tmpV.x * 0.5 + 0.5) * 100).toFixed(2)}%`); hudSet("count", "top", `${((-tmpV.y * 0.5 + 0.5) * 100).toFixed(2)}%`);
   }
 }
 
 let last = performance.now();
 function frame(now) {
-  const rawDt = (now - last) / 1000, dt = Math.min(0.05, rawDt); last = now;
+  const rawDt = Math.max(0, (now-last)/1000); last=now;
+  clocks.real += rawDt;
   if (L) {
-    adaptQuality(Math.min(rawDt, 0.25));
-    hud.realDt = state === "paused" ? 0 : dt;
-    const sim = state === "play" || state === "boss" || state === "bonus", gdt = sim ? dt * timeScale(dt) : dt;
-    if (sim) { if (gdt > 0) step(gdt); }
-    else if (state === "home") L.time += dt;
-    render(state === "paused" ? 0 : gdt);
+    adaptQuality(Math.min(rawDt, 0.25)); hud.realDt = state === "paused" ? 0 : Math.min(rawDt, 0.1);
+    if (!testMode) advanceClock(rawDt);
+    render(state === "paused" ? 0 : Math.min(rawDt, 0.1) * time.scale);
   }
   requestAnimationFrame(frame);
+}
+
+// ---------- campaign engine: deterministic simulation and module contracts ----------
+const FIXED_DT = 1/60, MAX_CATCHUP = 5, HASH_CELL = 2;
+const clocks = { real: 0, sim: 0, slow: 0, wall: 0 };
+let accumulator = 0, slowAccumulator = 0, testMode = false, nextEntityId = 1;
+let runSeed = 1, streams = Object.create(null), replay = null, playback = null, playbackAt = 0;
+let pendingInputs = [], pendingTarget = null;
+const visualRandom = rng(0xc05e71c);
+const enemyDefs = Object.create(null), bossDefs = Object.create(null), registeredLayers = Object.create(null), specialistLayers = Object.create(null);
+const BASE_ENEMIES = { zombie:{hp:2,r:.42,h:1.45,sp:2.6,dmg:1}, grunt:{hp:2,r:.42,h:1.45,sp:3.2,dmg:1}, brute:{hp:22,r:.85,h:2.3,sp:2.2,dmg:5} };
+const SPECIALISTS = { piercer:{icon:"↟",color:0x6bffdf}, grenadier:{icon:"✹",color:0xffba65}, defender:{icon:"⬡",color:0xada0ff} };
+const telegraphGroup = new THREE.Group(); scene.add(telegraphGroup);
+const bulletPool = [], fxPool = [], hudCache = new Map();
+const profile = { steps:0, simMs:0, maxSimMs:0, frames:0, calls:0, triangles:0, maxCalls:0, droppedSeconds:0, candidates:0 };
+function resetProfile() { for (const k in profile) profile[k]=0; }
+function sampleRenderer() { const r=renderer.info?.render; if(!r)return; profile.frames++; profile.calls+=r.calls; profile.triangles+=r.triangles; profile.maxCalls=Math.max(profile.maxCalls,r.calls); }
+function profileSnapshot() { return {...profile, meanSimMs:profile.steps?profile.simMs/profile.steps:0, meanCalls:profile.frames?profile.calls/profile.frames:null, meanTriangles:profile.frames?profile.triangles/profile.frames:null, memory:renderer.info?.memory || null}; }
+function gameplayRng(stream = "gameplay") {
+  // Numeric arguments retain the old seeded-generator helper used by scenery modules.
+  if (typeof stream === "number") return rng(stream);
+  if (streams[stream] === undefined) { let h=runSeed; for(let i=0;i<stream.length;i++)h=Math.imul(h^stream.charCodeAt(i),16777619); streams[stream]=h>>>0; }
+  streams[stream]=(Math.imul(streams[stream],1664525)+1013904223)>>>0; return streams[stream]/4294967296;
+}
+function resetEngine(seed) {
+  runSeed=seed>>>0; streams=Object.create(null); nextEntityId=1; accumulator=slowAccumulator=0; clocks.sim=clocks.slow=clocks.wall=0;
+  playback=null; playbackAt=0; pendingInputs=[]; pendingTarget=null;
+  if(L) { for(const b of L.bullets || [])bulletPool.push(b); for(const f of L.fx || [])fxPool.push(f); }
+  resetProfile();
+}
+function pooledList(pool) {
+  const a=[];
+  Object.defineProperty(a,"push",{value:function(...items){for(const data of items){const p=pool.pop() || {}; for(const k in p)delete p[k]; Object.assign(p,data); Array.prototype.push.call(this,p);}return this.length;}});
+  return a;
+}
+function releaseAt(a,i,pool) { const p=a[i]; a[i]=a[a.length-1];a.pop();pool.push(p); }
+function spawnFx(f) { L.fx.push(f); }
+function updateFx(dt) {
+  for(let i=L.fx.length-1;i>=0;i--) {const f=L.fx[i];f.t+=dt; if(f.vy!==undefined){f.vy-=12*dt;f.x+=(f.vx||0)*dt;f.z+=(f.vz||0)*dt;f.y=Math.max(.05,f.y+f.vy*dt);} if(f.t>=f.dur)releaseAt(L.fx,i,fxPool);}
+}
+function hudSet(id,key,value) {
+  const k=id+":"+key;if(hudCache.get(k)===value)return;hudCache.set(k,value);
+  const el=$(id);if(!el)return;if(["width","left","top"].includes(key))el.style[key]=value;else el[key]=value;
+}
+function updateSpecialistHUD() {
+  const counts={};for(const s of L.soldiers)if(s.specialist)counts[s.specialist]=(counts[s.specialist]||0)+1;
+  hudSet("specialists","textContent",Object.keys(SPECIALISTS).filter(k=>counts[k]).map(k=>`${SPECIALISTS[k].icon}${counts[k]}`).join(" "));
+}
+function queueInput(kind,value) {
+  if(!L || playback || !["play","boss"].includes(state))return false;
+  if(kind==="steer"){value=Math.max(-ROAD,Math.min(ROAD,Number(value)||0));pendingTarget=value;}
+  pendingInputs.push({kind,value});return true;
+}
+function fixedStep() {
+  if(!L || !["play","boss","bonus"].includes(state))return;
+  const tick=L.tick || 0;
+  let inputs;
+  if(playback){const row=playback.inputs[playbackAt];inputs=row?.tick===tick?row:null;if(inputs)playbackAt++;}
+  else {
+    inputs={tick,targetX:L.targetX,kx:(keys.ArrowLeft||keys.a?-1:0)+(keys.ArrowRight||keys.d?1:0),actions:pendingInputs};
+    replay?.inputs.push(inputs);
+  }
+  pendingInputs=[];pendingTarget=null;
+  const oldKeys={...keys};
+  for(const k in keys)keys[k]=false;
+  if(inputs){L.targetX=inputs.targetX;keys.a=inputs.kx<0;keys.d=inputs.kx>0;for(const a of inputs.actions || []) {if(a.kind==="steer")L.targetX=a.value;else if(a.kind==="powerup")usePowerup(a.value);else if(a.kind==="surge")useSurge();}}
+  const began=performance.now();step(FIXED_DT);const elapsed=performance.now()-began;
+  for(const k in keys)keys[k]=false;Object.assign(keys,oldKeys);
+  L.tick=tick+1;clocks.sim+=FIXED_DT;profile.steps++;profile.simMs+=elapsed;profile.maxSimMs=Math.max(profile.maxSimMs,elapsed);
+}
+function advanceTicks(n=1) { for(let i=0;i<n && ["play","boss","bonus"].includes(state);i++)fixedStep(); return L?.tick || 0; }
+function advanceClock(dt) {
+  if(!["play","boss","bonus"].includes(state)){accumulator=slowAccumulator=0;return;}
+  accumulator+=Math.max(0,dt);let steps=0;
+  while(accumulator+1e-9>=FIXED_DT && steps<MAX_CATCHUP){
+    accumulator-=FIXED_DT;clocks.wall+=FIXED_DT;
+    const scaled=FIXED_DT*timeScale(FIXED_DT);clocks.slow+=scaled;slowAccumulator+=scaled;
+    if(slowAccumulator+1e-9>=FIXED_DT){slowAccumulator-=FIXED_DT;fixedStep();}
+    steps++;
+    if(!["play","boss","bonus"].includes(state))break;
+  }
+  if(accumulator>=FIXED_DT){const drop=Math.floor(accumulator/FIXED_DT)*FIXED_DT;profile.droppedSeconds+=drop;accumulator-=drop;}
+}
+async function playReplay(record) {
+  if(record.version!==1)throw new Error("Unsupported replay version");testMode=true;
+  if(record.initial)save.jackDry=record.initial.jackDry;
+  if(record.mission)await goMission(record.mission,{assist:record.assist,elite:record.elite});
+  else await goLevel(record.level,"play",{seed:record.seed,mode:record.mode,modifier:record.modifier});
+  playback=record;playbackAt=0;pendingInputs=[];return true;
+}
+function stateHash() {
+  if(!L)return "00000000";
+  const skip=new Set(["hitKind","hitHW","hitHZ","entry","a","b","marker","shield","vis","mesh","def","fx","shake","giantK","ph","born","flash","popSfx","boomSfx","shotSfx","coach","coached","announcedVisual","_hashSeen"]), seen=new Map();
+  function clean(o){if(typeof o==="function"||o===undefined)return null;if(typeof o==="number")return Number.isFinite(o)?Math.round(o*1e7)/1e7:String(o);if(!o||typeof o!=="object")return o;if(o.isObject3D||o.isMaterial||o.isTexture)return null;if(seen.has(o))return {$ref:seen.get(o)};seen.set(o,seen.size);if(Array.isArray(o))return o.map(clean);const r={};for(const k of Object.keys(o).sort())if(!skip.has(k)&&!(k==="id"&&o.teleEvent))r[k]=clean(o[k]);return r;}
+  const data=JSON.stringify(clean({state,L,streams,nextEntityId,powerups:window.Powerups?.snapshot?.()}));let h=2166136261;for(let i=0;i<data.length;i++)h=Math.imul(h^data.charCodeAt(i),16777619);return (h>>>0).toString(16).padStart(8,"0");
+}
+function registerLayer(key,def) {
+  if(!TEX.grunt)return;
+  if(registeredLayers[key]){const old=registeredLayers[key];scene.remove(old.mesh);old.g.dispose();old.mesh.material.dispose();const i=spriteLayers.indexOf(old);if(i>=0)spriteLayers.splice(i,1);}
+  const layer=new SpriteLayer(TEX.grunt,4,2,key.startsWith("boss:")?4:600);registeredLayers[key]=layer;
+  layer.mesh.material.uniforms.tint.value.set(def.tint || 0xb6c6e8);
+  if(def.sheet)loader.load(def.sheet,tex=>{tex.anisotropy=4;layer.mesh.material.uniforms.map.value=tex;layer.mesh.material.uniforms.grid.value.set(def.cols||4,def.rows||2);layer.mesh.material.uniforms.tint.value.set(def.tint || 0xffffff);},undefined,()=>{layer.mesh.material.uniforms.map.value=TEX.grunt;layer.mesh.material.uniforms.grid.value.set(4,2);layer.mesh.material.uniforms.tint.value.set(def.tint || 0xb6c6e8);});
+}
+function registerEnemy(type,def){enemyDefs[type]=def;registerLayer(type,def);}
+function registerBoss(type,def){bossDefs[type]=def;registerLayer("boss:"+type,def);}
+function createSpecialistLayers(){for(const k in SPECIALISTS){const l=new SpriteLayer(TEX.soldier,4,2,300);l.mesh.material.uniforms.tint.value.set(SPECIALISTS[k].color);specialistLayers[k]=l;}}
+function initEnemy(e){if(e.initialized)return;e.initialized=true;e.def?.init?.(e);}
+function spawnEnemy(type,x,z,opts={}) {
+  const e=enemy(type,x,z,L.level,{authored:!!L.mission,...opts});
+  const factor=L.missionState?.assisted===2?.65:L.missionState?.assisted?.8:1;e.hp*=factor;e.maxHp=e.hp;L.enemies.push(e);initEnemy(e);return e;
+}
+function damageEnemiesInCircle(x,z,r,dmg){for(const e of L.enemies)if(e.hp>0 && Math.hypot(e.x-x,e.z-z)<r+e.r)hitEnemy(e,dmg);const b=L.boss;if(state==="boss"&&Math.hypot(b.x-x,b.z-z)<r+(b.r||2.6))damageBoss(dmg);}
+function compactEnemies(){let n=0;for(const e of L.enemies)if(e.state!=="dead")L.enemies[n++]=e;L.enemies.length=n;}
+function checkMedicOrder(patient){if(!L.missionState)return;for(const e of L.enemies)if(e.type==="medic"&&e.hp>0&&(e.patient===patient||e.target===patient||e.patientId===patient.id||e._campaignEnemy?.patient===patient))L.missionState.medicsFirst=false;}
+function onboarding(){return !L.mission || (L.mission.chapter===1 && L.mission.n<=3);}
+function missionTheme(m){return THEMES.find(t=>t.id===m.theme) || themeFor((m.chapter||1));}
+function missionProgress(id){let p=save.campaign[id];if(!p||typeof p!=="object")p=save.campaign[id]={};p.bestStars=Number(p.bestStars)||0;p.attempts=Number(p.attempts)||0;p.consecutiveFails=Number(p.consecutiveFails)||0;return p;}
+function generateMission(m,opts) {
+  const theme=missionTheme(m), assist=opts.assist===2?2:opts.assist?1:0, factor=assist===2?.65:assist?.8:1;
+  Obj3D.clear();Scenery.build(theme,m.length);
+  const out={level:(m.chapter-1)*6+m.n,theme,length:m.length,mission:m,elite:!!opts.elite,gates:[],solids:[],enemies:[],threats:[],hazards:[],radios:[],expectedKills:0,noBoss:!m.boss,
+    missionState:{rescued:0,recruits:0,causes:{},assisted:assist,rescueTaken:0,rescueTotal:0,rescueSlowdowns:0,bossLosses:0,medicsFirst:true}};
+  const events=m.events.slice();if(opts.elite)events.push({type:"threat",kind:"swarm",at:Math.max(40,m.length-45)});events.sort((a,b)=>a.at-b.at);
+  for(let i=0;i<events.length;i++) {
+    const e=events[i],z=-e.at, type=e.event || e.type;
+    if(type==="gate") {const g=makeGate(z,e.left,e.right);g.moving=!!e.moving;g.id="gate-"+i;out.gates.push(g);if(g.halves.some(h=>h.rescue))out.missionState.rescueTotal++;}
+    else if(type==="wave") {
+      const count=Math.max(1,Math.round(e.count*factor*(opts.elite?1.3:1))),spread=e.spread??3,depth=e.depth??6;
+      for(let j=0;j<count;j++){
+        const cols=Math.max(1,Math.ceil(Math.sqrt(count))), row=Math.floor(j/cols), col=j%cols;
+        let x=(e.lane||0)*3.4+(gameplayRng("layout")*2-1)*spread,zz=z-gameplayRng("layout")*depth;
+        if(e.formation==="line"){x=(e.lane||0)*3.4+(j/Math.max(1,count-1)-.5)*spread*2;zz=z;}
+        if(e.formation==="block"||e.formation==="wedge"){x=(e.lane||0)*3.4+(col-(cols-1)/2)*spread*2/cols;zz=z-row*depth/cols-(e.formation==="wedge"?Math.abs(col-(cols-1)/2)*.8:0);}
+        const enemyType=e.enemy || e.enemyType || e.unit || (e.type!=="wave"?e.type:null) || e.kind || "grunt";
+        const q=enemy(enemyType,Math.max(-5.5,Math.min(5.5,x)),zz,out.level,{authored:true});q.hp*=factor;q.maxHp=q.hp;out.enemies.push(q);
+      }
+    } else if(type==="solid") {
+      const n=e.n||1;for(let j=0;j<n;j++)out.solids.push(makeSolid(e.kind,e.x??0,z-j*2.7,e.hp??10,{reward:e.reward,weapon:e.weapon,ammo:e.kind==="ammo"}));
+    } else if(type==="threat")out.threats.push(makeThreat(e.kind,z,"mission-"+i));
+    else if(type==="drop"&&!opts.elite) {const pair=e.pair || [e.powerup];pair.forEach((powerup,j)=>out.solids.push(makeSolid("airdrop",pair.length>1?(j?3.3:-3.3):0,z,8,{powerup})));}
+    else if(type==="hazard") {const h={id:"hazard-"+i,kind:e.kind,lane:e.lane||0,x:(e.lane||0)*3.4,z,period:Math.max(2,e.period||3),warned:false,age:0,done:false};Obj3D.hazard?.(h);out.hazards.push(h);}
+    else if(type==="scenery")out.solids.push(makeSolid(e.kind,(e.lane||0)*3.4,z,e.hp || (e.kind==="fuelTruck"?20:35)));
+    else if(type==="radio")out.radios.push({at:e.at,who:e.who,text:e.text,fired:false});
+  }
+  if(assist)out.solids.push(makeSolid("airdrop",0,-18,5,{powerup:"shield"}));
+  const def=m.boss?bossDefs[m.boss.type]:null,hp=(m.boss?.hp||def?.hp||1)*factor*(opts.elite?1.3:1);
+  out.boss={id:nextEntityId++,type:m.boss?.type||"none",def,x:0,z:-m.length-14,hp:m.boss?hp:0,maxHp:hp,r:def?.r||2.6,h:def?.h||9.5,state:"wait",t:0,flash:0,slamT:0,phase:-1,attackT:0};
+  out.expectedKills=out.enemies.length;
+  if(!m.boss)Obj3D.finishArch?.(-m.length);
+  return out;
+}
+function makeThreat(kind,z,id){return {id,kind,counter:THREAT_COUNTER[kind],z,announced:false,live:false,done:false,countered:false,lost:0,actors:[],age:0,shotT:0,shellT:0,gap:gameplayRng("layout")<.5?-1:1};}
+async function goMission(id,{assist=0,elite=false}={}) {
+  const m=window.Campaign?.missions?.[id];if(!m)return false;
+  await goLevel((m.chapter-1)*6+m.n,"play",{mission:m,mode:"campaign",seed:m.seed,assist,elite});return true;
+}
+function goArcade(level=1){return goLevel(level,"play",{mode:"normal"});}
+function restartSame(){return L?.mission?goMission(L.mission.id,{elite:L.elite}):goLevel(L.level,"play",sameRun());}
+function skillOk() {
+  if(!L.mission)return false;const m=L.missionState;
+  const skills={noWaste:L.tactics.wasted===0,rescueAll:m.rescueTaken===m.rescueTotal,perfect2:L.tactics.perfect>=2,medicsFirst:m.medicsFirst,noCharge:!(m.causes.charger>0),bossClean:m.bossLosses<20,fast:m.rescueSlowdowns===0,noAssist:!m.assisted};
+  return !m.assisted && skills[L.mission.skill?.id]===true;
+}
+function missionStars(won,keptPct){return [won,won&&keptPct>=65,won&&skillOk()];}
+function endMission(result,keptPct){
+  if(L.missionEnded)return;L.missionEnded=true;
+  const p=missionProgress(L.mission.id),won=result==="win",stars=missionStars(won,keptPct),m=L.missionState;
+  p.bestStars=Math.max(p.bestStars,stars.filter(Boolean).length);p.consecutiveFails=won?0:p.consecutiveFails+1;p.assistedWin=!!(p.assistedWin||(won&&m.assisted));p.lastCause=won?null:L.lastCause;(save.campaign.stars ||= {})[L.mission.id]=p.bestStars;persist();
+  bus.emit("missionEnd",{id:L.mission.id,result,stars,keptPct,skillOk:skillOk(),cause:won?null:L.lastCause,rescued:m.rescued,assisted:m.assisted});
+  if(!won&&(p.consecutiveFails===2||p.consecutiveFails===4))bus.emit("assistOffer",{id:L.mission.id,level:p.consecutiveFails===4?2:1});
+}
+function updateCampaign(dt) {
+  if(!L.mission)return;
+  for(const r of L.radios)if(!r.fired&&-L.sz>=r.at){r.fired=true;bus.emit("radio",{who:r.who,text:r.text});}
+  for(const g of L.gates)if(g.moving&&!g.used){g.offset=Math.sin(L.time*1.2)*1.25;for(const h of g.halves)h.x=h.baseX+g.offset;Obj3D.moveGate?.(g);}
+  for(const h of L.hazards){
+    if(h.done)continue;const ahead=L.sz-h.z;
+    if(!h.warned&&ahead<32+squadRadius(L.soldiers.length)){h.warned=true;h.age=0;bus.emit("enemyTelegraph",{type:"hazard",kind:h.kind,x:h.x,z:h.z,lane:h.lane});}
+    if(!h.warned)continue;h.age+=dt;
+    const phase=h.age%h.period;h.active=h.age>=.9&&(h.kind==="collapse"||phase>=.9&&phase<1.7);
+    if(h.kind==="saw")h.x=h.lane*3.4+Math.sin(h.age*2)*.7;
+    Obj3D.updateHazard?.(h);
+    if(h.active&&!h.wasActive)bus.emit("hazard",{kind:h.kind,lane:h.lane});h.wasActive=h.active;
+    if(h.active)killSoldiersInRect(h.x-1.35,h.x+1.35,h.z-1.6,h.z+1.6,Infinity,"threat:"+h.kind);
+    if(ahead < -squadRadius(L.soldiers.length)-4){h.done=true;if(h.vis)h.vis.visible=false;}
+  }
+}
+function bossWeakMultiplier(b){return (b.weakT>0||b.weakUntil>L.time||b.weakOpen===true)?(b.def?.weak?.mult||2.5):1;}
+function updateRegisteredBoss(b,dt) {
+  b.t+=dt;b.flash=Math.max(0,b.flash-dt);
+  const phases=b.def.phases||[], ratio=b.hp/b.maxHp;let phase=0;
+  for(let i=0;i<phases.length;i++)if(ratio<=phases[i].at)phase=i;
+  if(!b.def.update && b.phase!==phase){b.phase=phase;bus.emit("bossPhase",{type:b.type,phase:phase+1});}
+  if(b.def.update){b.def.update(b,dt);}else{
+    if(b.weakT>0){b.weakT=Math.max(0,b.weakT-dt);if(!b.weakT)bus.emit("bossWeak",{on:false});}
+    const p=phases[phase]||{attacks:["slam"],cadence:2.6};b.attackT+=dt;
+    if(!b.pending && b.attackT>=Math.max(0,p.cadence-.9)){
+      const a=p.attacks[(b.attackIndex||0)%p.attacks.length];b.pending=typeof a==="string"?{name:a}:a;b.warnT=.9;b.lockX=L.sx;
+      bus.emit("enemyTelegraph",{type:b.type,kind:b.pending.name||b.pending.type,x:b.lockX,z:L.sz});
+      Obj3D.bossWarning?.(b,true);
+    }
+    if(b.pending){b.warnT-=dt;if(b.warnT<=0){const a=b.pending,name=a.name||a.type;b.pending=null;b.attackT=0;b.attackIndex=(b.attackIndex||0)+1;Obj3D.bossWarning?.(b,false);
+      if(b.def.attacks?.[name])b.def.attacks[name](b,a);
+      else if(name==="summon")for(let i=0;i<(a.n||4);i++)spawnEnemy(a.enemy||"grunt",(i%3-1)*3,b.z+3-i);
+      else if(name==="split")for(const x of [-2.5,2.5])spawnEnemy("brute",x,b.z,{hp:b.maxHp*.15});
+      else if(name==="shieldWall")b.shieldT=2;
+      else if(name==="charge"||name==="barrage"){for(const lane of a.lanes||[Math.round(b.lockX/3.4)])killSoldiersInRect(lane*3.4-1.3,lane*3.4+1.3,L.sz-12,L.sz+12,name==="charge"?8:Math.max(2,Math.ceil(L.soldiers.length*.03)),"boss:"+name);}
+      else killSoldiersInCircle(b.lockX,L.sz,3,8,"boss:slam");
+      if(b.def.weak?.after===name){b.weakT=b.def.weak.dur;bus.emit("bossWeak",{on:true});}
+    }}
+  }
+  hudSet("bossFill","width",`${Math.round(Math.max(0,b.hp/b.maxHp)*100)}%`);
+  Obj3D.weakMarker?.(b,bossWeakMultiplier(b)>1);
+  if(b.hp<=0)bossDown();
+}
+Object.assign(ctx,{registerEnemy,registerBoss,spawnEnemy,killSoldiersInRect,killSoldiersInCircle,damageEnemiesInCircle,telegraphGroup,goMission,goArcade,restartSame});
+Object.defineProperties(ctx,{squad:{get:()=>({x:L?.sx||0,z:L?.sz||0,count:L?.soldiers.length||0,radius:squadRadius(L?.soldiers.length||0),soldiers:L?.soldiers||[]})},mission:{get:()=>L?.mission||null},missionState:{get:()=>L?.missionState||null}});
+
+// Swept bullets: insert hit bounds into 2 m cells, query once, resolve by entry distance.
+class SpatialHash {
+  constructor(cell=HASH_CELL){this.cell=cell;this.cells=new Map();this.buckets=[];this.queryId=0;this.results=[];}
+  clear(){for(const a of this.cells.values()){a.length=0;this.buckets.push(a);}this.cells.clear();}
+  insert(o,x0,x1,z0,z1){for(let x=Math.floor(x0/this.cell);x<=Math.floor(x1/this.cell);x++)for(let z=Math.floor(z0/this.cell);z<=Math.floor(z1/this.cell);z++){const key=x+","+z;let a=this.cells.get(key);if(!a){a=this.buckets.pop()||[];this.cells.set(key,a);}a.push(o);}}
+  query(x0,x1,z0,z1){this.results.length=0;const id=++this.queryId;for(let x=Math.floor(x0/this.cell);x<=Math.floor(x1/this.cell);x++)for(let z=Math.floor(z0/this.cell);z<=Math.floor(z1/this.cell);z++){const a=this.cells.get(x+","+z);if(a)for(const o of a)if(o._hashSeen!==id){o._hashSeen=id;this.results.push(o);}}return this.results;}
+}
+const bulletGrid=new SpatialHash(),crowdGrid=new SpatialHash(.65);
+function sweepEntry(x,z,nx,nz,x0,x1,z0,z1){
+  let lo=0,hi=1;
+  for(const [p,d,a,b] of [[x,nx-x,x0,x1],[z,nz-z,z0,z1]]){if(Math.abs(d)<1e-10){if(p<a||p>b)return Infinity;}else{let t0=(a-p)/d,t1=(b-p)/d;if(t0>t1)[t0,t1]=[t1,t0];lo=Math.max(lo,t0);hi=Math.min(hi,t1);if(lo>hi)return Infinity;}}
+  return lo;
+}
+function updateBullets(dt){
+  bulletGrid.clear();
+  const insert=(o,kind,hw,hz)=>{o.hitKind=kind;o.hitHW=hw;o.hitHZ=hz;bulletGrid.insert(o,o.x-hw,o.x+hw,o.z-hz,o.z+hz);};
+  for(const e of L.enemies)if(e.hp>0&&e.state!=="dead"&&e.state!=="dying"&&Math.abs(e.z-L.sz)<65)insert(e,"enemy",e.r+.08,.3);
+  for(const o of L.solids)if(o.alive&&Math.abs(o.z-L.sz)<65)insert(o,"solid",o.hw,.1);
+  for(const g of L.gates)if(!g.used&&Math.abs(g.z-L.sz)<65)for(const h of g.halves){h.z=g.z;h.gate=g;insert(h,"gate",h.hw,.08);}
+  if(state==="boss"&&L.boss.hp>0)insert(L.boss,"boss",L.boss.r||2.6,.5);
+  for(let i=L.bullets.length-1;i>=0;i--){
+    const b=L.bullets[i],x=b.x,z=b.z,nx=x+b.vx*dt,nz=z-BULLET_SPEED*dt;b.life-=dt;
+    const candidates=bulletGrid.query(Math.min(x,nx),Math.max(x,nx),nz,z);profile.candidates+=candidates.length;
+    for(const o of candidates)o.entry=sweepEntry(x,z,nx,nz,o.x-o.hitHW,o.x+o.hitHW,o.z-o.hitHZ,o.z+o.hitHZ);
+    candidates.sort((a,b)=>a.entry-b.entry);let hit=false;
+    for(const o of candidates){
+      if(!Number.isFinite(o.entry)||o===b.lastHit)continue;
+      if(o.hitKind==="enemy"&&(o.hp<=0||o.state==="dying"||o.state==="dead"))continue;
+      if(o.hitKind==="solid"&&!o.alive)continue;
+      b.x=x+(nx-x)*o.entry;b.z=z+(nz-z)*o.entry;
+      if(o.hitKind==="gate"){
+        const h=o;if(h.op==="+"&&!h.powerup&&!h.recruit&&!h.rescue){h.acc=(h.acc||0)+b.dmg*(L.mission?.015:.35);if(h.acc>=1){const inc=Math.floor(h.acc);h.acc-=inc;h.v=Math.min(h.v+inc,L.mission?h.initialV+6:99);refreshGate(h.gate);bus.emit("gateShot",{gate:h.gate,half:h});}}
+        else if(h.op==="x"&&!L.mission){h.acc=(h.acc||0)+b.dmg*.02;if(h.acc>=1&&h.v<3){h.acc=0;h.v++;refreshGate(h.gate);bus.emit("gateShot",{gate:h.gate,half:h});}}hit=true;
+      } else if(o.hitKind==="solid"){hitSolid(o,b.dmg);if(b.splash)explode(b.x,b.z,b.dmg,b.splash);hit=true;}
+      else if(o.hitKind==="boss") {const hp=o.hp, base=b.dmg*(b.splash?1.2:1)*(L.giantT>0?2:1);
+        if(!(o.shieldT>0&&!b.shieldPierce&&!b.splash)&&o.def?.onBullet?.(o,b)!==false){if(o.hp<=0)bossDown();else damageBoss(Math.max(0,base*bossWeakMultiplier(o)-(hp-o.hp)),true);}hit=true;}
+      else {
+        const blocked=o.def?.onBullet?.(o,b)===false && !b.shieldPierce && !b.splash;
+        if(!blocked){if(o.hp<=0){o.hp=.001;hitEnemy(o,.001);}else hitEnemy(o,b.dmg);}if(b.splash)explode(o.x,o.z,b.dmg,b.splash,o);
+        b.lastHit=o;if(!blocked&&b.pierce>0)b.pierce--;else hit=true;
+      }
+      if(hit)break;
+    }
+    if(hit||b.life<=0)releaseAt(L.bullets,i,bulletPool);else {b.x=nx;b.z=nz;}
+  }
+}
+function updateCrowd(dt){
+  const radius=squadRadius(L.soldiers.length);let width=Math.min(5.3,radius),centre=L.sx;
+  // A nearby wall or a telegraphed hazard leaves an interval for the formation.
+  let left=-5.7,right=5.7;
+  for(const o of L.solids)if(o.alive&&o.z<L.sz+radius&&o.z>L.sz-12&&!["airdrop","ammo","weaponCase","barrel","fuelTruck"].includes(o.kind)){
+    if(o.x<L.sx)left=Math.max(left,o.x+o.hw+.3);else right=Math.min(right,o.x-o.hw-.3);
+  }
+  for(const h of L.hazards||[])if(!h.done&&h.warned&&Math.abs(h.z-L.sz)<14){if(h.x<L.sx)left=Math.max(left,h.x+1.6);else right=Math.min(right,h.x-1.6);}
+  if(right>left+.6){width=Math.min(width,(right-left)/2);centre=Math.max(left+width,Math.min(right-width,L.sx));}
+  else width=.5;
+  const target=Math.max(.12,Math.min(1,width/radius));L.compression+=(target-L.compression)*Math.min(1,dt*(target<L.compression?8:3));
+  crowdGrid.clear();for(const s of L.soldiers)crowdGrid.insert(s,s.x,s.x,s.z,s.z);
+  for(let i=0;i<L.soldiers.length;i++){
+    const s=L.soldiers[i],[ox,oz]=slot(i),tx=centre+ox*L.compression,tz=L.sz+oz/Math.sqrt(Math.max(.2,L.compression));
+    let ax=(tx-s.x)*45,az=(tz-s.z)*45;
+    const neighbors=crowdGrid.query(s.x-.55,s.x+.55,s.z-.55,s.z+.55);let checked=0;
+    for(const q of neighbors){if(q===s)continue;if(++checked>20)break;const dx=s.x-q.x,dz=s.z-q.z,d2=dx*dx+dz*dz;if(d2>0&&d2<.28){const push=(.53-Math.sqrt(d2))*24/Math.sqrt(d2);ax+=dx*push;az+=dz*push;}}
+    s.vx=((s.vx||0)+ax*dt)*Math.exp(-10*dt);s.vz=((s.vz||0)+az*dt)*Math.exp(-10*dt);s.x=Math.max(-5.7,Math.min(5.7,s.x+s.vx*dt));s.z+=s.vz*dt;
+  }
 }
 
 // ---------- boot ----------
@@ -1383,7 +1703,8 @@ function frame(now) {
   resize(); syncToggles();
   Scenery.setup(ctx); Obj3D.setup(ctx); Juice.setup(ctx);
   hud.externalSwap = gameEl.querySelector(".jt-swap");
-  for (const m of [window.Powerups, window.Finale, window.Meta]) { try { m?.setup?.(ctx); } catch (e) { console.error("module setup failed", e); } }
+  for (const m of [window.Powerups, window.Finale, window.Meta, window.Enemies, window.Campaign, window.Story]) { try { m?.setup?.(ctx); } catch (e) { console.error("module setup failed", e); } }
+  createSpecialistLayers();
   applySkin();
   if (!quality.auto) quality.level = 2; // ?hq: full quality for screenshots and tests
   applyQuality();
@@ -1393,7 +1714,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 })();
 // test hooks (read by the headless playtest bot)
-window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, goLevel, save, bus, ctx, cam: CAM, quality };
+window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, goLevel, save, bus, ctx, cam: CAM, quality, stateHash, input: queueInput, advance: advanceTicks, advanceClock, setTestMode: v => { testMode = !!v; }, get replay() { return JSON.parse(JSON.stringify(replay)); }, playReplay, profile: profileSnapshot, resetProfile, clocks, draw: () => render(FIXED_DT) };
 </script>
 
 </body></html>
