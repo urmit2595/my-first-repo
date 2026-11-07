@@ -1,6 +1,6 @@
 /* Operation Homeward. Authored distances, no procedural encounters or opening boost.
  * Event discriminator: `event`; a wave's `type` is its enemy archetype.
- * See design/campaign-script.md for lanes, budgets and the executable validator.
+ * See design/campaign-script.md for structure and design/campaign-engine-notes.md for I1 tuning.
  */
 (function () {
   "use strict";
@@ -114,18 +114,18 @@
   mission(2, 2, "Rain Check", 280, 22, "noWaste",
     "Keep those bridge workers moving.", "Red circles mean mortars. SHIELD buys us breathing room.",
     "Workers across. Nobody left in the rain.", [
-      wave(38, "grunt", 24, -1), gate(72, recruit("piercer", 2), ["+", 6]),
+      gate(20, recruit("piercer", 3), ["+", 8]), wave(38, "grunt", 14, -1),
       drop(104, "shield"), radio(128, "mira", "Don't stand in a red circle. The rest of the road is yours."),
       threat(144, "mortars"), gate(216, tool("giant"), rescue(8, 3)),
-      wave(248, "shieldbearer", 3, 0), wave(248, "grunt", 18, 0)
+      wave(248, "shieldbearer", 3, 0), wave(248, "grunt", 6, 0)
     ]);
   mission(2, 3, "Missing Planks", 290, 24, "noWaste",
     "Bridge is shedding planks. Eyes up.", "The left lane will fall. Cross to the right before it does.",
     "Still a bridge. Just a little less of one.", [
       gate(22, tool("giant"), ["+", 7]), wave(62, "shieldbearer", 4, 0),
-      wave(62, "grunt", 24, 0), drop(96, "shield"), threat(136, "mortars"),
+      wave(62, "grunt", 14, 0), drop(96, "shield"), threat(136, "mortars"), gate(176, recruit("piercer", 2), ["+", 6]),
       radio(204, "mira", "Cracks on the left. Right lane stays solid."),
-      hazard(226, "collapse", -1), wave(258, "grunt", 24, 0)
+      hazard(226, "collapse", -1), wave(258, "grunt", 16, 0)
     ]);
   mission(2, 4, "Last Bus", 280, 26, "rescueAll",
     "A bus full of families. We're their walking escort.", "Both rescue stops are on sound decking.",
@@ -137,20 +137,21 @@
   mission(2, 5, "Steel and Rain", 300, 26, "noWaste",
     "Shields below, shells above. We've seen both.", "Take a piercer and keep the mortar counter ready.",
     "They held a wall. We kept a way through.", [
-      gate(22, recruit("piercer", 3), ["+", 8]), wave(58, "grunt", 30, 1),
-      drop(90, "shield"), threat(130, "mortars"), wave(130, "shieldbearer", 6, -1),
+      gate(22, recruit("piercer", 3), ["+", 8]), wave(58, "grunt", 10, 1), wave(58, "shieldbearer", 9, 0),
+      drop(90, "shield"), threat(130, "mortars"), wave(130, "shieldbearer", 12, -1),
       radio(174, "mira", "Right side is open. Don't let their shields pin you."),
-      gate(208, tool("giant"), recruit("piercer", 2)), hazard(236, "collapse", -1),
-      wave(268, "grunt", 30, 0), wave(268, "brute", 2, 0)
+      hazard(200, "collapse", -1), gate(208, tool("giant"), recruit("piercer", 2)),
+      drop(246, "shield"), wave(268, "grunt", 10, 0), wave(268, "shieldbearer", 8, 0),
+      threat(282, "mortars")
     ]);
   mission(2, 6, "A Crack in Iron", 310, 28, "bossClean",
     "The bridge tower is just past that walking wall.", "Bulwark opens its core after a slam. That's our moment.",
     "Two banks, one signal. Bring the bus over.", [
       radio(0, "warlord", "Iron Bulwark doesn't open for strays."),
       gate(24, recruit("piercer", 3), ["+", 8]), solid(52, "weaponCase", 3.4, 52, { weapon: 3 }),
-      wave(90, "shieldbearer", 5, 0), wave(90, "grunt", 26, 0),
-      gate(146, recruit("piercer", 2), tool("airstrike")), wave(184, "brute", 3, -1),
-      wave(220, "grunt", 26, 1), pair(256, "shield", "giant"),
+      wave(90, "shieldbearer", 7, 0), wave(90, "grunt", 10, 0),
+      gate(146, recruit("piercer", 2), tool("airstrike")), drop(156, "shield"), wave(184, "shieldbearer", 4, -1), threat(196, "mortars"),
+      wave(220, "grunt", 10, 1), pair(256, "shield", "giant"),
       radio(280, "mira", "Let the slam pass. Shoot the glow.")
     ], 1700);
 
@@ -159,9 +160,9 @@
     "Fresh tracks. Fast feet. We can read both.", "That charger crouches before it runs. Leave its lane.",
     "It ran out of road. We didn't.", [
       wave(50, "charger", 1, 0), radio(54, "mira", "Red arrow: move sideways. No tool needed."),
-      gate(100, ["+", 8], ["-", 5]), wave(136, "grunt", 32, -1),
+      gate(100, ["+", 8], ["-", 5]), wave(136, "grunt", 20, -1),
       solid(174, "weaponCase", 3.4, 56, { weapon: 1 }),
-      wave(212, "charger", 4, -1, "line", 12), wave(258, "grunt", 30, 0)
+      wave(212, "charger", 4, -1, "line", 12), gate(236, recruit("piercer", 2), ["+", 6]), wave(258, "grunt", 20, 0)
     ]);
   mission(3, 2, "Short Fuse", 310, 30, "noWaste",
     "Keep a little daylight between us and trouble.", "One bomber ahead. Shoot early or step outside its ring.",
@@ -214,7 +215,7 @@
     "The ferry's waiting. Clear its landing.", "A rifleman paints its shot first. Step off the red line.",
     "Landing clear. Tell the ferry to come in slow.", [
       gate(22, recruit("defender", 3), ["+", 8]), wave(62, "rifleman", 1, -1),
-      radio(66, "mira", "Laser on the left. Centre and right are clear."),
+      radio(66, "mira", "The laser follows your lane. Step off the red line."),
       wave(120, "grunt", 42, 0), drop(160, "shield"),
       wave(200, "rifleman", 6, 1, "line", 12), wave(200, "grunt", 24, 1),
       gate(252, recruit("grenadier", 3), tool("giant")), wave(292, "charger", 5, -1, "line", 12)
@@ -232,8 +233,8 @@
     "Big numbers can come with a red line attached.", "Left doubles us under fire. Right adds twenty in the clear.",
     "A good choice is one your squad can walk away from.", [
       gate(24, recruit("defender", 4), tool("shield")), wave(68, "grunt", 42, 0),
-      radio(100, "mira", "Rifles cover the left gate. Right is the safe gain."),
-      wave(126, "rifleman", 8, -1, "line", 12), gate(132, ["x", 2], ["+", 20]),
+      radio(100, "mira", "Riflemen guard the doubler. The plus side is the safe gain."),
+      wave(126, "rifleman", 6, -1, "line", 12), gate(132, ["x", 2], ["+", 20]),
       wave(188, "medic", 3, -1), wave(188, "brute", 4, 0),
       gate(238, tool("airstrike"), rescue(8, 4)),
       wave(282, "bomber", 5, 1), wave(282, "grunt", 32, 1)
@@ -280,21 +281,21 @@
   mission(5, 2, "Through the Rubble", 360, 42, "perfect2",
     "One crowd, one wall. Bring the right answers.", "AIRSTRIKE for the swarm. GIANT for the barricade.",
     "Road open. The builders can bring their carts.", [
-      gate(22, recruit("grenadier", 4), ["+", 10]), wave(58, "grunt", 48, -1),
+      gate(22, recruit("grenadier", 4), ["+", 10]), wave(58, "grunt", 28, -1),
       drop(88, "airstrike"), threat(128, "swarm"),
       wave(192, "splitter", 9, 0, "line", 12), drop(228, "giant"),
       radio(250, "mira", "Wall ahead. GIANT breaks it; the side gap still works."),
-      threat(268, "barricade"), wave(336, "grunt", 34, 1)
+      threat(268, "barricade"), wave(336, "grunt", 20, 1)
     ]);
   mission(5, 3, "A Better Way", 370, 42, "fast",
     "We can go around. Or make a door.", "Shoot the shortcut wall to skip the crusher. Right lane is clear too.",
     "New door. Neighbours will appreciate that.", [
-      wave(40, "grunt", 48, -1), gate(82, recruit("grenadier", 4), ["+", 12]),
+      gate(20, recruit("grenadier", 4), ["+", 12]), wave(40, "grunt", 28, -1),
       scenery(122, "shortcut", -1), hazard(162, "crusher", -1, 3.6),
-      wave(206, "splitter", 12, 0, "line", 14),
-      gate(244, rescue(10, 5), tool("giant")),
+      wave(206, "splitter", 9, 0, "line", 14),
+      gate(244, rescue(10, 5), ["+", 10]),
       radio(268, "mira", "Saw on the right. Left and centre stay open."),
-      hazard(292, "saw", 1, 3.4), wave(330, "grunt", 38, 0), wave(330, "brute", 3, 0)
+      hazard(292, "saw", 1, 3.4), wave(330, "grunt", 10, 0), wave(330, "brute", 1, 0)
     ]);
   mission(5, 4, "Names on the Wall", 350, 46, "rescueAll",
     "They wrote every missing name here. Let's cross some off.", "Two shelters answered. Both need an escort out.",
@@ -307,21 +308,21 @@
   mission(5, 5, "Moving Parts", 380, 44, "noWaste",
     "Keep the minis away from the machinery.", "The crusher takes the left. Fight the splitters from the right.",
     "Machinery stopped. People moving. Good trade.", [
-      gate(22, recruit("grenadier", 5), ["+", 12]), wave(62, "grunt", 54, 0),
+      gate(22, recruit("grenadier", 5), ["+", 12]), wave(62, "grunt", 18, 0), wave(62, "splitter", 4, 0),
       scenery(104, "shortcut", -1), hazard(144, "crusher", -1, 3),
       wave(144, "splitter", 12, 0, "line", 14),
       gate(202, tool("airstrike"), recruit("piercer", 4)), hazard(250, "saw", 1, 3.2),
-      wave(250, "splitter", 12, 0, "line", 14), wave(250, "bomber", 6, 0),
-      wave(326, "grunt", 48, -1), wave(326, "brute", 4, -1)
+      wave(250, "splitter", 32, 0, "line", 14), drop(282, "giant"), threat(322, "barricade"),
+      wave(346, "splitter", 14, 0)
     ]);
   mission(5, 6, "Two Halves, One Plan", 390, 46, "bossClean",
     "Colossus is standing in our front garden.", "It splits at half strength. Save some splash for both halves.",
     "Five towers lit. I can see our old roof from here.", [
       radio(0, "warlord", "Break my Colossus and you'll only have twice the trouble."),
-      gate(24, recruit("grenadier", 5), ["+", 12]), solid(54, "weaponCase", 3.4, 84, { weapon: 4 }),
-      wave(100, "splitter", 12, 0, "line", 14), wave(100, "grunt", 48, 0),
-      wave(164, "shieldbearer", 6, -1), gate(210, tool("airstrike"), recruit("defender", 4)),
-      wave(254, "brute", 5, 1), wave(254, "grunt", 44, 1),
+      gate(24, recruit("grenadier", 5), ["+", 12]), solid(54, "weaponCase", 0, 36, { weapon: 4 }),
+      wave(100, "splitter", 14, 0, "line", 14), wave(100, "grunt", 16, 0),
+      drop(144, "giant"), threat(184, "barricade"), gate(210, tool("airstrike"), recruit("defender", 4)),
+      wave(254, "splitter", 14, 0),
       pair(324, "airstrike", "giant"), radio(356, "mira", "Two halves, same rule: leave yourself space.")
     ], 4600);
 
@@ -337,22 +338,22 @@
   mission(6, 2, "Pick Your Ground", 390, 46, "noCharge",
     "Same tricks. New floor. Keep your feet thinking.", "Stay clear of the crusher, then read the rush lanes.",
     "Good feet beat a bad floor.", [
-      gate(22, recruit("grenadier", 5), ["+", 12]), wave(62, "grunt", 54, -1),
+      gate(22, recruit("grenadier", 5), ["+", 12]), wave(62, "grunt", 32, -1),
       scenery(102, "shortcut", 1), hazard(142, "crusher", 1, 3.2),
-      wave(142, "splitter", 12, 0, "line", 14),
+      wave(142, "splitter", 9, 0, "line", 14),
       gate(200, tool("shield"), recruit("defender", 4)),
-      wave(246, "charger", 9, -1, "line", 14), wave(246, "bomber", 7, -1),
-      wave(322, "rifleman", 8, 1), wave(322, "grunt", 48, 1)
+      wave(246, "charger", 6, -1, "line", 14), wave(246, "bomber", 6, -1),
+      wave(322, "rifleman", 6, 1), wave(322, "grunt", 28, 1)
     ]);
   mission(6, 3, "The Price of Plenty", 400, 48, "medicsFirst",
     "He's offering easy numbers. Read the fine print.", "Left doubles us under rifles. Right gives twenty safely.",
     "We kept our people. He can keep his promises.", [
-      gate(24, tool("shield"), recruit("defender", 5)), wave(68, "grunt", 58, 0),
-      wave(118, "rifleman", 10, -1, "line", 14), gate(124, ["x", 2], ["+", 20]),
+      gate(24, tool("shield"), recruit("defender", 5)), wave(68, "grunt", 46, 0),
+      wave(118, "rifleman", 7, -1, "line", 14), gate(124, ["x", 2], ["+", 20]),
       wave(184, "medic", 4, -1), wave(184, "brute", 6, 0),
-      scenery(234, "fuelTruck", 1), wave(246, "splitter", 14, 1, "line", 14),
+      scenery(234, "fuelTruck", 1), wave(246, "splitter", 10, 1, "line", 14),
       wave(246, "bomber", 8, 1), gate(304, tool("airstrike"), rescue(10, 5)),
-      wave(350, "shieldbearer", 6, 0), wave(350, "grunt", 48, 0)
+      wave(350, "shieldbearer", 6, 0), wave(350, "grunt", 38, 0)
     ]);
   mission(6, 4, "Leave Nobody", 380, 50, "rescueAll",
     "Last holding yard. Nobody spends another night here.", "Three groups waiting. The gate crews can escort them.",
@@ -367,13 +368,13 @@
     "Road clear. Six districts are right behind us.", [
       gate(22, recruit("defender", 5), recruit("grenadier", 5)),
       wave(66, "medic", 4, -1), wave(66, "brute", 6, -1),
-      wave(66, "rifleman", 12, 1, "line", 14),
+      wave(66, "rifleman", 9, 1, "line", 14),
       gate(126, tool("airstrike"), ["+", 14]),
       scenery(166, "shortcut", -1), hazard(206, "crusher", -1, 3),
-      wave(206, "splitter", 18, 0, "line", 14), wave(206, "bomber", 8, 0),
+      wave(206, "splitter", 14, 0, "line", 14), wave(206, "bomber", 8, 0),
       gate(266, recruit("piercer", 5), tool("giant")), hazard(310, "saw", 1, 3),
-      wave(310, "charger", 10, 0, "line", 14), wave(310, "shieldbearer", 8, 0),
-      wave(370, "grunt", 90, -1)
+      wave(310, "charger", 8, 0, "line", 14), wave(310, "shieldbearer", 8, 0),
+      wave(370, "grunt", 66, -1)
     ]);
   mission(6, 6, "Operation Homeward", 420, 50, "bossClean",
     "There's our last light. Let's bring it home.", "Slams, rushes, barrages. Read each warning. Keep an exit.",
@@ -389,5 +390,6 @@
       radio(386, "mira", "All five towers answering. Nobody's alone anymore.")
     ], 6200);
 
-  window.Campaign = { version: 1, chapters, missions };
+  const keepPct = m => ({ normal: 65, hard: 50, boss: 45 }[m?.tag] ?? 65);
+  window.Campaign = { version: 1, chapters, missions, keepPct };
 })();

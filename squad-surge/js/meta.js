@@ -611,7 +611,8 @@ function onWin(d) {
   const L = ctx.L || {};
   const noLoss = run.lost === 0;
   finishTactics(true);
-  S().wins++; S().bosses++; S().maxSquad = Math.max(S().maxSquad, d.n || 0);
+  S().wins++; if (!ctx.mission || ctx.mission.boss) S().bosses++;
+  S().maxSquad = Math.max(S().maxSquad, d.n || 0);
   const total = d.total != null ? d.total : d.score;
   if (total != null) S().maxScore = Math.max(S().maxScore, total);
   if (d.mult) S().maxMult = Math.max(S().maxMult, d.mult);

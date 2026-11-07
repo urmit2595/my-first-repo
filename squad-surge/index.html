@@ -180,7 +180,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
     <div class="toggle">SOUND <button id="soundBtn" aria-pressed="true">ON</button></div>
     <div class="toggle">VIBRATION <button id="vibeBtn" aria-pressed="true">ON</button></div>
     <button class="btn go" id="resumeBtn">RESUME</button>
-    <button class="btn alt" id="quitBtn">RESTART LEVEL</button>
+    <button class="btn alt" id="quitBtn">QUIT TO HOME</button>
   </div></div>
 
   <div class="loading" id="loading"><div><img class="loadlogo" src="assets/ui/logo.webp" alt=""><div class="loadbar"><i></i></div><div class="loadtxt">LOADING…</div><div class="err" id="loadErr"></div></div></div>
@@ -764,7 +764,7 @@ function removeSoldier(i) {
 }
 function lostSoldiers(n, cause = "attrition") {
   if (!n) return 0;
-  if (!["rifleman","charger","bomber","gate","swarm","attrition"].includes(cause) && !cause.startsWith("threat:") && !cause.startsWith("boss:")) cause = "swarm";
+  if (!["rifleman","charger","bomber","shieldbearer","splitter","splitter_mini","medic","gate","horde","attrition"].includes(cause) && !cause.startsWith("threat:") && !cause.startsWith("boss:")) cause = cause === "colossus_half" ? "boss:split" : "horde";
   if (L.threat?.bossAttack && cause.startsWith("boss:")) L.threat.lost += n;
   L.lastCause = cause;
   if (L.missionState) { L.missionState.causes[cause] = (L.missionState.causes[cause] || 0) + n; if (state === "boss") L.missionState.bossLosses += n; }
@@ -813,7 +813,8 @@ function startLevel(level, opts = {}) {
   floatsEl.innerHTML = "";
   const mod = opts.modifier && MODIFIERS[opts.modifier] ? opts.modifier : null;
   resetEngine(opts.seed ?? level * 9973 + 17);
-  L = opts.mission ? generateMission(opts.mission, opts) : generateLevel(level, { ...opts, seed: opts.seed ?? level * 9973 + 17, modifier: mod });
+  const jackDry0 = save.jackDry || 0; // arcade jackpot pity counter before this level is generated (replays restore it)
+  L = opts.mission ? generateMission(opts.mission, opts) : generateLevel(level, { ...opts, modifier: mod }); homeClock = 0;
   Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, popSfx: 0, reached: 0, winT: 0,
     rateMult: mod === "swift" ? 1.25 : 1, speedMul: mod === "swift" ? 1.2 : 1, mode: opts.mode || "normal", modifier: mod, seed: opts.seed ?? level * 9973 + 17, scoreMult: mod ? MODIFIERS[mod].scoreMult : 1,
     belt: [null, null], beltFx: [null, null], beltFxUntil: [0, 0], swap: null, coach: null,
@@ -827,9 +828,10 @@ function startLevel(level, opts = {}) {
   if (L.boss.def?.init) L.boss.def.init(L.boss);
   addSoldiers(L.mission ? L.mission.start : mod === "lone" ? 1 : START_SQUAD);
   hud.beltKey = null; hudCache.clear();
-  replay = { version: 1, rules: {...CAMPAIGN_TUNING}, seed: L.seed, level, mission: L.mission?.id || null, assist: L.missionState?.assisted || 0, elite: !!L.elite, inputs: [], mode:L.mode, modifier:L.modifier, initial: { jackDry: save.jackDry || 0 } };
+  replay = { version: 1, rules: {...CAMPAIGN_TUNING}, seed: L.seed, seeded: opts.seed !== undefined, level, mission: L.mission?.id || null, assist: L.missionState?.assisted || 0, elite: !!L.elite, inputs: [], mode:L.mode, modifier:L.modifier, initial: { jackDry: jackDry0 } };
   beltChanged();
-  $("levelName").textContent = mod ? MODIFIERS[mod].name : levelName(level); $("levelNo").textContent = L.mode === "daily" ? "Daily Challenge" : `Level ${level}`;
+  $("levelName").textContent = L.mission ? L.mission.title : mod ? MODIFIERS[mod].name : levelName(level);
+  $("levelNo").textContent = L.mission ? `C${L.mission.chapter} · ${L.mission.n}${L.mission.tag === "boss" ? " · ♛ BOSS" : L.mission.tag === "hard" ? " · ☠ HARD" : ""}` : L.mode === "daily" ? "Daily Challenge" : `Level ${level}`;
   setWeapon(mod === "arsenal" ? 4 : 0);
   hud.score = 0; hud.best = L.mode === "normal" ? save.bestScore[level] || 0 : 0;
   bus.emit("generate", { L, level, rng: rng(L.seed * 4241 + 7), length: L.length, theme: L.theme, mode: L.mode, modifier: mod });
@@ -919,7 +921,7 @@ $("pauseBtn").onclick = togglePause; $("settingsBtn").onclick = () => { resumeSt
 $("playBtn").onclick = () => { if (state === "home") { setState("play"); sfx("gate"); } };
 $("levelsBtn").onclick = () => setState("levels"); $("levelsClose").onclick = () => setState("home");
 $("resumeBtn").onclick = () => setState(resumeState);
-$("quitBtn").onclick = () => goLevel(L.level, "home", sameRun());
+$("quitBtn").onclick = () => L.mission ? goLevel(save.level, "home") : goLevel(L.level, "home", sameRun());
 $("nextBtn").onclick = () => goLevel(save.level, "home");
 $("retryBtn").onclick = () => restartSame();
 function syncToggles() {
@@ -1129,7 +1131,7 @@ function step(dt) {
       const guarded = L.shieldT > 0 || L.giantT > 0;
       if (!guarded) {
         const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
-        const lost = killSoldiersInCircle(e.x, e.z, e.r + 0.65, loss, e.threat ? `threat:${e.threat.kind}` : "swarm"); if (e.threat) e.threat.lost += lost;
+        const lost = killSoldiersInCircle(e.x, e.z, e.r + 0.65, loss, e.threat ? `threat:${e.threat.kind}` : "horde"); if (e.threat) e.threat.lost += lost;
       }
       e.hp = 0; e.state = "dying"; e.dieT = 0.3; checkMedicOrder(e); e.def?.onDeath?.(e); bus.emit("enemyDie", { e });
       if (guarded) onKill(e); // trampled by a GIANT squad or bounced off the SHIELD
@@ -1335,8 +1337,8 @@ function render(dt) {
   const firing = state === "play" || state === "boss";
   // Giant scale is advanced on simulation ticks.
   for (const s of L.soldiers) {
-    const f = Math.floor(s.ph + L.time * 11) % 4 + (firing ? 4 : 0);
-    const age = s.born === undefined ? 1 : (L.time - s.born) / 0.25, k = (age >= 1 ? 1 : popScale(Math.max(0, age))) * L.giantK;
+    const t = state === "home" ? homeClock : L.time, f = Math.floor(s.ph + t * 11) % 4 + (firing ? 4 : 0);
+    const age = s.born === undefined ? 1 : (t - s.born) / 0.25, k = (age >= 1 ? 1 : popScale(Math.max(0, age))) * L.giantK;
     (specialistLayers[s.specialist] || sold).push(s.x, 0, s.z, SOLDIER_H * 0.512 * k, SOLDIER_H * k, f); shadow.push(s.x + SHADOW_DX, s.z + SHADOW_DZ, 1.0 * k);
   }
   const eTex = L.theme.enemy;
@@ -1411,6 +1413,7 @@ function frame(now) {
   if (L) {
     adaptQuality(Math.min(rawDt, 0.25)); hud.realDt = state === "paused" ? 0 : Math.min(rawDt, 0.1);
     if (!testMode) advanceClock(rawDt);
+    if (state === "home") homeClock += Math.min(rawDt, 0.05);
     render(state === "paused" ? 0 : Math.min(rawDt, 0.1) * time.scale);
   }
   requestAnimationFrame(frame);
@@ -1418,8 +1421,9 @@ function frame(now) {
 
 // ---------- campaign engine: deterministic simulation and module contracts ----------
 const FIXED_DT = 1/60, MAX_CATCHUP = 5, HASH_CELL = 2;
-const CAMPAIGN_TUNING = { normalDamage: .34, hardDamage: .35, bossDamage: .43, firstBossDamage: 2.5, gateCharge: .015, gateGrowth: 6 };
+const CAMPAIGN_TUNING = { normalDamage: .28, hardDamage: .35, bossDamage: .40, firstBossDamage: 2.5, gateCharge: .015, gateGrowth: 6 };
 const clocks = { real: 0, sim: 0, slow: 0, wall: 0 };
+let homeClock = 0; // home-screen idle animation only; not part of L, the replay or the state hash
 let accumulator = 0, slowAccumulator = 0, testMode = false, nextEntityId = 1;
 let runSeed = 1, streams = Object.create(null), replay = null, playback = null, playbackAt = 0;
 let pendingInputs = [], pendingTarget = null;
@@ -1504,7 +1508,7 @@ async function playReplay(record) {
   testMode=true;
   if(record.initial)save.jackDry=record.initial.jackDry;
   if(record.mission)await goMission(record.mission,{assist:record.assist,elite:record.elite});
-  else await goLevel(record.level,"play",{seed:record.seed,mode:record.mode,modifier:record.modifier});
+  else await goLevel(record.level,"play",{...(record.seeded===false?{}:{seed:record.seed}),mode:record.mode,modifier:record.modifier}); // arcade layouts are built unseeded
   playback=record;playbackAt=0;pendingInputs=[];return true;
 }
 function stateHash() {
@@ -1550,7 +1554,7 @@ function generateMission(m,opts) {
       for(let j=0;j<count;j++){
         const cols=Math.max(1,Math.ceil(Math.sqrt(count))), row=Math.floor(j/cols), col=j%cols;
         let x=(e.lane||0)*3.4+(gameplayRng("layout")*2-1)*spread,zz=z-gameplayRng("layout")*depth;
-        if(e.formation==="line"){x=(e.lane||0)*3.4+(j/Math.max(1,count-1)-.5)*spread*2;zz=z;}
+        if(e.formation==="line"){x=(e.lane||0)*3.4+(j%3-1)*spread*.8;zz=z-(count>1?j/(count-1):0)*depth;}
         if(e.formation==="block"||e.formation==="wedge"){x=(e.lane||0)*3.4+(col-(cols-1)/2)*spread*2/cols;zz=z-row*depth/cols-(e.formation==="wedge"?Math.abs(col-(cols-1)/2)*.8:0);}
         const enemyType=e.enemy || e.enemyType || e.unit || (e.type!=="wave"?e.type:null) || e.kind || "grunt";
         const q=enemy(enemyType,Math.max(-5.5,Math.min(5.5,x)),zz,out.level,{authored:true});q.hp*=factor;q.maxHp=q.hp;out.enemies.push(q);
@@ -1582,7 +1586,7 @@ function skillOk() {
   const skills={noWaste:L.tactics.wasted===0,rescueAll:m.rescueTaken===m.rescueTotal,perfect2:L.tactics.perfect>=2,medicsFirst:m.medicsFirst,noCharge:!(m.causes.charger>0),bossClean:m.bossLosses<20,fast:m.rescueSlowdowns===0,noAssist:!m.assisted};
   return !m.assisted && skills[L.mission.skill?.id]===true;
 }
-function missionStars(won,keptPct){return [won,won&&keptPct>=65,won&&skillOk()];}
+function missionStars(won,keptPct){return [won,won&&keptPct>=(window.Campaign?.keepPct?.(L.mission) ?? 65),won&&skillOk()];}
 function endMission(result,keptPct){
   if(L.missionEnded)return;L.missionEnded=true;
   const p=missionProgress(L.mission.id),won=result==="win",stars=missionStars(won,keptPct),m=L.missionState;

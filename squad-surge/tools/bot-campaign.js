@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 "use strict";
-// node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 3
+// node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 3 [--assist 0|1|2]
 // Optional: --three /path/three.min.js --engine simulation (CPU fixture; no GPU claims).
+// --checks only runs the integration contracts without a balance sweep.
 const fs=require("fs"),path=require("path"),http=require("http"),vm=require("vm");
 const ROOT=path.resolve(__dirname,"..");
 const args={};for(let i=2;i<process.argv.length;i+=2){if(!process.argv[i+1])throw Error("Missing value: "+process.argv[i]);args[process.argv[i].replace(/^--/,"")]=process.argv[i+1];}
@@ -20,11 +21,11 @@ const server=http.createServer((req,res)=>{
   res.writeHead(200,{"content-type":mime[path.extname(file)]||"application/octet-stream"});fs.createReadStream(file).pipe(res);
 });
 // This function is serialized into the browser/VM; all decisions use observed state.
-async function installBot({id,policy,seed}) {
+async function installBot({id,policy,seed,assist=0}) {
   const g=window.__game,C=g.ctx;
   g.setTestMode(true);
   let result=null;C.bus.on("missionEnd",d=>{result={...d};});
-  await C.goMission(id,{assist:0});g.resetProfile();
+  await C.goMission(id,{assist});g.resetProfile();
   let random=seed>>>0,next=0;
   const rnd=()=>((random=(Math.imul(random,1664525)+1013904223)>>>0)/4294967296);
   const warnings=[];C.bus.on("enemyTelegraph",t=>warnings.push({...t,until:g.L.time+(t.kind==="fuse"?2.3:1.25)}));
@@ -76,22 +77,58 @@ async function installBot({id,policy,seed}) {
   window.__campaignBatch=(ticks=120)=>{
     for(let i=0;i<ticks&&["play","boss","bonus"].includes(g.state);i++){decide();g.advance(1);if(g.draw&&g.L.tick%60===0)g.draw();}
     const L=g.L;
-    return {done:!!result,tick:L.tick,debug:L.tick>=18000?{state:g.state,squad:L.soldiers.length,x:L.sx,z:L.sz,boss:{hp:L.boss.hp,x:L.boss.x,z:L.boss.z,mode:L.boss._campaignEnemy?.mode},enemies:L.enemies.filter(e=>e.hp>0).map(e=>({type:e.type,hp:e.hp,x:e.x,z:e.z,mode:e._campaignEnemy?.mode}))}:null,result:result?{...result,chapter:L.mission.chapter,tag:L.mission.tag,hash:g.stateHash(),score:L.score,peak:L.peakSquad,profile:g.profile()}:null};
+    return {done:!!result,tick:L.tick,debug:L.tick>=18000?{state:g.state,squad:L.soldiers.length,x:L.sx,z:L.sz,boss:{hp:L.boss.hp,x:L.boss.x,z:L.boss.z,mode:L.boss._campaignEnemy?.mode},enemies:L.enemies.filter(e=>e.hp>0).map(e=>({type:e.type,hp:e.hp,x:e.x,z:e.z,mode:e._campaignEnemy?.mode}))}:null,result:result?{...result,chapter:L.mission.chapter,tag:L.mission.tag,hash:g.stateHash(),score:L.score,peak:L.peakSquad,casualties:{...L.missionState.causes},bossLosses:L.missionState.bossLosses,profile:g.profile()}:null};
   };
 }
-function makeSimulation(){
+function makeSimulation(errors=[]){
   // Reuse the established DOM/texture fixture, without running its old balance assertions.
   let fixture=fs.readFileSync(path.join(ROOT,"tools/check-tactics.js"),"utf8").split("const H=sandbox.H,events=[];")[0].replace(/^#!.*\n/,"");
   fixture=fixture.replace("performance:{now:()=>10000}","performance:require('perf_hooks').performance");
   fixture=fixture.replace("ctx,startLevel,setState,step,", "ctx,stateHash,advanceTicks,advanceClock,resetProfile,profileSnapshot,setTestMode:v=>testMode=!!v,queueInput,startLevel,setState,step,");
   const sandbox=new Function("require",fixture+"\nreturn sandbox;")(require),H=sandbox.H;
+  sandbox.console={...console,error:(...args)=>{errors.push(args.map(String).join(" "));console.error(...args);}};
   sandbox.__game={ctx:H.ctx,get L(){return H.L;},get state(){return H.state;},stateHash:H.stateHash,advance:H.advanceTicks,advanceClock:H.advanceClock,input:H.queueInput,setTestMode:H.setTestMode,profile:H.profileSnapshot,resetProfile:H.resetProfile};
   for(const file of ["js/enemies.js","js/campaign.js"])if(fs.existsSync(file))vm.runInContext(fs.readFileSync(file,"utf8"),sandbox);
   sandbox.Enemies?.setup(H.ctx);return sandbox;
 }
+async function checkIntegration(){
+  const assert=require("assert"),errors=[],s=makeSimulation(errors),g=s.__game,C=g.ctx;
+  vm.runInContext(fs.readFileSync("js/story.js","utf8"),s);
+  for(const m of Object.values(s.Campaign.missions)){
+    assert.equal(m.brief.length,2,m.id+" briefing");
+    assert(m.events.every((e,i,a)=>e.at>=0&&e.at<m.length&&(!i||e.at>=a[i-1].at)),m.id+" event order");
+  }
+  for(const [id,pct] of [["c4m2",65],["c4m5",50],["c4m6",45]]){
+    await C.goMission(id);
+    assert.equal(s.Campaign.keepPct(C.mission),pct);
+    assert.equal(vm.runInContext(`missionStars(true,${pct-1})[1]`,s),false);
+    assert.equal(vm.runInContext(`missionStars(true,${pct})[1]`,s),true);
+    assert.equal(s.document.getElementById("levelName").textContent,C.mission.title);
+    assert(s.document.getElementById("levelNo").textContent.startsWith(`C4 · ${C.mission.n}`));
+    if(C.mission.tag!=="normal")assert(s.document.getElementById("levelNo").textContent.includes(C.mission.tag==="hard"?"☠ HARD":"♛ BOSS"));
+  }
+  await C.goMission("c2m2");
+  const initial=g.stateHash(),seed=g.L.seed;
+  g.advance(60);await C.restartSame();assert.equal(g.L.seed,seed);assert.equal(g.stateHash(),initial);
+  for(const cause of ["horde","shieldbearer","splitter","splitter_mini","medic","rifleman","charger","bomber","gate","attrition","threat:swarm","threat:barricade","threat:mortars","threat:collapse","threat:crusher","threat:saw","threat:slam","boss:slam","boss:contact","boss:summon","boss:charge","boss:barrage","boss:shieldWall","boss:split"]){
+    C.addSoldiers(1);C.killSoldiers(1,null,true,cause);
+    assert.equal(g.L.lastCause,cause);assert(s.Story.hint(cause).length>20);
+    if(cause!=="attrition")assert.notEqual(s.Story.hint(cause),s.Story.hint("attrition"),cause+" specific hint");
+  }
+  for(const cause of ["grunt","brute","swarm"]){C.addSoldiers(1);C.killSoldiers(1,null,true,cause);assert.equal(g.L.lastCause,"horde");}
+  C.addSoldiers(1);C.killSoldiers(1,null,true,"colossus_half");assert.equal(g.L.lastCause,"boss:split");
+  await C.goMission("c2m5",{assist:1});assert.equal(vm.runInContext("missionStars(true,100)[2]",s),false);
+  await C.goArcade(4);assert.equal(C.mission,null);assert.equal(s.document.getElementById("levelNo").textContent,"Level 4");
+  assert.equal(s.document.getElementById("levelName").textContent,vm.runInContext("levelName(4)",s));
+  await C.goMode({mode:"daily",level:4,seed:711,modifier:"horde"});
+  assert.equal(C.mission,null);assert.equal(s.document.getElementById("levelNo").textContent,"Daily Challenge");
+  assert.deepEqual(errors,[]);
+  console.log("PASS: campaign event order/briefings, tag star boundaries, mission HUD, same-seed retry, cause hints, assisted stars, Arcade/Daily HUD.");
+}
 let browser;
 (async()=>{
   process.chdir(ROOT);const results=[];
+  if(args.checks){await checkIntegration();if(args.checks==="only")return;}
   if(engine==="browser"){
     const {chromium}=require("playwright");await new Promise((resolve,reject)=>{server.once("error",reject);server.listen(0,"127.0.0.1",resolve);});
     browser=await chromium.launch({args:["--use-gl=swiftshader","--enable-webgl","--ignore-gpu-blocklist"],...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
@@ -99,13 +136,14 @@ let browser;
   for(let run=0;run<runs;run++)for(const id of missions)for(const policy of policies){
     let context;const errors=[];
     try{
-      const config={id,policy,seed:7301+ordinal(id)*173+run*697};let batch;
+      const config={id,policy,seed:7301+ordinal(id)*173+run*697,assist:Number(args.assist||0)};let batch;
       if(engine==="simulation"){
-        const sandbox=makeSimulation();await vm.runInContext(`(${installBot.toString()})(${JSON.stringify(config)})`,sandbox);
+        const sandbox=makeSimulation(errors);await vm.runInContext(`(${installBot.toString()})(${JSON.stringify(config)})`,sandbox);
         batch=()=>sandbox.__campaignBatch(120);
       }else{
         context=await browser.newContext({viewport:{width:390,height:780},deviceScaleFactor:1});const page=await context.newPage();
         page.on("pageerror",e=>errors.push(e.message));
+        page.on("console",m=>{if(m.type()==="error"&&m.text().startsWith("bus "))errors.push(m.text());});
         if(local)await page.route("**/three.min.js",r=>r.fulfill({path:path.resolve(local),contentType:"application/javascript"}));
         await page.addInitScript(()=>localStorage.setItem("squad-surge-v1",JSON.stringify({sound:false,vibe:false,level:1})));
         await page.goto(`http://127.0.0.1:${server.address().port}/index.html?hq`);await page.waitForFunction(()=>window.__game&&__game.state==="home",null,{timeout:60000});
@@ -119,7 +157,8 @@ let browser;
   }
   const summary=(label,select)=>policies.map(policy=>{const all=results.filter(r=>r.policy===policy&&select(r)),r=all.filter(r=>r.result!=="ERROR");return {group:label,policy,wins:r.filter(r=>r.result==="win").length,attempts:r.length,errors:all.length-r.length,winRate:r.length?(100*r.filter(r=>r.result==="win").length/r.length).toFixed(1)+"%":"—",stars:r.length?(r.reduce((s,x)=>s+x.stars.filter(Boolean).length,0)/r.length).toFixed(2):"—"};});
   console.log("First-attempt results: fresh save, no Assist; errors excluded from win rates.");
-  console.table([...["normal","hard","boss"].flatMap(t=>summary(t,r=>r.tag===t)),...Array.from({length:6},(_,i)=>summary("chapter "+(i+1),r=>r.chapter===i+1)).flat()]);
+  console.table([...["normal","hard","boss"].flatMap(t=>summary(t,r=>r.tag===t)),...summary("normal (excl. onboarding)",r=>r.tag==="normal"&&ordinal(r.id)>2),...Array.from({length:6},(_,i)=>summary("chapter "+(i+1),r=>r.chapter===i+1)).flat()]);
+  console.table(missions.flatMap(id=>summary(id,r=>r.id===id)));
   const causes={};for(const r of results)if(r.result==="lose"){const k=r.policy+":"+r.cause;causes[k]=(causes[k]||0)+1;}console.log("Causes of loss",JSON.stringify(causes));
   if(results.some(r=>r.errors?.length))process.exitCode=1;
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();server.close();});

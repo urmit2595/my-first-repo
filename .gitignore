@@ -1,0 +1,3 @@
+__pycache__/
+*.pyc
+squad-surge/design/qa/campaign/flow/*.png

@@ -1,0 +1,132 @@
+[
+ {
+  "name": "home shows STORY button",
+  "ok": true,
+  "info": "{\"story\":\"STORY\",\"arcade\":\"ARCADE\",\"daily\":true}"
+ },
+ {
+  "name": "home relabels play as ARCADE",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "map lists 36 missions, only the first open",
+  "ok": true,
+  "info": "{\"nodes\":36,\"open\":1,\"next\":\"1 Out of the Barracks ☆☆☆\"}"
+ },
+ {
+  "name": "briefing shows title, radio lines, 3 objectives",
+  "ok": true,
+  "info": "MISSION · CHAPTER 1 Out of the Barracks R ROOK Boots on. We start with the next street. M MIRA Green numbers bring friends. Red ones cost them. ☆ Win the missio"
+ },
+ {
+  "name": "START launches c1m1 with the overlay closed",
+  "ok": true,
+  "info": "{\"state\":\"play\",\"mission\":\"c1m1\",\"mode\":\"campaign\",\"assist\":0,\"level\":1,\"pill\":\"C1 · 1\",\"squad\":8}"
+ },
+ {
+  "name": "HUD pill shows campaign chapter and mission",
+  "ok": true,
+  "info": "C1 · 1"
+ },
+ {
+  "name": "radio line appears in play",
+  "ok": true,
+  "info": "MmiraThat case holds a rifle. Give it a few shots."
+ },
+ {
+  "name": "loss shows results sheet with a hint",
+  "ok": true,
+  "info": "Out of the Barracks · MISSION SQUAD WIPED OUT ☆ — Win the mission ☆ — Keep at least 65% of your peak squad ☆ — Win without Assist SETTLERS RESCUED +0 Big waves eat small squads. Grab + gates before them and steer around "
+ },
+ {
+  "name": "first loss shows no Assist yet",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "RETRY restarts the same mission",
+  "ok": true,
+  "info": "{\"state\":\"play\",\"mission\":\"c1m1\",\"mode\":\"campaign\",\"assist\":0,\"level\":1,\"pill\":\"C1 · 1\",\"squad\":8}"
+ },
+ {
+  "name": "second loss offers Assist",
+  "ok": true,
+  "info": " Assist · 20% fewer/weaker enemies + extra drop (max 2 stars)"
+ },
+ {
+  "name": "assisted retry starts with Assist on",
+  "ok": true,
+  "info": "{\"state\":\"play\",\"mission\":\"c1m1\",\"mode\":\"campaign\",\"assist\":1,\"level\":1,\"pill\":\"C1 · 1\",\"squad\":8}"
+ },
+ {
+  "name": "Assist stays ticked after an assisted loss",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "retry after an assisted loss keeps Assist",
+  "ok": true,
+  "info": "{\"state\":\"play\",\"mission\":\"c1m1\",\"mode\":\"campaign\",\"assist\":1,\"level\":1,\"pill\":\"C1 · 1\",\"squad\":8}"
+ },
+ {
+  "name": "pause quit returns home",
+  "ok": true,
+  "info": "QUIT TO HOME"
+ },
+ {
+  "name": "ARCADE starts a normal level, not the campaign",
+  "ok": true,
+  "info": "{\"state\":\"play\",\"mission\":null,\"mode\":\"normal\",\"assist\":null,\"level\":1,\"pill\":\"Level 1\",\"squad\":5}"
+ },
+ {
+  "name": "Daily starts the daily mode",
+  "ok": true,
+  "info": "{\"state\":\"play\",\"mission\":null,\"mode\":\"daily\",\"assist\":null,\"level\":5,\"pill\":\"Daily Challenge\",\"squad\":5}"
+ },
+ {
+  "name": "A: no page errors or failed requests",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "home offers CONTINUE for a returning player",
+  "ok": true,
+  "info": "CONTINUE · Chapter 1"
+ },
+ {
+  "name": "next node is the chapter 1 boss",
+  "ok": true,
+  "info": "6 ♛ The First Light ☆☆☆"
+ },
+ {
+  "name": "boss briefing is tagged BOSS",
+  "ok": true,
+  "info": ""
+ },
+ {
+  "name": "boss mission won through the UI (smart driver)",
+  "ok": true,
+  "info": "tries 1; {\"result\":\"win\",\"stars\":[true,true,true],\"keptPct\":100,\"cause\":null}"
+ },
+ {
+  "name": "win sheet offers NEXT",
+  "ok": true,
+  "info": "The First Light · ♛ BOSS MISSION COMPLETE! ★ ✓ Win the mission ★ ✓ Keep at least 45% of your peak squad ★ ✓ Lose fewer than 20 soldiers during the boss SETTLERS RESCUED +0 R ROOK One light on. Five mo"
+ },
+ {
+  "name": "chapter vignette shows after the chapter's last win",
+  "ok": true,
+  "info": "☀ Old Town LIGHTS UP! R ROOK One light on. Five more, and we can all find home. ARMORY UNLOCKED ROSE NEXT: Red Bridge Shieldbearer · flank its shield or use splash NEXT DISTRICT"
+ },
+ {
+  "name": "map then points at chapter 2 mission 1",
+  "ok": true,
+  "info": "1 Side Door ☆☆☆"
+ },
+ {
+  "name": "B: no page errors or failed requests",
+  "ok": true,
+  "info": ""
+ }
+]

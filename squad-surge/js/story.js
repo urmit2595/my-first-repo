@@ -3,7 +3,7 @@
 window.Story = (() => {
   'use strict';
   let ctx, game, overlay, panel, homeButton, focusBefore, pending = null;
-  let ended = false, currentAssist = 0, lastResult = null, timers = [], disabled = [];
+  let ended = false, lastResult = null, timers = [], disabled = [];
   const offers = {}, elite = {};
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const campaign = () => window.Campaign;
@@ -14,7 +14,8 @@ window.Story = (() => {
   const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   function data() {
     if (!ctx.save) return null;
-    const s = ctx.save.storyUI ||= {};
+    if (!ctx.save.storyUI || typeof ctx.save.storyUI !== 'object' || Array.isArray(ctx.save.storyUI)) ctx.save.storyUI = {};
+    const s = ctx.save.storyUI;
     s.records ||= {}; s.vignettes ||= {}; s.offers ||= {};
     return s;
   }
@@ -23,16 +24,17 @@ window.Story = (() => {
   function stars(id) {
     const r = record(id), engine = ctx.save?.campaign;
     const v = r.stars ?? engine?.stars?.[id] ?? engine?.missions?.[id]?.stars ?? 0;
-    return Array.isArray(v) ? v.filter(Boolean).length : Math.max(0, Math.min(3, Number(v) || 0));
+    return Math.max(0, Math.min(3, Array.isArray(v) ? v.filter(Boolean).length : Number(v) || 0));
   }
   const cleared = id => !!record(id).won || stars(id) > 0;
-  const next = () => all().find(m => !cleared(m.id)) || all().at(-1);
+  const next = () => { const list = all(); return list.find(m => !cleared(m.id)) || list[list.length - 1]; };
   const open = id => { const list = all(), i = list.findIndex(m => m.id === id); return i === 0 || (i > 0 && cleared(list[i - 1].id)); };
   const chapterStars = c => c.missions.reduce((n, id) => n + stars(id), 0);
   const complete = c => c.missions.every(cleared);
   const bossNames = ['Ogre Warlord', 'Iron Bulwark', 'Dune Ravager', 'Harbor Gunner', 'Scrap Colossus', 'The Warlord, Reborn'];
   const enemies = ['Brute', 'Shieldbearer · flank its shield or use splash', 'Charger & Bomber · dodge the rush and fuse', 'Rifleman & Medic · move off lasers; target healers', 'Splitter · leave space for its minis', 'Every enemy · combine your counters'];
-  const objectives = m => ['Win the mission', 'Keep at least 65% of your peak squad', m.skill?.text || 'Win without Assist'];
+  const keepPct = m => window.Campaign?.keepPct?.(m) ?? 65;
+  const objectives = m => ['Win the mission', `Keep at least ${keepPct(m)}% of your peak squad`, m.skill?.text || 'Win without Assist'];
   const tag = m => m.tag === 'boss' ? '♛ BOSS' : m.tag === 'hard' ? '☠ HARD' : 'MISSION';
   function portrait(who) {
     const name = ['rook', 'mira', 'warlord'].includes(who) ? who : 'rook';
@@ -61,6 +63,10 @@ window.Story = (() => {
     const b = document.createElement('button'); b.className = 'btn ' + (primary ? 'go' : 'alt'); b.textContent = text;
     b.onclick = action; root.appendChild(b); return b;
   }
+  function home() {
+    close();
+    ctx.goMode({ mode: 'normal', level: ctx.save?.level || 1, next: 'home' });
+  }
   function refreshHome() {
     if (!homeButton) return;
     homeButton.hidden = !ready();
@@ -74,6 +80,7 @@ window.Story = (() => {
     const p = sheet('Operation Homeward chapter map', 'st-map');
     p.innerHTML = '<h2 class="stroke">OPERATION HOMEWARD</h2><p>Relight the valley. Bring everyone home.</p>';
     button(p, 'BACK', () => { if (lastResult) results(lastResult, true); else close(); });
+    if (lastResult && ctx.goMode) button(p, 'HOME', home);
     const target = next();
     chapters().forEach((c, i) => {
       const district = document.createElement('section'); district.className = 'st-district' + (complete(c) ? ' restored' : ''); district.id = `st-chapter-${c.id}`;
@@ -97,10 +104,10 @@ window.Story = (() => {
     const selected = p.querySelector(`#st-chapter-${Number(chapterId || target?.chapter || 1)}`);
     if (selected) p.scrollTop = Math.max(0, selected.offsetTop - p.offsetTop - 100);
   }
-  function assist(root, id) {
+  function assist(root, id, checked = false) {
     const level = offers[id] || data()?.offers[id];
     const label = document.createElement('label'); label.className = 'st-assist'; label.hidden = !level;
-    const input = document.createElement('input'); input.type = 'checkbox';
+    const input = document.createElement('input'); input.type = 'checkbox'; input.checked = !!(checked && level);
     label.append(input, document.createTextNode(` Assist${level >= 2 ? '+' : ''} · ${level >= 2 ? '35' : '20'}% fewer/weaker enemies + extra drop (max 2 stars)`)); root.appendChild(label);
     return () => input.checked ? (offers[id] || data()?.offers[id] || 1) : 0;
   }
@@ -108,7 +115,7 @@ window.Story = (() => {
     if (!ready()) { close(); return; }
     const m = missions()[id]; if (!m) return;
     close();
-    if (retry && assistLevel === currentAssist && typeof ctx.restartSame === 'function') ctx.restartSame();
+    if (retry && assistLevel === 0 && typeof ctx.restartSame === 'function') ctx.restartSame();
     else ctx.goMission(id, { assist: assistLevel, elite: !!elite[m.chapter] });
   }
   function briefing(id) {
@@ -128,7 +135,16 @@ window.Story = (() => {
     'boss:summon': 'Clear the summoned enemies before they surround you.', 'boss:charge': 'Move into a lane outside the boss charge arrows.',
     'boss:barrage': 'Move away from the marked barrage lanes.', 'boss:shieldWall': 'Flank the shield wall and fire when its core opens.',
     'boss:split': 'Keep space from both halves and use splash damage.', gate: 'Choose the safer gate; avoid subtracting from a small squad.',
-    swarm: 'Use AIRSTRIKE before the swarm reaches your squad.', attrition: 'Take recruit gates and save counters for the next threat.'
+    horde: 'Big waves eat small squads. Grab + gates before them and steer around the densest pack.',
+    shieldbearer: 'Flank the shield or bring piercers, splash, or GIANT.',
+    splitter: 'Leave room for the split and use grenadiers or AIRSTRIKE to clear the minis.',
+    splitter_mini: 'Move away from the split; splash or AIRSTRIKE clears the little ones.',
+    medic: 'Target the medic before its patient, and leave a lane open.',
+    'threat:collapse': 'Leave the cracked bridge lane before it falls; the other lanes stay open.',
+    'threat:crusher': 'Shoot the shortcut wall or steer away from the crusher lane.',
+    'threat:saw': 'Stay clear of the saw lane and move through the open side.',
+    'threat:slam': 'Use SHIELD at the slam warning or leave the marked lane.',
+    'boss:contact': 'Keep away from the boss and fire from an open lane.', attrition: 'Take recruit gates and save counters for the next threat.'
   };
   function hint(cause) {
     return tips[cause] || (String(cause).startsWith('boss:') ? 'Dodge the marked attack, then fire during the weak point window.' : String(cause).startsWith('threat:') ? 'Watch the threat warning and use its matching counter.' : tips.attrition);
@@ -145,7 +161,7 @@ window.Story = (() => {
   function results(d, replay = false) {
     const m = missions()[d.id]; if (!m || (ended && !replay)) return; ended = true; lastResult = d;
     const won = d.result === 'win' || d.result === 'won' || d.result === true;
-    const bits = Array.isArray(d.stars) ? d.stars.map(Boolean) : [won, won && d.keptPct >= 65, won && !!d.skillOk];
+    const bits = Array.isArray(d.stars) ? d.stars.map(Boolean) : [won, won && d.keptPct >= keepPct(m), won && !!d.skillOk];
     if (!won) bits.fill(false); if (d.assisted) bits[2] = false;
     const s = data(), old = record(d.id), fails = won ? 0 : (old.fails || 0) + 1;
     if (s && !replay) {
@@ -166,13 +182,14 @@ window.Story = (() => {
       const reveal = () => { row.textContent = `${bits[i] ? '★ ✓' : '☆ —'} ${text}`; row.classList.toggle('earned', bits[i]); };
       if (reduced()) reveal(); else timers.push(setTimeout(reveal, 250 + i * 350));
     });
-    imageFallback(p); const selection = assist(p, d.id);
+    imageFallback(p); const selection = assist(p, d.id, !won && d.assisted); // keep Assist ticked after an assisted loss
     const after = all()[all().findIndex(x => x.id === d.id) + 1];
     const finish = action => { if (won && c && complete(c) && !data()?.vignettes[c.id]) vignette(c, m); else action(); };
-    if (won && after) button(p, 'NEXT MISSION', () => finish(() => briefing(after.id)), true);
+    if (won && after) button(p, `NEXT · C${after.chapter} · ${after.n}: ${after.title}`, () => finish(() => briefing(after.id)), true);
     else if (won && c && complete(c) && !data()?.vignettes[c.id]) button(p, 'DISTRICT RESTORED', () => vignette(c, m), true);
     button(p, 'RETRY', () => launch(d.id, selection(), true), !won);
     button(p, 'MAP', () => finish(() => map(m.chapter)));
+    if (ctx.goMode) button(p, 'HOME', () => finish(home));
     pending = { id: d.id, rerenderAssist: () => {
       const label = p.querySelector('.st-assist'); if (!label) return;
       const replacement = document.createElement('div'); assist(replacement, d.id);
@@ -208,7 +225,7 @@ window.Story = (() => {
     }
     const toast = document.createElement('div'); toast.id = 'storyRadio'; toast.hidden = true; toast.setAttribute('aria-live', 'polite'); game.appendChild(toast);
     const art = new Image(); art.onload = () => game.style.setProperty('--story-map', 'url("assets/story/map.webp")'); art.src = 'assets/story/map.webp';
-    c.bus.on('missionStart', d => { close(); currentAssist = Number(d.assist) || 0; ended = false; pending = null; lastResult = null; const s = data(); if (s) { s.started = true; persist(); } refreshHome(); });
+    c.bus.on('missionStart', d => { close(); ended = false; pending = null; lastResult = null; const s = data(); if (s) { s.started = true; persist(); } refreshHome(); });
     c.bus.on('missionEnd', d => results(d));
     c.bus.on('assistOffer', d => { offers[d.id] = d.level; const s = data(); if (s) { s.offers[d.id] = d.level; persist(); } if (pending?.id === d.id) pending.rerenderAssist(); });
     c.bus.on('radio', radio);

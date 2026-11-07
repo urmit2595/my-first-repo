@@ -240,7 +240,8 @@ window.Juice = (() => {
       banner.style.opacity = "0"; banner.hidden = false;
     }
     function showBanner(isBoss) {
-      enqueue(isBoss ? "BOSS!" : `LEVEL ${level ? level.level : (ctx.L ? ctx.L.level : 1)}`, {
+      const m = ctx.mission;
+      enqueue(isBoss ? "BOSS!" : m ? `C${m.chapter} · ${m.n}` : `LEVEL ${level ? level.level : (ctx.L ? ctx.L.level : 1)}`, {
         sub: isBoss ? "" : (level ? level.name : ""), color: isBoss ? "#ff6957" : "#8bd9ff"
       });
     }
