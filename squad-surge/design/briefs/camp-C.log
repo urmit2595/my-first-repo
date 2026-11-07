@@ -1,0 +1,955 @@
+OpenAI Codex v0.167.0
+--------
+workdir: /home/user/my-first-repo/squad-surge
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a1b7a7-66d1-7422-a943-ebaef28e0bd6
+--------
+user
+# Codex run C: campaign content for the Squad Surge "Campaign Update"
+
+Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 2, 3, 4, 5, 6 and 7 are your
+spec), `design/strategy.md` (threats and counters), and `index.html`'s generateLevel (current pacing, distances,
+solid HP and rewards) for scale reference.
+
+EDIT ONLY the new files `js/campaign.js` and `design/campaign-script.md`. Do not run git.
+
+Write `window.Campaign` (format in section 4) with **all 36 missions**: 6 chapters × 6 missions, following
+teach → practice → twist → recovery/rescue → HARD → BOSS.
+- **Difficulty targets (section 2):** chapter 1, missions 1–3 are easy onboarding; then a real sawtooth. HARD missions
+  combine two learned pressures. BOSS missions examine the chapter's lesson. Waves and gates must be authored for the
+  squad sizes the player can have at that point (squad cap 300). Don't let gates snowball the squad: use −, x and
+  trade-off halves wisely.
+- **Fairness:** every threat has a reachable safe lane. No mandatory barricade under unavoidable mortars. Counters (drops
+  or tool gates) appear before threats often, but not always from chapter 3 on, so planning matters.
+- **Content:** introduce each new enemy alone first, then combine. Use rescue gates, recruit gates, crossfire choices,
+  hazards (collapse lanes on the bridge, crushers and saws in the ruins and arena) and scenery events (fuel trucks,
+  shortcut walls).
+- **Story:** original "Operation Homeward" text in a warm, punchy voice. Every mission has two brief lines
+  (rook/mira), 0–2 in-run radio lines and one win line. The Warlord taunts before the boss missions. Short lines only
+  (≤ 90 characters).
+- **Skill objective:** every mission gets one, from the section 7 ids, chosen to teach that mission's lesson.
+- `seed` values are unique. `length` is 220–420 m, longer later.
+- Write a small `node` validation snippet in `design/campaign-script.md` (and run it) that checks:
+  - every field is present, ids are unique, and events are sorted
+  - event types, enemy types, boss types and skill ids are valid
+  - the total enemy budget per mission rises across the curve
+Also put the full story outline in that file (chapter arcs and characters).
+
+warning: Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.
+codex
+I’ll read the campaign spec and current level generator, author all 36 missions, and run the validator. I’ll edit only the two requested files and won’t run git.
+
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'campaign.md' -g 'strategy.md' -g 'index.html' -g 'campaign.js' -g 'campaign-script.md'" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+/home/user/my-first-repo/squad-surge
+index.html
+design/campaign.md
+design/strategy.md
+
+exec
+/bin/bash -lc 'cat design/campaign.md' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+# Squad Surge "Campaign Update": story mode, real difficulty, engine upgrade
+
+Inputs: `design/engine-audit.md` (the code audit) and the genre research summarised below.
+
+**Owner's request:** "This game is super easy right now. Check the similar games and story mode, copy their best
+features, and improve our gaming engine as well."
+
+**Standing constraints:**
+- No shop, no currency and no purchasable upgrades. Stars, medals and cosmetics are progress records only.
+- Original work only: borrow genre mechanics, never another game's names, art, characters or levels.
+
+## 1. Why it is easy today (from the audit)
+
+- Enemies only walk forward. None shoot, shield, charge or split.
+- Difficulty is mostly HP and count scaling.
+- The squad snowballs to 500+.
+- Several safety nets protect the squad:
+  - the guaranteed opening boost
+  - supplied counters
+  - the threat loss cap (never below 60% of the squad)
+  - no real attrition
+
+## 2. Targets (first-attempt win rates, measured by bot)
+
+| Mission tag | "smart" bot (uses counters, dodges) | "never" bot (steers to gates only) |
+|---|---|---|
+| normal | 80–90% | 45–65% |
+| hard | 55–70% | 15–35% |
+| boss | 45–60% | 5–25% |
+
+- Chapter 1, missions 1–3 are onboarding: everyone wins.
+- Losing must feel fair:
+  - every threat is telegraphed for ≥ 0.8 s
+  - there is always a reachable safe lane
+  - no mandatory barricade under unavoidable mortars
+- After a loss: instant restart on the same seed, plus a specific hint about the decisive mistake.
+- After 2 consecutive fails, offer **Assist**: 20% fewer and weaker enemies plus one extra drop. After 4 fails, offer
+  Assist+ (−35%).
+- Assist is offered between attempts, never applied mid-run. An assisted win is marked and cannot earn the third star.
+
+## 3. Story: "Operation Homeward" (original)
+
+The Warlord's horde has cut the valley into six isolated districts. Captain **Rook** leads the Surge squad home
+district by district, rescuing settlers and relighting each district's signal tower. **Mira**, the radio scout,
+calls out what's ahead. Each chapter ends with a boss guarding the tower. Cleared districts visibly recover on the
+map.
+
+| Chapter | District (theme) | New enemy | New mechanic | Boss |
+|---|---|---|---|---|
+| 1 | Old Town (town) | the brute | trade-off gates and weapon cases | **Ogre Warlord**: slam, then summons when enraged |
+| 2 | Red Bridge (bridge) | **shieldbearer** | mortars; collapsing bridge lanes | **Iron Bulwark**: a shield wall that exposes a weak core after each slam |
+| 3 | Dust Road (desert) | **charger** and **bomber** | lane rushes; fuse explosions | **Dune Ravager**: telegraphed lane charges, then double charges |
+| 4 | The Pier (pier) | **rifleman** and **medic** | crossfire gates; healer tethers | **Harbor Gunner**: lane barrages plus rifleman summons |
+| 5 | Broken Blocks (ruins) | **splitter** | barricades; interactive collapses (shoot to open a shortcut) | **Scrap Colossus**: splits into two halves at 50% |
+| 6 | The Arena (arena) | everything combined | everything | **The Warlord, Reborn**: 3 phases combining all patterns |
+
+Each chapter has 6 missions:
+1. teach
+2. practice
+3. twist
+4. recovery or rescue
+5. **HARD** combination
+6. **BOSS**
+
+That is 36 missions in total. Every mission has two radio lines before it starts, optional in-run radio lines, and
+one line after a win.
+
+## 4. Mission data format (`js/campaign.js` exports `window.Campaign`)
+
+```js
+Campaign = {
+  version: 1,
+  chapters: [{ id: 1, name: "Old Town", theme: "town", blurb: "...", boss: "ogre", missions: ["c1m1", ...] }],
+  missions: { "c1m1": {
+    id: "c1m1", chapter: 1, n: 1, tag: "normal" | "hard" | "boss", theme: "town", title: "Out of the Barracks",
+    seed: 101, length: 260, start: 5,                     // start = initial squad; length in metres
+    brief: [["rook", "..."], ["mira", "..."]], win: ["rook", "..."],
+    skill: { id: "noWaste", text: "Win without wasting a power-up" },  // the third-star objective (see 7)
+    events: [ /* sorted by `at` (metres from the start); see below */ ],
+    boss: { type: "ogre", hp: 900 }                       // omitted means no boss: the mission ends at the finish arch
+  } } }
+```
+
+Event types (`at` is in metres; lanes are −1, 0, +1, which map to x = −3.4, 0, +3.4):
+
+| Event | Shape | Notes |
+|---|---|---|
+| `gate` | `{left: Half, right: Half, moving?: true}` | `Half` is one of: `["+", n]`, `["x", n]`, `["-", n]`, `{powerup: "shield"\|"airstrike"\|"giant"}`, `{recruit: "piercer"\|"grenadier"\|"defender", n}`, `{rescue: n, cost: m}` (lose m soldiers now, rescue n settlers for the story tally and score). Add `jackpot: true` for a golden half. |
+| `wave` | `{type, count, lane?: -1\|0\|1, spread?: 3, depth?: 6, formation?: "block"\|"line"\|"wedge"}` | `type` is any enemy type, including the new ones in 5 |
+| `solid` | `{kind, x?, n?, hp, reward?, weapon?}` | `kind` is blockBlue, blockYellow, crate, tyres, weaponCase, ammo or barrel |
+| `threat` | `{kind: "swarm"\|"barricade"\|"mortars"}` | The existing Tactics threats |
+| `drop` | `{powerup}` or `{pair: [a, b]}` | Airdrops |
+| `hazard` | `{kind: "crusher"\|"saw"\|"collapse", lane, period?}` | `collapse`: a bridge lane falls away and is telegraphed |
+| `scenery` | `{kind: "fuelTruck"\|"shortcut", lane}` | Shoot a fuel truck to explode nearby enemies. Shoot a shortcut wall to skip the next hazard. |
+| `radio` | `{who: "rook"\|"mira"\|"warlord", text}` | |
+
+## 5. Enemy archetypes and bosses (`js/enemies.js`)
+
+Each archetype is readable, telegraphed and has a counter.
+
+| Type | Behaviour | Counter |
+|---|---|---|
+| shieldbearer | A frontal shield blocks bullets from within ±25° in front, so it takes damage only when the squad centre is more than 2.2 to its side. | splash (grenadier), AIRSTRIKE, GIANT, piercer |
+| charger | Stops, crouches for 0.9 s with a red lane arrow, then rushes down its lane at 3× speed, killing the soldiers it touches (cap 8 per charge). | sidestep |
+| bomber | Within 9 m it lights a 2.2 s fuse with a visible ring; the blast (radius 2.4) kills soldiers. Killed early, it explodes where it stands and damages enemies. | kill it early, or step out |
+| rifleman | Stops about 20 m ahead and paints a lane laser for 1.0 s, then fires a burst that kills up to max(2, 3%) soldiers in that lane. Killing it during the lock cancels the shot. | change lane, or kill it fast |
+| medic | Tethers to the nearest brute or boss (a visible beam) and heals it 6% of max HP per second. | kill the medic first |
+| splitter | On death, splits into 3 small fast minis. | space, splash, AIRSTRIKE |
+
+**Bosses** (data-driven phases):
+
+```js
+{ hp, phases: [{ at: 1.0, attacks: ["slam"], cadence: 2.6 }, { at: 0.5, attacks: ["slam", "summon"], cadence: 1.9 }],
+  weak: { after: "slam", dur: 1.4, mult: 2.5 } }
+```
+
+- Attacks: slam, summon(type, n), charge(lanes), barrage(lanes), shieldWall, split.
+- Every attack is telegraphed for ≥ 0.9 s.
+- The weak window is shown with a glowing marker and takes multiplied damage.
+
+## 6. Squad depth without upgrades (run-only)
+
+- **Specialists**, recruited at gates for the current run only, each with fixed stats and a tinted sprite plus a small
+  icon:
+  - **piercer**: bullets pass through shields
+  - **grenadier**: splash
+  - **defender**: soaks one ranged hit per defender, protecting the lane-side soldiers
+- **Trade-off gates:**
+  - a rescue costs soldiers now
+  - x2 through a rifleman crossfire versus +20 in a safe lane
+  - a power-up versus soldiers (already in place)
+- **Anti-snowball:**
+  - campaign squad cap 300
+  - waves are authored for the squad sizes expected at that point
+  - no automatic opening boost in campaign missions
+
+## 7. Stars and meta (no currency)
+
+- ★1 for the win.
+- ★2 for keeping ≥ 65% of the peak squad (this already exists).
+- ★3 for the mission's skill objective. The ids are:
+  - `noWaste`: no wasted power-up
+  - `rescueAll`: take every rescue gate
+  - `perfect2`: 2 PERFECT counters
+  - `medicsFirst`: every medic dies before its patient
+  - `noCharge`: no soldiers lost to chargers
+  - `bossClean`: lose < 20 soldiers during the boss
+  - `fast`: finish without a slowdown from a rescue
+  - `noAssist`: an assisted win never earns ★3
+- **Elite** versions of a chapter's missions unlock at 15/18 stars in that chapter. They use the same layouts with:
+  - enemies ×1.3
+  - no drops
+  - one extra threat
+- Chapter completion awards an armory cosmetic (existing) and shows a vignette.
+- The existing daily challenge stays.
+- The old procedural levels remain as **ARCADE** mode.
+
+## 8. Engine upgrade (from the audit, prioritised)
+
+1. **Fixed 60 Hz timestep:**
+   - an accumulator, with at most 5 catch-up steps
+   - separate clocks for sim time, real time and slow-mo
+   - nothing authoritative inside presentation callbacks
+2. **Determinism:**
+   - every gameplay random number comes from seeded streams (no Math.random in the simulation)
+   - a replay/test mode that records tick-indexed inputs
+   - state hashing for bot regression tests
+3. **Spatial hash** (cell 2 m) for bullets against enemies, solids and gates:
+   - nearest-hit resolution
+   - compact dead enemies each step
+   - O(K) soldier removal (swap-pop, no splice)
+4. **Crowd:**
+   - soldiers get velocity-based cohesion toward their slot plus local separation (spatial grid)
+   - the formation compresses through gaps (walls, barricade gaps, hazard lanes) and springs back out afterwards
+   - per-soldier contacts for hazards, chargers and blasts
+   - pooled death knockback visuals
+5. **Allocation and rendering:**
+   - pool bullets and FX
+   - cache formation slots
+   - update the HUD only when values change
+   - batch repeated gate and solid parts where cheap
+   - keep the instanced sprite layers
+6. **Campaign interpreter** for the format in 4. The procedural generator stays for ARCADE and daily.
+7. **Difficulty systems:**
+   - Assist offers
+   - failure-cause tracking (`cause`: `threat:<kind>`, `rifleman`, `charger`, `bomber`, `boss:<attack>`, `gate`,
+     `swarm`, `attrition`)
+   - same-seed instant restart
+
+## 9. Contracts
+
+### ctx additions, provided by index.html
+
+| Function | Purpose |
+|---|---|
+| `ctx.registerEnemy(type, def)` | `def = {sheet: url, cols: 4, rows: 2, hp, r, h, sp, dmg, scale, init(e), update(e, dt), onBullet(e, b) → false to block, onDeath(e)}`. Sheets load into new SpriteLayers. |
+| `ctx.registerBoss(type, def)` | Same idea, plus `phases`, `weak`, `attacks: {name: fn}` |
+| `ctx.spawnEnemy(type, x, z, opts)` | |
+| `ctx.squad` | `{x, z, count, radius, soldiers}` (read-only use) |
+| `ctx.killSoldiersInRect(x0, x1, z0, z1, max, cause)` | Returns the number killed |
+| `ctx.killSoldiersInCircle(x, z, r, max, cause)` | |
+| `ctx.damageEnemiesInCircle(x, z, r, dmg)` | |
+| `ctx.rng(stream)` | A seeded gameplay random number |
+| `ctx.telegraphGroup` | A THREE.Group for telegraph meshes. Modules own their own meshes. |
+| `ctx.goMission(id, {assist})` | |
+| `ctx.goArcade(level)` | |
+| `ctx.restartSame()` | Restart on the same seed |
+| `ctx.mission` | The current mission def |
+| `ctx.missionState` | `{rescued, recruits, causes, assisted}` |
+
+### Events
+
+| Event | Payload |
+|---|---|
+| `missionStart` | `{id, assist}` |
+| `missionEnd` | `{id, result, stars: [b1, b2, b3], keptPct, skillOk, cause, rescued, assisted}` |
+| `radio` | `{who, text}` |
+| `recruit` | `{kind, n}` |
+| `rescue` | `{n, cost}` |
+| `bossPhase` | `{type, phase}` |
+| `bossWeak` | `{on}` |
+| `enemyTelegraph` | `{type, kind, x, z}` |
+| `hazard` | `{kind, lane}` |
+| `assistOffer` | `{id, level: 1\|2}` |
+
+## 10. Ownership (parallel Codex runs; never edit outside your column; never run git)
+
+| Run | Files |
+|---|---|
+| E1 engine and systems | index.html, js/objects3d.js, js/powerups.js, tools/bot-*.js |
+| E2 enemies and bosses | js/enemies.js (new) |
+| C campaign content | js/campaign.js (new), design/campaign-script.md |
+| U story UI | js/story.js (new), js/meta.js, js/juice.js |
+| A art | assets/units2/*, assets/story/*, art-src/units2/*, art-src/story/* |
+
+- index.html (E1) loads js/enemies.js, js/campaign.js and js/story.js after the existing modules.
+- Every module must work when another is missing:
+  - campaign absent: no Story button
+  - an enemies sheet absent: fall back to a tinted grunt sheet
+
+exec
+/bin/bash -lc 'cat design/strategy.md' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+# Squad Surge "Tactics Update": player-activated power-ups and strategic choices
+
+## 1. Goal
+
+Squad Surge plays itself too much. Today a power-up fires the moment its crate is shot open, so the player only steers.
+This update makes the player **decide**:
+- **What to take:** fork drops and power-up gates.
+- **When to use it:** activation buttons and telegraphed threats with a matching counter.
+- **Whether to save it:** unused power-ups pay off at the end, so saving is a gamble.
+
+Players are **conditioned** to make these choices through a clear loop:
+1. A cue: a telegraphed threat with the counter icon.
+2. An action: tap the matching power-up.
+3. An immediate, juicy reward: PERFECT callout, bonus score and combo.
+4. Mild loss feedback for waste or misuse.
+5. A long-term reward for planning: banked power-ups multiply the finale.
+
+Hard constraint (from the user): **no upgrades, no shop, no currency.** Everything here is in-run.
+
+## 2. Mechanics (acceptance criteria)
+
+### T1. The belt (2 slots), and activation
+- Power-ups from crates and gates go into a 2-slot **belt** instead of firing instantly. JACKPOT stays instant (+soldiers).
+- HUD: two large round buttons at the bottom corners, 64–72 px and thumb-reachable, with safe-area insets. Each shows its
+  icon from `assets/ui/icons/pu-*.webp`, or a faint empty socket. Keys **1** and **2**, and **Q** and **E**, also activate.
+- Button taps never steer the squad: stop propagation, and exclude the button rects from the drag area.
+- Activation applies the existing effect (SHIELD 6 s, AIRSTRIKE on the road ahead, GIANT 6 s) and empties the slot.
+  The button pulses while an effect is active.
+- **Full belt:** a new pickup shows a "SWAP?" chip with its icon above the belt for 3 s. Tapping a slot (or pressing its
+  key) swaps it in. Otherwise the new one turns into **+8 soldiers**. This is a micro keep-or-swap choice and is never
+  forced.
+- The buttons are visible in the `play` and `boss` states, and hidden elsewhere.
+
+### T2. Fork drops (choose what to take)
+- From level 2, about half of the airdrops land as a **pair**: two crates side by side (x ≈ −3.3 and +3.3), each showing
+  its power-up icon on a billboard. The squad shoots what is in front of it, so steering picks one. The other crate
+  stays shootable if the player can manage both, which is a skill reward.
+- From level 3, about one gate pair per level is a **tool gate**: one half is a power-up (big icon, no number), the other
+  is a good soldier gain (+N). The player chooses numbers or a tool.
+
+### T3. Telegraphed threats with a counter (when to use it)
+Each threat is announced about 2.5 s ahead. A tall holo sign stands on the road ("⚠ SWARM" plus the counter's icon),
+and a `threat` event fires.
+
+| Threat | From level | What it is | Without the counter | Counter |
+|---|---|---|---|---|
+| **SWARM** | 2 | a very dense horde (1.8× a normal horde, packed) | costly but survivable | **AIRSTRIKE** clears most of it |
+| **BARRICADE** | 3 | a reinforced wall across the road: 3 tall blocks with a gap of about 1.2 units at one random side; touching the wall kills soldiers | shoot it down (high HP) or squeeze through the gap | **GIANT** smashes straight through, no losses |
+| **MORTARS** | 4 | 1–2 mortar towers at the road edge that lob shells with red target rings onto the squad every ~1.6 s for ~6 s; each hit kills 2–4 soldiers | lose soldiers, or shoot the towers (moderate HP) | **SHIELD** nullifies the hits |
+
+- Spawn about 2–3 threats per level, scaled with level, and never two at once. The generator ensures that the level's
+  drops and tool gates make at least one counter likely to be available before each threat (not guaranteed: planning
+  matters).
+- **Boss uses:**
+  - the boss slam is a threat (counter SHIELD: no losses)
+  - AIRSTRIKE deals 18% of boss max HP and clears adds
+  - GIANT doubles squad damage to the boss for its duration
+
+### T4. PERFECT, WASTED, MISUSED (conditioning feedback)
+- **PERFECT:** activating a threat's counter while that threat is live (in range or active). Rewards:
+  - callout "PERFECT AIRSTRIKE!"
+  - +300 × level score, raw (not multiplied)
+  - +10 combo and a short slow-mo (respect the existing slow-mo limit)
+  - counts toward `tactics.perfect`
+- **WASTED:** activating with no target, meaning no enemies or solids in the effect range (for SHIELD: no threat within
+  4 s). A small grey "WASTED" chip appears; it counts toward `tactics.wasted`.
+- **MISUSED:** using a non-counter on a live threat. Allowed, but no bonus.
+
+### T5. SURGE becomes player-activated
+- When the meter fills, it holds at 100% (no drain) and shows **SURGE READY**. A third button sits bottom-centre, or the
+  player can tap the surge bar, or press Space.
+- Activation behaves as today (6 s of double fire rate and more).
+- Using it during a threat or the boss fight counts as PERFECT SURGE: score bonus, no extra slow-mo.
+
+### T6. Banking (save versus use)
+- When the boss falls, each power-up still on the belt is **banked**: +0.5× on the final multiplier (finale multiplier
+  plus bank).
+- Show it with a "BANKED ×2 → +1.0×" toast before the finale.
+- Dying loses the belt. Saving is a gamble against loss aversion.
+
+### T7. Teaching (early levels condition the habit)
+- **Level 2:** the first SWARM comes with a guaranteed AIRSTRIKE drop just before it. A coach mark points at the
+  AIRSTRIKE slot ("Tap to call an airstrike!"), with a pulsing ring.
+- **Level 3:** the first BARRICADE, with a GIANT drop before it.
+- **Level 4:** the first MORTARS, with a SHIELD drop before it.
+- After a counter has been used PERFECT twice, its coach mark stops showing. Never show more than one coach mark at a
+  time.
+- The slot whose power-up counters the live threat glows: a gold ring, always on as a gentle hint, which fades after 3
+  PERFECT uses overall.
+
+## 3. Contracts
+
+### ctx additions (index.html provides)
+- `ctx.belt`: `[type|null, type|null]`
+- `ctx.usePowerup(slot)`
+- `ctx.tactics`: `{perfect, used, wasted, misused, banked, surgePerfect}`
+- `ctx.threat`: the live threat, or null
+- `ctx.surgeReady`: boolean
+
+### Events
+- `belt {slots}`: on every change.
+- `powerupGot {type, slot}`
+- `swapOffer {type, until}`
+- `swapDone {type, slot}`
+- `swapExpired {type}`
+- `powerupUse {type, slot, perfect, misused, wasted, threatKind}`
+- `threat {id, kind, counter, z}`: when the sign appears.
+- `threatLive {id, kind}`: in range.
+- `threatEnd {id, kind, countered, lost}`
+- `surgeReady {}`
+- `bank {count, bonus}`
+- `tacticsCoach {kind, slot}`: when a coach mark should show.
+
+## 4. Ownership and process
+
+| Owner | Files |
+|---|---|
+| Codex run A (mechanics) | index.html, js/powerups.js, js/objects3d.js, tools/* (bots) |
+| Codex run B (feedback, meta) | js/juice.js (callouts, PERFECT/WASTED/SWAP visuals, coach marks), js/meta.js (results "Tactics" line, 6+ new missions and 3+ trophies about tactics, stats) |
+
+- Never edit a file outside your column.
+- Do not commit; the orchestrator does.
+- Keep the game's style, performance (no per-frame allocation), and the existing balance targets: a player who never
+  presses the buttons can still clear levels 1–5, and level 7 stays winnable for a casual player.
+
+exec
+/bin/bash -lc "rg -n 'generateLevel|solidHP|solidHp' index.html; ls -la js design; for p in /AGENTS.md /home/AGENTS.md /home/user/AGENTS.md /home/user/my-first-repo/AGENTS.md /home/user/my-first-repo/squad-surge/AGENTS.md; do if [ -f \""'$p" ]; then cat "$p"; fi; done' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+219:const MODIFIERS = {                                               // daily challenge twists (gameplay lives in generateLevel/startLevel)
+632:function generateLevel(level, opts = {}) {
+766:  L = generateLevel(level, { ...opts, modifier: mod });
+design:
+total 92
+drwxr-xr-x  4 root root  4096 Nov  7 20:15 .
+drwxr-xr-x 11 root root  4096 Nov  7 20:16 ..
+drwxr-xr-x  2 root root  4096 Nov  7 20:16 briefs
+-rw-r--r--  1 root root 12290 Nov  7 20:15 campaign.md
+-rw-r--r--  1 root root  8542 Nov  6 18:42 engagement.md
+-rw-r--r--  1 root root  9447 Nov  7 20:10 engine-audit.md
+-rw-r--r--  1 root root  2782 Nov  6 18:52 juice-brief-2.md
+-rw-r--r--  1 root root  4481 Nov  6 15:56 juice-brief.md
+-rw-r--r--  1 root root 13026 Nov  6 15:55 overhaul.md
+drwxr-xr-x  3 root root  4096 Nov  7 12:33 qa
+-rw-r--r--  1 root root  7205 Nov  7 12:21 strategy.md
+
+js:
+total 248
+drwxr-xr-x  2 root root  4096 Nov  7 13:26 .
+drwxr-xr-x 11 root root  4096 Nov  7 20:16 ..
+-rw-r--r--  1 root root 12468 Nov  6 19:06 finale.js
+-rw-r--r--  1 root root 30968 Nov  7 13:02 juice.js
+-rw-r--r--  1 root root 63875 Nov  7 13:26 meta.js
+-rw-r--r--  1 root root 44033 Nov  7 12:25 objects3d.js
+-rw-r--r--  1 root root 23083 Nov  7 12:29 powerups.js
+-rw-r--r--  1 root root 58142 Nov  6 16:42 scenery.js
+
+exec
+/bin/bash -lc "sed -n '610,765p' index.html; rg -n 'const (ENEMY|WEAP)|grunt:|brute:|runner:|speed:|speed =|spawnThreat|threat.*swarm|barricade|mortars' index.html js/powerups.js js/objects3d.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+const gateText = h => h.powerup ? "" : h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
+function makeGate(z, left, right) {
+  const gate = { kind: "gate", z, used: false, halves: [] };
+  for (const [s, spec] of [[-1, left], [1, right]]) gate.halves.push({ x: s * ROAD / 2, hw: ROAD / 2, op: spec[0], v: spec[1], side: s, jackpot: !!(spec[2] && spec[2].jackpot), powerup: spec[0] === "tool" ? spec[1] : null });
+  Obj3D.gate(gate); refreshGate(gate); return gate;
+}
+function refreshGate(gate) { for (const h of gate.halves) Obj3D.gateHalf(gate, h, isGood(h), gateText(h)); }
+// solid shootable objects: blocks, crates, tyres, weapon cases, ammo boxes (hw = half-width for bullets and collisions)
+const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3, airdrop: 1.2, barrel: 0.8, barricade: 1.8, mortar: 0.8 };
+function makeSolid(kind, x, z, hp, extra = {}) {
+  const o = { kind, x, z, hw: SOLID_HW[kind], hp, maxHp: hp, alive: true, ...extra };
+  Obj3D.solid(o); labelSolid(o); return o;
+}
+function labelSolid(o) {
+  if (o.kind === "blockBlue" || o.kind === "blockYellow") Obj3D.solidLabel(o, `+${o.reward}`, "#fff");
+  else Obj3D.solidLabel(o, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" || o.kind === "airdrop" ? "#ffe066" : o.kind === "ammo" ? "#9dff7a" : o.kind === "barrel" ? "#ff9a7a" : "#fff");
+}
+function enemy(type, x, z, level) {
+  const hpScale = 1 + (level - 1) * 0.1;
+  const def = { zombie: { hp: 2, r: 0.42, h: 1.45, sp: 2.6, dmg: 1 }, grunt: { hp: 2, r: 0.42, h: 1.45, sp: 3.2, dmg: 1 }, brute: { hp: 22, r: 0.85, h: 2.3, sp: 2.2, dmg: 5 } }[type];
+  return { type, x, z, hp: def.hp * hpScale, maxHp: def.hp * hpScale, r: def.r, h: def.h, sp: def.sp * (0.85 + Math.random() * 0.3), dmg: def.dmg, state: "idle", t: Math.random() * 4, flash: 0, dieT: 0 };
+}
+function generateLevel(level, opts = {}) {
+  const theme = themeFor(level), seeded = opts.seed !== undefined;
+  const r = seeded ? rng(opts.seed * 7919 + level * 131) : rng(level * 9973 + 17);
+  const rj = rng((seeded ? opts.seed : level) * 7777 + 3); // jackpots use their own stream so layouts stay the same
+  const mod = opts.modifier, hordeMul = mod === "horde" ? 1.7 : 1, blockMul = mod === "lone" ? 2 : 1;
+  const jackChance = mod === "jackpot" ? 0.45 : 0.08;
+  let needJackpot = !seeded && (level === 2 || (save.jackDry || 0) >= 3), jackpots = 0; // first one in level 2, then never 3 dry levels
+  const length = Math.min(200 + level * 35, 520);
+  Obj3D.clear(); Scenery.build(theme, length);
+  const gates = [], solids = [], enemies = [];
+  const threats = [];
+  if (level >= 2) {
+    const count = level >= 7 ? 4 : level >= 4 ? 3 : 2, kinds = level >= 4 ? ["swarm", "barricade", "mortars"] : level >= 3 ? ["swarm", "barricade"] : ["swarm"];
+    for (let i = 0; i < count; i++) {
+      const kind = i === 0 && level <= 4 ? kinds[kinds.length - 1] : kinds[(i + level) % kinds.length];
+      threats.push({ id: `road-${i}`, kind, counter: THREAT_COUNTER[kind], z: -100 - i * (length - 165) / (count - 1), announced: false, live: false, done: false, countered: false, lost: 0, actors: [], age: 0, shotT: 0, shellT: 0, gap: rj() < 0.5 ? -1 : 1, teaching: i === 0 && level <= 4 });
+    }
+  }
+  let threatIndex = 0;
+  const etype = theme.enemy, d = level;
+  const horde = (z, n, spread = 4.2, depth = 6) => {
+    n = Math.round(n * hordeMul);
+    for (let i = 0; i < n; i++) enemies.push(enemy(etype, (r() * 2 - 1) * spread, z - r() * depth, level));
+    if (mod === "brutes") enemies.push(enemy("brute", (rj() * 2 - 1) * 3, z - depth * 0.5, level));
+  };
+  let z = -26;
+  if (level === 1) { // tutorial: shoot the gate up, small hordes, one lane strip, case, tiny boss
+    gates.push(makeGate(z, ["+", -5], ["+", 4])); z -= 30;
+    horde(z, 5, 3); z -= 26;
+    gates.push(makeGate(z, ["x", 2], ["+", -3])); z -= 24;
+    for (let i = 0; i < 6; i++) solids.push(makeSolid("blockBlue", -4.6, z - i * 2.6, 3, { reward: 1 }));
+    horde(z - 4, 8, 2.2, 10); z -= 32;
+    solids.push(makeSolid("weaponCase", 3.3, z, 30, { weapon: 1 })); solids.push(makeSolid("ammo", -3.3, z, 18, { ammo: true })); horde(z - 6, 8, 3); z -= 30;
+    gates.push(makeGate(z, ["+", 6], ["+", -8])); z -= 26;
+    horde(z, 16, 4.5, 10);
+  } else {
+    // every level opens with a free boost so the squad isn't wiped by the first wave
+    gates.push(makeGate(z, ["+", 4 + d], ["+", 8 + d])); z -= 26;
+    const pool = ["gates", "horde", "lanes", "tyres", "gates", "case", "brutes", "horde", "ammo"];
+    while (z > -length + 30) {
+      const nextThreat = threats[threatIndex];
+      // Reserve the whole encounter corridor, including a supply approach and a recovery gap.
+      // It replaces ordinary obstacles/hordes rather than stacking damage on top of them.
+      if (nextThreat && z <= nextThreat.z + 78) {
+        const supplyZ = nextThreat.z + 43;
+        const tool = level >= 3 && threatIndex === 1;
+        const jackpot = !tool && ((needJackpot && !jackpots) || rj() < jackChance);
+        if (jackpot) jackpots++;
+        // Build the squad before the threat sequence; later supply drops still arrive just in time.
+        const gateZ = level >= 4 ? -40 - threatIndex * 8 : supplyZ + (tool ? 0 : 14);
+        gates.push(makeGate(gateZ, jackpot ? ["+", 40 + 8 * d, { jackpot: true }] : ["+", 10 + d * 2], tool ? ["tool", nextThreat.counter] : ["+", 12 + d * 2]));
+        nextThreat.tool = tool;
+        z = nextThreat.z - 37; threatIndex++; continue;
+      }
+      const seg = pool[Math.floor(r() * pool.length)];
+      if (seg === "gates") {
+        const good = [["+", 5 + Math.floor(r() * 5 * d)], ["x", 2], ["+", 10 + d * 3]], bad = [["+", -(2 + Math.floor(r() * 2 * d))], ["x", 1], ["+", -(5 + d)]];
+        const pair = r() < 0.5 ? [good[Math.floor(r() * 3)], bad[Math.floor(r() * 3)]] : [bad[Math.floor(r() * 3)], good[Math.floor(r() * 3)]];
+        if ((needJackpot && !jackpots) || rj() < jackChance) { // golden jackpot half replaces the good one
+          const gi = pair[0][1] >= 0 && pair[0][0] === "+" || (pair[0][0] === "x" && pair[0][1] > 1) ? 0 : 1;
+          pair[gi] = rj() < 0.4 ? ["x", 4, { jackpot: true }] : ["+", 40 + 8 * d, { jackpot: true }]; jackpots++;
+        }
+        gates.push(makeGate(z, pair[0], pair[1])); z -= 22;
+      } else if (seg === "horde") { horde(z, 6 + d * 3, 4.5, 8 + d); z -= 24 + d; }
+      else if (seg === "lanes") { // the ad's layout: +1 column left, crate + +99 column right, horde in the middle
+        const n = 6 + Math.floor(d / 2);
+        for (let i = 0; i < n; i++) solids.push(makeSolid("blockBlue", -4.6, z - i * 2.6, 3 + d, { reward: (1 + Math.floor(d / 3)) * blockMul }));
+        solids.push(makeSolid("crate", 4.5, z, 25 + d * 10, {}));
+        for (let i = 0; i < 3; i++) solids.push(makeSolid("blockYellow", 4.5, z - 3 - i * 2.8, 18 + d * 6, { reward: 10 + d * 5 }));
+        horde(z - 2, 8 + d * 3, 2.4, n * 2.6); z -= n * 2.6 + 18;
+      } else if (seg === "tyres") {
+        for (const x of [-3.6, 0, 3.6]) if (r() < 0.75) solids.push(makeSolid("tyres", x, z, 10 + d * 5, {}));
+        z -= 18;
+      } else if (seg === "ammo") {
+        solids.push(makeSolid("ammo", (r() < 0.5 ? -1 : 1) * 3.3, z, 20 + d * 8, { ammo: true }));
+        horde(z - 4, 4 + d, 2, 4); z -= 22;
+      } else if (seg === "case") {
+        solids.push(makeSolid("weaponCase", (r() < 0.5 ? -1 : 1) * 3.3, z, 30 + d * 18, { weapon: 1 + Math.floor(r() * (level >= 4 ? 4 : 3)) }));
+        horde(z - 4, 4 + d, 2, 4); z -= 24;
+      } else if (seg === "brutes") {
+        for (let i = 0; i < 1 + Math.floor(d / 3); i++) enemies.push(enemy("brute", (r() * 2 - 1) * 3.5, z - i * 3, level));
+        horde(z - 2, 4 + d * 2, 4.5, 6); z -= 26;
+      }
+    }
+  }
+  if (level >= 3 && !solids.some(o => o.kind === "weaponCase")) { // guarantee a weapon upgrade on the way
+    const free = zz => !solids.some(o => Math.abs(o.z - zz) < 5) && !gates.some(g => Math.abs(g.z - zz) < 5) && !threats.some(t => Math.abs(t.z - zz) < 35);
+    let zc = -length * 0.35; while (zc > -length * 0.8 && !free(zc)) zc -= 2;
+    solids.push(makeSolid("weaponCase", (rj() < 0.5 ? -1 : 1) * 3.3, zc, 30 + d * 18, { weapon: 2 + Math.floor(rj() * (level >= 4 ? 3 : 2)) }));
+  }
+  const bossHp = Math.round(40 * Math.pow(level, 1.3) + 40);
+  if (!seeded && level > 1) { save.jackDry = jackpots ? 0 : (save.jackDry || 0) + 1; persist(); }
+  return { level, theme, length, gates, solids, enemies, threats, expectedKills: enemies.length, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
+}
+
+// ---------- squad ----------
+function slot(i) { const r = 0.5 * Math.sqrt(i), a = i * 2.39996; return [Math.cos(a) * r, Math.sin(a) * r * 0.85]; }
+function squadRadius(n) { return 0.5 * Math.sqrt(Math.max(1, n)) + 0.35; }
+function addSoldiers(n) {
+  let added = 0;
+  for (let i = 0; i < n && L.soldiers.length < 600; i++, added++) {
+    const [ox, oz] = slot(L.soldiers.length);
+    L.soldiers.push({ x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, ph: Math.random() * 4, born: L.time });
+  }
+  if (L.boss.state === "wait") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
+  if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
+}
+function killSoldiers(n, nearX = null, force = false) {
+  if (L.bankLocked && state === "boss") return; // victory is locked during the pre-finale celebration
+  if (!force && (L.shieldT > 0 || L.giantT > 0)) return; // SHIELD / GIANT power-ups
+  for (let k = 0; k < n && L.soldiers.length; k++) {
+    let idx = L.soldiers.length - 1;
+    if (nearX !== null) { let best = 1e9; L.soldiers.forEach((s, i) => { const d = Math.abs(s.x - nearX); if (d < best) { best = d; idx = i; } }); }
+    const s = L.soldiers[idx]; L.fx.push({ x: s.x, y: 0.6, z: s.z, f: 4, t: 0, dur: 0.35, size: 1.1 });
+    L.soldiers.splice(idx, 1);
+  }
+  if (n > 0) bus.emit("soldiersLost", { n, total: L.soldiers.length });
+}
+
+// ---------- floating text ----------
+function floatText(x, y, z, text, color) {
+  tmpV.set(x, y, z).project(camera);
+  if (tmpV.z > 1) return;
+  const el = document.createElement("div"); el.className = "float stroke"; el.textContent = text; el.style.color = color;
+  el.style.left = `${(tmpV.x * 0.5 + 0.5) * 100}%`; el.style.top = `${(-tmpV.y * 0.5 + 0.5) * 100}%`;
+  floatsEl.appendChild(el); setTimeout(() => el.remove(), 950);
+}
+
+// ---------- game state ----------
+let state = "loading"; // loading | home | play | boss | win | lose | paused
+let resumeState = "play";
+function startLevel(level, opts = {}) {
+  floatsEl.innerHTML = "";
+  const mod = opts.modifier && MODIFIERS[opts.modifier] ? opts.modifier : null;
+js/objects3d.js:410:    barricade(v, r) {
+js/powerups.js:229:        if (st.threat && st.threat.kind === "swarm") {
+js/powerups.js:234:        C.damageArea(b.x, b.z, st.threat && st.threat.kind === "swarm" ? 10 : 4, 40 + 8 * L.level, { skipBoss: true });
+index.html:218:const POINTS = { kill: 10, brute: 60, soldier: 2, blockBlue: 10, blockYellow: 40, crate: 50, tyres: 30, weaponCase: 100, ammo: 50, airdrop: 100, barrel: 25 };
+index.html:234:const WEAPONS = [
+index.html:443:const THREAT_COUNTER = { swarm: "airstrike", barricade: "giant", mortars: "shield", slam: "shield" };
+index.html:547:  } else if (t.kind === "barricade") {
+index.html:548:    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, Math.max(70 + L.level * 8, t.startSquad * 25), { threat: t }));
+index.html:549:  } else if (t.kind === "mortars") {
+index.html:578:  if (t.kind === "barricade" && L.giantT > 0 && L.sz - t.z < 12) for (const o of t.actors) if (o.alive) breakSolid(o, true);
+index.html:579:  if (t.kind === "mortars") {
+index.html:605:  if ((!alive && !(t.shellT > 0)) || t.age >= 6 || (t.kind === "barricade" && L.sz < t.z - 2)) endThreat(t);
+index.html:618:const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3, airdrop: 1.2, barrel: 0.8, barricade: 1.8, mortar: 0.8 };
+index.html:629:  const def = { zombie: { hp: 2, r: 0.42, h: 1.45, sp: 2.6, dmg: 1 }, grunt: { hp: 2, r: 0.42, h: 1.45, sp: 3.2, dmg: 1 }, brute: { hp: 22, r: 0.85, h: 2.3, sp: 2.2, dmg: 5 } }[type];
+index.html:644:    const count = level >= 7 ? 4 : level >= 4 ? 3 : 2, kinds = level >= 4 ? ["swarm", "barricade", "mortars"] : level >= 3 ? ["swarm", "barricade"] : ["swarm"];
+index.html:873:const ENEMY_ASPECT = { zombie: 0.861, grunt: 0.787, brute: 0.946 };
+index.html:1028:    if (o.threat) lose = Math.min(o.kind === "barricade" && !guarded ? o.threat.lossCap : lose, threatLossLeft(o.threat));
+index.html:1160:  if (e.threat && e.threat.kind === "swarm" && !e.threat.countered) dmg *= 0.2;
+index.html:1377:    enem: null, brute: new SpriteLayer(TEX.brute, 4, 2, 80),
+index.html:1381:  const enemyLayers = { zombie: new SpriteLayer(TEX.zombie, 4, 2, 900), grunt: new SpriteLayer(TEX.grunt, 4, 2, 900) };
+
+exec
+/bin/bash -lc "rg --files -g 'AGENTS.md' -g '*campaign*' -g '*enemy*' -g '*enemies*' -g '*brief*' .agents .codex design js 2>/dev/null; sed -n '140,250p' index.html" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+design/campaign.md
+design/juice-brief.md
+design/juice-brief-2.md
+  <div class="weapon-tag" id="weaponTag" hidden><img id="weaponImg" src="assets/w-pistol.png" alt=""><span id="weaponName">PISTOL</span></div>
+
+  <div class="belt" id="belt" hidden>
+    <button class="belt-slot empty" id="belt0" data-slot="0" aria-label="Empty slot 1"><img alt="" hidden><small>1 / Q</small></button>
+    <button class="belt-slot empty" id="belt1" data-slot="1" aria-label="Empty slot 2"><img alt="" hidden><small>2 / E</small></button>
+    <button class="surge-button" id="surgeButton" hidden>SURGE READY</button>
+    <div class="swap-chip" id="swapChip" hidden><img id="swapIcon" alt=""> SWAP? <small>tap a slot</small></div>
+  </div>
+  <div class="home" id="home">
+    <div class="logo" id="logo"><img id="logoImg" src="assets/ui/logo.webp" alt="Squad Surge" hidden><b>SQUAD</b><b>SURGE</b></div>
+    <div>
+      <div class="hint"><div class="pill">HOLD &amp; DRAG <span class="arrows"><i>◀</i><i>▶</i></span></div><div class="line"></div>
+        <svg class="hand" viewBox="0 0 24 24" fill="#fff" stroke="#0d1630" stroke-width="1.2"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10h.5V8.5a1.5 1.5 0 0 1 3 0V10h.5v-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.6 14a1.5 1.5 0 0 1 2.4-1.8L9 14z"/></svg></div>
+      <button class="btn go playbtn stroke" id="playBtn">PLAY</button>
+    </div>
+  </div>
+
+  <div class="modal" id="winModal" hidden><div class="panel" role="dialog" aria-labelledby="winTitle">
+    <h2 id="winTitle" class="stroke">LEVEL COMPLETE!</h2>
+    <div class="stars" id="stars"></div>
+    <div class="sub" id="winSub"></div>
+    <button class="btn go" id="nextBtn">NEXT LEVEL</button>
+  </div></div>
+
+  <div class="modal" id="loseModal" hidden><div class="panel" role="dialog" aria-labelledby="loseTitle">
+    <h2 id="loseTitle" class="stroke">SQUAD WIPED OUT</h2>
+    <div class="sub">You reached</div>
+    <div class="bigpct stroke" id="losePct">0%</div>
+    <div class="sub" id="loseBest"></div>
+    <button class="btn go" id="retryBtn">TRY AGAIN</button>
+  </div></div>
+
+  <div class="modal" id="levelsModal" hidden><div class="panel" role="dialog" aria-labelledby="levelsTitle">
+    <h2 id="levelsTitle" class="stroke">LEVELS</h2>
+    <div class="lvgrid" id="lvgrid"></div>
+    <button class="btn alt" id="levelsClose">BACK</button>
+  </div></div>
+
+  <div class="modal" id="pauseModal" hidden><div class="panel" role="dialog" aria-labelledby="pauseTitle">
+    <h2 id="pauseTitle" class="stroke">PAUSED</h2>
+    <div class="toggle">SOUND <button id="soundBtn" aria-pressed="true">ON</button></div>
+    <div class="toggle">VIBRATION <button id="vibeBtn" aria-pressed="true">ON</button></div>
+    <button class="btn go" id="resumeBtn">RESUME</button>
+    <button class="btn alt" id="quitBtn">RESTART LEVEL</button>
+  </div></div>
+
+  <div class="loading" id="loading"><div><img class="loadlogo" src="assets/ui/logo.webp" alt=""><div class="loadbar"><i></i></div><div class="loadtxt">LOADING…</div><div class="err" id="loadErr"></div></div></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/scenery.js"></script>
+<script src="js/objects3d.js"></script>
+<script src="js/juice.js"></script>
+<script src="js/powerups.js"></script>
+<script src="js/finale.js"></script>
+<script src="js/meta.js"></script>
+<script>
+"use strict";
+// ---------- persistence ----------
+const SAVE_KEY = "squad-surge-v1";
+const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
+Object.assign(save, { level: 1, unlocked: 1, best: {}, stars: {}, bestSquad: {}, bestScore: {}, skin: "classic", tracer: "gold", sound: true, vibe: true, ...save });
+save.tacticsPerfect = Math.max(0, Number(save.tacticsPerfect) || 0);
+save.tacticsCounters = save.tacticsCounters && typeof save.tacticsCounters === "object" ? save.tacticsCounters : {};
+save.unlocked = Math.max(save.unlocked, save.level);
+for (const k of ["coins", "gems", "up"]) delete save[k]; // drop old shop data from earlier builds
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
+
+// ---------- constants ----------
+const ROAD = 6;               // road half-width
+const SPEED = 8.5;            // squad forward speed (units/s)
+const BULLET_SPEED = 72, BULLET_RANGE = 46;
+const MAX_SHOOTERS = 48;
+const START_SQUAD = 5;
+// Surge Update tuning (design/engagement.md; numbers from the design review)
+const COMBO_WINDOW = 3.0;                                          // seconds between kills before the combo drops
+const COMBO_TIERS = [[100, 4, "UNSTOPPABLE"], [50, 3, "SURGE!"], [25, 2, "GREAT"], [10, 1.5, "NICE"]]; // [combo, multiplier, callout]
+const SURGE_TIME = 6, SURGES_PER_LEVEL = 2;                       // fever: double damage + pierce
+const POINTS = { kill: 10, brute: 60, soldier: 2, blockBlue: 10, blockYellow: 40, crate: 50, tyres: 30, weaponCase: 100, ammo: 50, airdrop: 100, barrel: 25 };
+const MODIFIERS = {                                               // daily challenge twists (gameplay lives in generateLevel/startLevel)
+  arsenal: { name: "BAZOOKA DAY", desc: "Start with the bazooka", scoreMult: 1 },
+  horde: { name: "HORDE NIGHT", desc: "70% more enemies · score x1.5", scoreMult: 1.5 },
+  brutes: { name: "BRUTE FORCE", desc: "Brutes in every horde · score x1.4", scoreMult: 1.4 },
+  jackpot: { name: "LUCKY GATES", desc: "Jackpot gates everywhere", scoreMult: 1 },
+  swift: { name: "DOUBLE TIME", desc: "Faster run and fire · score x1.3", scoreMult: 1.3 },
+  lone: { name: "LONE WOLF", desc: "Start with 1 soldier, double +blocks · score x1.3", scoreMult: 1.3 },
+};
+const SKINS = {                                                    // squad colours: recolour the blue uniform and helmet in the sprite shader
+  classic: { name: "CLASSIC BLUE" }, crimson: { name: "ROSE", hue: 0.93, sat: 0.8, val: 1.05 }, /* not red: red helmets are the grunt enemies */
+  jungle: { name: "JUNGLE", hue: 0.27, sat: 0.75, val: 0.85 }, arctic: { name: "ARCTIC", hue: 0.58, sat: 0.12, val: 1.25 },
+  desert: { name: "DESERT", hue: 0.09, sat: 0.5, val: 1.05 }, violet: { name: "VIOLET", hue: 0.77, sat: 0.9, val: 1.0 },
+  gold: { name: "GOLD", hue: 0.12, sat: 0.95, val: 1.2 }, shadow: { name: "SHADOW OPS", hue: 0.62, sat: 0.35, val: 0.45 },
+};
+const TRACERS = { gold: { name: "GOLD", rgb: [1, 1, 1] }, plasma: { name: "PLASMA", rgb: [0.45, 0.8, 1.7] }, toxic: { name: "TOXIC", rgb: [0.6, 1.5, 0.5] }, inferno: { name: "INFERNO", rgb: [1.6, 0.55, 0.35] }, rainbow: { name: "RAINBOW", rainbow: true } };
+const WEAPONS = [
+  { name: "PISTOL", img: "assets/w-pistol.png", dmg: 1, rate: 1, spread: 1 },
+  { name: "RIFLE", img: "assets/w-rifle.png", dmg: 1.4, rate: 1.35, spread: 1 },
+  { name: "SHOTGUN", img: "assets/w-shotgun.png", dmg: 1.2, rate: 1, spread: 3 },
+  { name: "MINIGUN", img: "assets/w-minigun.png", dmg: 1.3, rate: 2.4, spread: 1 },
+  { name: "BAZOOKA", img: "assets/w-bazooka.png", dmg: 7, rate: 0.4, spread: 1, splash: 2.6 },
+];
+const THEMES = [
+  { id: "town", name: "OLD TOWN", sky: ["#f9c48f", "#fde8c9"], fog: 0xf6d2aa, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "zombie", deco: "city", landmark: "tower" },
+  { id: "bridge", name: "GOLDEN BRIDGE", sky: ["#6fb6ff", "#d8eeff"], fog: 0xbfe0ff, ground: null, water: 0x2f8fd0, road: "t-asphalt", side: "t-concrete", enemy: "grunt", deco: "bridge" },
+  { id: "pier", name: "OLD PIER", sky: ["#7fd3e6", "#e9fbff"], fog: 0xc6eef5, ground: null, water: 0x1d9fb8, road: "t-concrete", side: "t-cobble", enemy: "zombie", deco: "pier" },
+  { id: "ruins", name: "RUINED CITY", sky: ["#9aa7b8", "#e7d6c2"], fog: 0xcfc6bb, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "grunt", deco: "city" },
+  { id: "desert", name: "DESERT HIGHWAY", sky: ["#ffb36b", "#ffe9b8"], fog: 0xf5d6a0, ground: "t-dirt", road: "t-asphalt", side: "t-dirt", enemy: "zombie", deco: "desert" },
+  { id: "arena", name: "WAR ARENA", sky: ["#24345f", "#5a6d9a"], fog: 0x3b4c78, ground: null, water: 0x1a2546, road: "t-concrete", side: "t-concrete", enemy: "grunt", deco: "arena" },
+];
+
+// ---------- DOM ----------
+
+exec
+/bin/bash -lc "rg --files design/briefs; sed -n '520,610p' index.html; rg -n 'campaign|event.*type|event.*kind' design/briefs" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+design/briefs/tactics-B.log
+design/briefs/camp-C.md
+design/briefs/camp-U.log
+design/briefs/camp-E1.md
+design/briefs/camp-C.log
+design/briefs/tactics-A2.log
+design/briefs/camp-E2.log
+design/briefs/tactics-A.md
+design/briefs/tactics-A2.md
+design/briefs/tactics-A.log
+design/briefs/camp-E1.log
+design/briefs/camp-U.md
+design/briefs/tactics-B.md
+design/briefs/engine-audit.md
+design/briefs/camp-E2.md
+design/briefs/engine-audit.log
+  const type = L.belt[slot]; if (!type) return false;
+  const threat = L.threat, perfect = !!threat && threat.counter === type, misused = !!threat && !perfect, wasted = !threat && !hasPowerTarget(type);
+  L.belt[slot] = null; L.beltFx[slot] = type; L.beltFxUntil[slot] = L.time + (type === "airstrike" ? 2.5 : 6);
+  L.tactics.used++; if (wasted) L.tactics.wasted++; if (misused) L.tactics.misused++;
+  if (perfect) { threat.countered = true; rewardPerfect(type); }
+  beltChanged();
+  bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
+  window.Powerups?.activate(type); return true;
+}
+function threatLossLeft(t) { if (t.countered) return 0; return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }
+function announceThreat(t) {
+  t.announced = true; Obj3D.threatSign(t);
+  bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
+}
+function liveThreat(t) {
+  t.live = true; L.threat = t;
+  t.startSquad = L.soldiers.length;
+  t.lossCap = Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));
+  if (t.kind === "swarm") {
+    const count = Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3)));
+    for (let i = 0; i < count; i++) {
+      const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
+      e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6);
+      e.dmg = Math.max(e.dmg, Math.ceil(t.startSquad * 0.015));
+      e.sp *= 1.5;
+      e.threat = t; L.enemies.push(e); t.actors.push(e);
+    }
+  } else if (t.kind === "barricade") {
+    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, Math.max(70 + L.level * 8, t.startSquad * 25), { threat: t }));
+  } else if (t.kind === "mortars") {
+    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z - 32, Math.max(22 + L.level * 4, t.startSquad * 8), { threat: t }));
+  }
+  bus.emit("threatLive", { id: t.id, kind: t.kind }); coachCounter(); updateBeltHUD();
+}
+function endThreat(t) {
+  if (!t || t.done) return;
+  t.done = true; t.live = false;
+  if (t.vis) { t.vis.sign.visible = t.vis.ring.visible = t.vis.shell.visible = false; }
+  if (L.threat === t) L.threat = null;
+  if (L.coach === t.id) L.coach = null;
+  bus.emit("threatEnd", { id: t.id, kind: t.kind, countered: t.countered, lost: t.lost }); updateBeltHUD();
+}
+function updateTactics(dt) {
+  if (L.swap && L.time >= L.swap.until) expireSwap();
+  coachCounter();
+  if (L.bankLocked) return;
+  if (state === "boss" && !L.threat && L.boss.hp > 0) {
+    const t = { id: `slam-${L.slamId = (L.slamId || 0) + 1}`, kind: "slam", counter: "shield", z: L.boss.z, actors: [], age: 0, lost: 0, countered: false };
+    announceThreat(t); liveThreat(t);
+  }
+  if (state === "play") for (const t of L.threats) {
+    if (t.done) continue;
+    const d = L.sz - t.z;
+    if (!t.announced && d <= 24 + 2.5 * SPEED * L.speedMul) announceThreat(t);
+    if (!t.live && d <= 24 && !L.threat) liveThreat(t);
+  }
+  const t = L.threat; if (!t || t.kind === "slam") return;
+  t.age += dt;
+  if (t.kind === "barricade" && L.giantT > 0 && L.sz - t.z < 12) for (const o of t.actors) if (o.alive) breakSolid(o, true);
+  if (t.kind === "mortars") {
+    if (t.shellT > 0) {
+      t.shellT -= dt;
+      const u = Math.min(1, 1 - t.shellT / 0.65);
+      t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.fromZ + (t.targetZ - t.fromZ) * u);
+      if (t.shellT <= 0) {
+        t.vis.shell.visible = t.vis.ring.visible = false;
+        if (L.shieldT <= 0 && Math.abs(L.sx - t.targetX) < 2.8) {
+          const loss = Math.min(Math.max(2, Math.ceil(L.soldiers.length * 0.03)), threatLossLeft(t));
+          killSoldiers(loss, t.targetX, true); t.lost += loss;
+        }
+        bus.emit("explosion", { x: t.targetX, z: t.targetZ, radius: 2.8 });
+        L.fx.push({ x: t.targetX, y: 0.3, z: t.targetZ, f: 9, t: 0, dur: 0.4, size: 4 });
+      }
+    }
+    t.shotT -= dt;
+    if (t.shotT <= 0 && t.age < 5.3) {
+      let tower = null; for (const o of t.actors) if (o.alive) { tower = o; break; }
+      if (tower) {
+        t.shotT = 0.7; t.shellT = 0.65; t.fromX = tower.x; t.fromZ = tower.z; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.65;
+        t.vis.ring.position.set(t.targetX, 0.09, t.targetZ); t.vis.ring.visible = t.vis.shell.visible = true;
+      }
+    }
+  }
+  let alive = false;
+  for (const a of t.actors) if (t.kind === "swarm" ? a.hp > 0 && a.state !== "dead" && a.state !== "dying" : a.alive) { alive = true; break; }
+  if ((!alive && !(t.shellT > 0)) || t.age >= 6 || (t.kind === "barricade" && L.sz < t.z - 2)) endThreat(t);
+}
+
+// ---------- level generation ----------
+const isGood = h => h.powerup ? true : h.op === "x" ? h.v >= 1 : h.v >= 0;
+const gateText = h => h.powerup ? "" : h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
+design/briefs/camp-U.md:3:Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 3, 7, 9 and 10), `js/meta.js`
+design/briefs/engine-audit.md:20:   - data-driven authored levels (a level script format for a story campaign: waves, enemy types, hazards, gates,
+design/briefs/camp-E2.md:3:Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 5 and 9 are your spec),
+design/briefs/camp-E1.log:15:Repo: /home/user/my-first-repo/squad-surge. Read fully first: `design/campaign.md` (THE spec, sections 2, 6, 7, 8,
+design/briefs/camp-E1.log:19:EDIT ONLY: `index.html`, `js/objects3d.js`, `js/powerups.js`, and `tools/bot-*.js` (add `tools/bot-campaign.js`).
+design/briefs/camp-E1.log:20:Four other runs are writing `js/enemies.js`, `js/campaign.js`, `js/story.js`, `js/meta.js`, `js/juice.js` and art
+design/briefs/camp-E1.log:35:   - `ctx.goMission(id, {assist})` builds a level from `Campaign.missions[id]` (js/campaign.js, loaded by index.html)
+design/briefs/camp-E1.log:36:   - every event type, including hazards (crusher, saw, collapse lanes with telegraphs) and scenery (fuel truck,
+design/briefs/camp-E1.log:52:   - campaign mode: squad cap 300, no automatic opening boost, and no 60% loss cap (keep it only in chapter 1,
+design/briefs/camp-E1.log:61:6. Load `js/enemies.js`, `js/campaign.js` and `js/story.js` (in that order, after the existing modules). Everything
+design/briefs/camp-E1.log:63:7. **`tools/bot-campaign.js`**, modelled on tools/bot-tactics.js:
+design/briefs/camp-E1.log:72:events and tuning knobs to `design/campaign-engine-notes.md`, and print it.
+design/briefs/camp-E1.log:79:/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'campaign.md' -g 'engine-audit.md' -g 'strategy.md' -g 'index.html' -g 'objects3d.js' -g 'powerups.js' -g 'bot-*.js' -g 'package.json'" in /home/user/my-first-repo/squad-surge
+design/briefs/camp-E1.log:88:design/campaign.md
+design/briefs/camp-E1.log:92:/bin/bash -lc 'cat design/campaign.md design/engine-audit.md design/strategy.md' in /home/user/my-first-repo/squad-surge
+design/briefs/camp-E1.log:161:## 4. Mission data format (`js/campaign.js` exports `window.Campaign`)
+design/briefs/camp-E1.log:226:  - campaign squad cap 300
+design/briefs/camp-E1.log:228:  - no automatic opening boost in campaign missions
+design/briefs/camp-E1.log:325:| C campaign content | js/campaign.js (new), design/campaign-script.md |
+design/briefs/camp-E1.log:329:- index.html (E1) loads js/enemies.js, js/campaign.js and js/story.js after the existing modules.
+design/briefs/camp-E1.log:331:  - campaign absent: no Story button
+design/briefs/camp-E1.log:357:**Prioritised implementation plan.** Effort estimates are engineering days for one developer, excluding art and campaign production.
+design/briefs/camp-E1.log:361:3. **Authored campaign interpreter — 5–8 days; highest variety impact.** Add validated JSON with stable event IDs, distance/time/condition triggers, ordered execution, objectives and checkpoints. Example record shapes:
+design/briefs/camp-E1.log:2503:**Prioritised implementation plan.** Effort estimates are engineering days for one developer, excluding art and campaign production.
+design/briefs/camp-E1.log:2507:3. **Authored campaign interpreter — 5–8 days; highest variety impact.** Add validated JSON with stable event IDs, distance/time/condition triggers, ordered execution, objectives and checkpoints. Example record shapes:
+design/briefs/camp-C.log:13:# Codex run C: campaign content for the Squad Surge "Campaign Update"
+design/briefs/camp-C.log:15:Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 2, 3, 4, 5, 6 and 7 are your
+design/briefs/camp-C.log:19:EDIT ONLY the new files `js/campaign.js` and `design/campaign-script.md`. Do not run git.
+design/briefs/camp-C.log:37:- Write a small `node` validation snippet in `design/campaign-script.md` (and run it) that checks:
+design/briefs/camp-C.log:39:  - event types, enemy types, boss types and skill ids are valid
+design/briefs/camp-C.log:45:I’ll read the campaign spec and current level generator, author all 36 missions, and run the validator. I’ll edit only the two requested files and won’t run git.
+design/briefs/camp-C.log:48:/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'campaign.md' -g 'strategy.md' -g 'index.html' -g 'campaign.js' -g 'campaign-script.md'" in /home/user/my-first-repo/squad-surge
+design/briefs/camp-C.log:52:design/campaign.md
+design/briefs/camp-C.log:56:/bin/bash -lc 'cat design/campaign.md' in /home/user/my-first-repo/squad-surge
+design/briefs/camp-C.log:125:## 4. Mission data format (`js/campaign.js` exports `window.Campaign`)
+design/briefs/camp-C.log:190:  - campaign squad cap 300
+design/briefs/camp-C.log:192:  - no automatic opening boost in campaign missions
+design/briefs/camp-C.log:289:| C campaign content | js/campaign.js (new), design/campaign-script.md |
+design/briefs/camp-C.log:293:- index.html (E1) loads js/enemies.js, js/campaign.js and js/story.js after the existing modules.
+design/briefs/camp-C.log:295:  - campaign absent: no Story button
+design/briefs/camp-C.log:437:-rw-r--r--  1 root root 12290 Nov  7 20:15 campaign.md
+design/briefs/camp-C.log:638:/bin/bash -lc "rg --files -g 'AGENTS.md' -g '*campaign*' -g '*enemy*' -g '*enemies*' -g '*brief*' .agents .codex design js 2>/dev/null; sed -n '140,250p' index.html" in /home/user/my-first-repo/squad-surge
+design/briefs/camp-C.log:640:design/campaign.md
+design/briefs/engine-audit.log:32:   - data-driven authored levels (a level script format for a story campaign: waves, enemy types, hazards, gates,
+design/briefs/engine-audit.log:5217:+**Prioritised implementation plan.** Effort estimates are engineering days for one developer, excluding art and campaign production.
+design/briefs/engine-audit.log:5221:+3. **Authored campaign interpreter — 5–8 days; highest variety impact.** Add validated JSON with stable event IDs, distance/time/condition triggers, ordered execution, objectives and checkpoints. Example record shapes:
+design/briefs/camp-U.log:15:Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 3, 7, 9 and 10), `js/meta.js`
+design/briefs/camp-U.log:59:I’ll read the campaign contracts and existing UI code, then build the story flow within the three allowed files, with fallbacks for missing campaign APIs.
+design/briefs/camp-U.log:62:/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'campaign.md' -g 'meta.js' -g 'juice.js' -g 'index.html'" in /home/user/my-first-repo/squad-surge
+design/briefs/camp-U.log:68:design/campaign.md
+design/briefs/camp-U.log:71:/bin/bash -lc 'cat design/campaign.md' in /home/user/my-first-repo/squad-surge
+design/briefs/camp-U.log:140:## 4. Mission data format (`js/campaign.js` exports `window.Campaign`)
+design/briefs/camp-U.log:205:  - campaign squad cap 300
+design/briefs/camp-U.log:207:  - no automatic opening boost in campaign missions
+design/briefs/camp-U.log:304:| C campaign content | js/campaign.js (new), design/campaign-script.md |
+design/briefs/camp-U.log:308:- index.html (E1) loads js/enemies.js, js/campaign.js and js/story.js after the existing modules.
+design/briefs/camp-U.log:310:  - campaign absent: no Story button
+design/briefs/camp-E1.md:3:Repo: /home/user/my-first-repo/squad-surge. Read fully first: `design/campaign.md` (THE spec, sections 2, 6, 7, 8,
+design/briefs/camp-E1.md:7:EDIT ONLY: `index.html`, `js/objects3d.js`, `js/powerups.js`, and `tools/bot-*.js` (add `tools/bot-campaign.js`).
+design/briefs/camp-E1.md:8:Four other runs are writing `js/enemies.js`, `js/campaign.js`, `js/story.js`, `js/meta.js`, `js/juice.js` and art
+design/briefs/camp-E1.md:23:   - `ctx.goMission(id, {assist})` builds a level from `Campaign.missions[id]` (js/campaign.js, loaded by index.html)
+design/briefs/camp-E1.md:24:   - every event type, including hazards (crusher, saw, collapse lanes with telegraphs) and scenery (fuel truck,
+design/briefs/camp-E1.md:40:   - campaign mode: squad cap 300, no automatic opening boost, and no 60% loss cap (keep it only in chapter 1,
+design/briefs/camp-E1.md:49:6. Load `js/enemies.js`, `js/campaign.js` and `js/story.js` (in that order, after the existing modules). Everything
+design/briefs/camp-E1.md:51:7. **`tools/bot-campaign.js`**, modelled on tools/bot-tactics.js:
+design/briefs/camp-E1.md:60:events and tuning knobs to `design/campaign-engine-notes.md`, and print it.
+design/briefs/camp-C.md:1:# Codex run C: campaign content for the Squad Surge "Campaign Update"
+design/briefs/camp-C.md:3:Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 2, 3, 4, 5, 6 and 7 are your
+design/briefs/camp-C.md:7:EDIT ONLY the new files `js/campaign.js` and `design/campaign-script.md`. Do not run git.
+design/briefs/camp-C.md:25:- Write a small `node` validation snippet in `design/campaign-script.md` (and run it) that checks:
+design/briefs/camp-C.md:27:  - event types, enemy types, boss types and skill ids are valid
+design/briefs/camp-E2.log:15:Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 5 and 9 are your spec),
+design/briefs/camp-E2.log:53:I’ll read the campaign spec and engine code, then implement `js/enemies.js` against the section 9 contract and run the syntax check.
+design/briefs/camp-E2.log:56:/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'campaign.md' -g 'engine-audit.md' -g 'index.html' -g 'enemies.js' -g 'package.json'" in /home/user/my-first-repo/squad-surge
+design/briefs/camp-E2.log:61:design/campaign.md
+design/briefs/camp-E2.log:65:/bin/bash -lc 'cat design/campaign.md' in /home/user/my-first-repo/squad-surge
+design/briefs/camp-E2.log:134:## 4. Mission data format (`js/campaign.js` exports `window.Campaign`)
+design/briefs/camp-E2.log:199:  - campaign squad cap 300
+design/briefs/camp-E2.log:201:  - no automatic opening boost in campaign missions
+design/briefs/camp-E2.log:298:| C campaign content | js/campaign.js (new), design/campaign-script.md |
+design/briefs/camp-E2.log:302:- index.html (E1) loads js/enemies.js, js/campaign.js and js/story.js after the existing modules.
+design/briefs/camp-E2.log:304:  - campaign absent: no Story button
+design/briefs/camp-E2.log:334:**Prioritised implementation plan.** Effort estimates are engineering days for one developer, excluding art and campaign production.
+design/briefs/camp-E2.log:338:3. **Authored campaign interpreter — 5–8 days; highest variety impact.** Add validated JSON with stable event IDs, distance/time/condition triggers, ordered execution, objectives and checkpoints. Example record shapes:
+design/briefs/tactics-A2.log:1273:H.setState('boss');H.L.boss.z=H.L.sz-20;H.useSurge();assert.equal(H.ctx.surgeReady,false);assert.equal(H.L.tactics.surgePerfect,1);assert(events.some(e=>e[0]==='powerupUse'&&e[1].type==='surge'&&e[1].perfect));
+design/briefs/tactics-A2.log:1293:  assert(events.some(e => e[0] === 'tacticsCoach' && e[1].kind === first.counter));
+design/briefs/tactics-A2.log:1989:H.setState('boss');H.L.boss.z=H.L.sz-20;H.useSurge();assert.equal(H.ctx.surgeReady,false);assert.equal(H.L.tactics.surgePerfect,1);assert(events.some(e=>e[0]==='powerupUse'&&e[1].type==='surge'&&e[1].perfect));
+design/briefs/tactics-A2.log:2011:s=s.replace('  await new Promise(resolve => server.listen(0, \"127.0.0.1\", resolve));','  const results = [];\\n  if (args.engine === \"simulation\") {\\n    console.log(\"Simulation balance check: real core and bot policies; DOM/graphics stubbed, fixed 50 ms steps.\");\\n    const vm = require(\"vm\");\\n    // Reuse the behavioral checker\\'s boot fixture, without executing its tests.\\n    const fixture = fs.readFileSync(path.join(ROOT, \"tools/check-tactics.js\"), \"utf8\").split(\"const H=sandbox.H,events=[];\")[0];\\n    for (let attempt = 0; attempt < runs; attempt++) for (const level of levels) for (const policy of policies) {\\n      const sandbox = new Function(\"require\", fixture.replace(/"'^#!.*'"\\\\n/, \"\") + \"\\\\nreturn sandbox;\")(require);\\n      const H = sandbox.H;\\n      let randomSeed = level * 997 + attempt * 193 + 17;\\n      sandbox.Math = Object.create(Math);\\n      sandbox.Math.random = () => (randomSeed = (Math.imul(randomSeed, 1664525) + 1013904223) >>> 0) / 4294967296;\\n      sandbox.__game = { ctx: H.ctx, get L() { return H.L; }, get state() { return H.state; }, goLevel(l) { H.startLevel(l); H.setState(\"play\"); } };\\n      const config = { level, policy, steering, seed: level * 173 + attempt * 697 + 11 };\\n      await vm.runInContext("'`(${setupBot.toString()})(${JSON.stringify(config)})`, sandbox);'"\\n      for (let i = 0; i < 10000 && [\"play\", \"boss\", \"bonus\"].includes(H.state); i++) H.step(.05);\\n      const L = H.L, errors = [];\\n      if (sandbox.__tacticsCounts.maxLive > 1) errors.push(\"Overlapping live threats\");\\n      if (policy === \"never\" && sandbox.__tacticsCounts.uses) errors.push(\"Never policy activated a power-up\");\\n      const row = { level, policy, attempt: attempt + 1, steering, engine: \"simulation\", result: [\"win\", \"lose\"].includes(H.state) ? H.state : \"ERROR\", stars: sandbox.__tacticsWin?.stars ?? 0, keptPct: sandbox.__tacticsWin?.keptPct ?? Math.floor(L.soldiers.length / Math.max(1, L.peakSquad) * 100), squad: L.bossSoldiers || L.soldiers.length, peakSquad: L.peakSquad, threats: L.threats.map(t => ({ kind: t.kind, start: t.startSquad, cap: t.lossCap, lost: t.lost, countered: t.countered })), tactics: { ...H.ctx.tactics }, events: sandbox.__tacticsCounts, errors };\\n      results.push(row); console.log(JSON.stringify(row));\\n    }\\n  } else {\\n  await new Promise((resolve, reject) => { server.once(\"error\", reject); server.listen(0, \"127.0.0.1\", resolve); });')
+design/briefs/tactics-A.log:5206:H.setState('boss');H.L.boss.z=H.L.sz-20;H.useSurge();assert.equal(H.ctx.surgeReady,false);assert.equal(H.L.tactics.surgePerfect,1);assert(events.some(e=>e[0]==='powerupUse'&&e[1].type==='surge'&&e[1].perfect));
+design/briefs/tactics-A.log:5284:  assert(events.some(e => e[0] === '"'tacticsCoach' && e[1].kind === first.counter));
+

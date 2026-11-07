@@ -4640,3 +4640,623 @@ exec
    374	      for (const s of [-1, 1]) {
    375	        const xi = s * ROAD, xc = s * (ROAD + 0.08), xo = s * (ROAD + 0.62), yt = 0.3, yc = 0.23;
 
+exec
+/bin/bash -lc "nl -ba js/scenery.js | sed -n '376,570p'" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+   376	        const side = (xa, ya, xb, yb, h) => b.quad([[xa, ya, Z0], [xa, ya, Z1], [xb, yb, Z1], [xb, yb, Z0]], [cuv(Z0, 0), cuv(Z1, 0), cuv(Z1, 1), cuv(Z0, 1)], white, h);
+   377	        side(xi, 0, xi, yc, [-s, 0, 0]); side(xi, yc, xc, yt, [-s, 1, 0]); side(xc, yt, xo, yt, [0, 1, 0]); side(xo, yt, xo, 0.15, [s, 0, 0]);
+   378	      }
+   379	      const m = new T.Mesh(b.geometry(), L(isPier ? { vertexColors: true, color: lin(0x6b4a2c) } : { map: CM.curb, vertexColors: true })); m.receiveShadow = true; m.castShadow = true; world.add(m);
+   380	    }
+   381	    // soft contact darkening along the curbs
+   382	    {
+   383	      const ao = CM._ao ||= (() => { const c = mkCanvas(64, 4), x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 64, 0); g.addColorStop(0, "rgba(0,0,0,0.2)"); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 64, 4); return mkTex(c, { srgb: false, repeat: false }); })();
+   384	      const b = new Batch(), y = 0.008;
+   385	      for (const s of [-1, 1]) b.quad([[s * ROAD, y, Z0], [s * (ROAD - 0.8), y, Z0], [s * (ROAD - 0.8), y, Z1], [s * ROAD, y, Z1]], [[0, 0], [1, 0], [1, 1], [0, 1]], white, [0, 1, 0]);
+   386	      const m = new T.Mesh(b.geometry(), new T.MeshBasicMaterial({ map: ao, transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })); m.renderOrder = 1; world.add(m);
+   387	    }
+   388	    S.pools = [];
+   389	    if (cfg.dim) { // arena floodlight pools that travel with the squad
+   390	      const pt = CM._pool ||= (() => { const c = mkCanvas(128, 128), x = c.getContext("2d"), g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.5, "rgba(255,255,255,0.45)"); g.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return mkTex(c, { srgb: false, repeat: false }); })();
+   391	      const pm = new T.MeshBasicMaterial({ map: pt, color: 0xcfe0ff, transparent: true, opacity: 0.35, blending: T.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
+   392	      for (let k = 0; k < 4; k++) { const m = new T.Mesh(new T.PlaneBufferGeometry(16, 16).rotateX(-Math.PI / 2), pm); m.renderOrder = 2; m.position.y = 0.04; m.userData.off = [6, -10, -26, -42][k]; m.userData.dx = k % 2 ? 1.6 : -1.6; S.pools.push(m); world.add(m); }
+   393	    }
+   394	    // sidewalks -------------------------------------------------------------------
+   395	    {
+   396	      const sw = isPier ? tex("deck", "deck", 0x7a5a3a) : tex("sidewalk", "concrete", 0xa0a0a8), st = isPier ? tile("deck", 3) * 0.65 : tile("sidewalk", 4);
+   397	      const b = new Batch(), yt = 0.2, xi = ROAD + 0.62, xo = 11.0, yb = hasWater ? -1.3 : -0.05;
+   398	      const wt = cfg.walkTone || (id === "ruins" ? 0.85 : 1), sh = new T.Color(wt, wt, wt);
+   399	      for (const s of [-1, 1]) {
+   400	        const xa = s * xi, xb = s * xo, uv = (x, z) => (isPier ? [z / st, x / st] : [x / st, z / st]);
+   401	        b.quad([[xa, yt, Z0], [xb, yt, Z0], [xb, yt, Z1], [xa, yt, Z1]], [uv(xa, Z0), uv(xb, Z0), uv(xb, Z1), uv(xa, Z1)], white, [0, 1, 0]);
+   402	        const dark = new T.Color(0.55, 0.55, 0.55);
+   403	        b.quad([[xb, yb, Z0], [xb, yb, Z1], [xb, yt, Z1], [xb, yt, Z0]], [[Z0 / st, yb / st], [Z1 / st, yb / st], [Z1 / st, yt / st], [Z0 / st, yt / st]], [dark, dark, white, white], [s, 0, 0]);
+   404	      }
+   405	      const m = new T.Mesh(b.geometry(), L({ map: sw, vertexColors: true, color: sh })); m.receiveShadow = true; world.add(m);
+   406	      if (hasWater) { // under-deck fascia
+   407	        const fb = new Batch(), steel = lin(isPier ? 0x5a4026 : 0x59657a), dk = lin(isPier ? 0x3a281a : 0x39414f);
+   408	        for (const s of [-1, 1]) fb.box(s * (xo - 0.05), s * (xo + 0.0), yb - 0.2, 0.2, Z1, Z0, steel, { bot: dk, noTop: true, fix: [0.5, 0.5] });
+   409	        const fm = new T.Mesh(fb.geometry(), L({ vertexColors: true })); world.add(fm);
+   410	      }
+   411	    }
+   412	    // road markings -----------------------------------------------------------------
+   413	    {
+   414	      const b = new Batch(), y = 0.022, r2 = srand(length * 17 + 3);
+   415	      for (let z = Z0 - 1; z > Z1; z -= 5) { // dashed centre line
+   416	        const l = 2.3, w = 0.22, v0 = r2() * 0.8;
+   417	        b.quad([[-w / 2, y, z], [w / 2, y, z], [w / 2, y, z - l], [-w / 2, y, z - l]], [[0, v0], [1, v0], [1, v0 + 0.2], [0, v0 + 0.2]], white, [0, 1, 0]);
+   418	      }
+   419	      for (const s of [-1, 1]) for (let z = Z0; z > Z1; z -= 9) { // thin edge lines, broken here and there
+   420	        if (r2() < 0.07) continue;
+   421	        const w = 0.13, x = s * (ROAD - 0.45), l = 8.8, v0 = r2() * 0.8;
+   422	        b.quad([[x - w / 2, y, z], [x + w / 2, y, z], [x + w / 2, y, z - l], [x - w / 2, y, z - l]], [[0, v0], [1, v0], [1, v0 + 0.2], [0, v0 + 0.2]], white, [0, 1, 0]);
+   423	      }
+   424	      const m = new T.Mesh(b.geometry(), L({ map: CM.paint, alphaTest: 0.4, vertexColors: true, transparent: isPier, opacity: isPier ? 0.5 : 1, depthWrite: !isPier, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })); m.receiveShadow = true; world.add(m);
+   425	    }
+   426	    // road decals -------------------------------------------------------------------
+   427	    if (CM.decals && CM.decalJson && !isPier) {
+   428	      const dj = CM.decalJson, sz = dj._size || [CM.decalImg.width, CM.decalImg.height], names = Object.keys(dj).filter(k => k[0] !== "_");
+   429	      const W = { "crack-branch": 2.8, "crack-long": 3, drain: 0.9, manhole: 0.95, skid: 1.5, "skid-b": 1.9, pothole: 1.5, patch: 2.3, oil: 1.7 };
+   430	      const wt = { "crack-branch": 3, "crack-long": 3, drain: 0.6, manhole: 0.7, skid: 1.5, "skid-b": 1.5, pothole: 0.8, patch: 2, oil: 1.2 };
+   431	      const tot = names.reduce((a, n) => a + (wt[n] || 1), 0), b = new Batch(), r3 = srand(length * 29 + 7), y = 0.012;
+   432	      for (let z = Z0 - 6; z > Z1 + 40; z -= 3 + r3() * 3.5) {
+   433	        let q = r3() * tot, nm = names[0]; for (const n of names) { q -= wt[n] || 1; if (q <= 0) { nm = n; break; } }
+   434	        const [rx, ry, rw, rh] = dj[nm], w = W[nm] || 1.6, h = w * rh / rw;
+   435	        let x = (r3() * 2 - 1) * (ROAD - 1.1), ang = nm === "drain" ? 0 : (nm.startsWith("skid") || nm.startsWith("crack")) ? (r3() - 0.5) * 0.7 : r3() * Math.PI * 2;
+   436	        if (nm === "drain") x = (r3() < 0.5 ? -1 : 1) * (ROAD - 0.75);
+   437	        const u0 = (rx + 2) / sz[0], u1 = (rx + rw - 2) / sz[0], v1 = 1 - (ry + 2) / sz[1], v0 = 1 - (ry + rh - 2) / sz[1], ca = Math.cos(ang), sa = Math.sin(ang);
+   438	        const pt = (lx, lz) => [x + lx * ca - lz * sa, y, z + lx * sa + lz * ca];
+   439	        b.quad([pt(-w / 2, h / 2), pt(w / 2, h / 2), pt(w / 2, -h / 2), pt(-w / 2, -h / 2)], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]], white, [0, 1, 0]);
+   440	      }
+   441	      const m = new T.Mesh(b.geometry(), L({ map: CM.decals, transparent: true, depthWrite: false, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })); m.receiveShadow = true; m.renderOrder = 1; world.add(m);
+   442	    }
+   443	
+   444	    // buildings -----------------------------------------------------------------------
+   445	    const occ = []; // z ranges occupied by buildings, per side
+   446	    const rowCfg = cfg.rows ? ROWS[cfg.rows] : null;
+   447	    if (rowCfg && K && K.facs.length) {
+   448	      const endZ = cfg.endWall ? -length - 50 : undefined, zr = endZ !== undefined ? endZ + 2 : Z1;
+   449	      buildRows(rowCfg, K, rnd, occ, Z0, zr, tex, { endZ });
+   450	      if (cfg.far2) buildRows({ ...rowCfg, front: rowCfg.front + 12, scale: [rowCfg.scale[0] * 1.3, rowCfg.scale[1] * 1.6], lot: 0.15, alley: 0, stagger: 3 }, K, rnd, occ, Z0, zr, tex, { far: true });
+   451	    }
+   452	    else if (rowCfg && !(K && K.facs.length)) buildFallbackRows(rowCfg, rnd, occ, Z0, Z1);
+   453	
+   454	    // theme extras ----------------------------------------------------------------------
+   455	    if (isBridge) bridgeExtras(rnd, Z0, Z1, length);
+   456	    if (isPier) pierExtras(rnd, Z0, Z1, tex);
+   457	    if (id === "desert") mesas(rnd, Z0, Z1);
+   458	    if (id === "arena") arenaExtras(Z0, Z1);
+   459	
+   460	    // props ------------------------------------------------------------------------------
+   461	    if (K && K.atlasTex && K.items.length) buildProps(cfg, K, rnd, occ, Z0, Z1, hasWater ? cfg.water.y : 0);
+   462	
+   463	    // sun shadows follow squad
+   464	    S.sun.position.set(...cfg.sunPos).multiplyScalar(4.2);
+   465	    S.lastSunZ = 1e9; updateSun();
+   466	    S.sun.shadow.needsUpdate = true;
+   467	  }
+   468	
+   469	  // ------------------------------------------------------------------ buildings
+   470	  function plasterCanvas(seed, base) {
+   471	    const c = mkCanvas(256, 256), x = c.getContext("2d"), r = srand(seed);
+   472	    x.fillStyle = base; x.fillRect(0, 0, 256, 256);
+   473	    for (let i = 0; i < 70; i++) { const px = r() * 256, py = r() * 256, rad = 14 + r() * 40, g = x.createRadialGradient(px, py, 0, px, py, rad); const a = 0.06 + r() * 0.08, dark = r() < 0.6;
+   474	      g.addColorStop(0, dark ? `rgba(60,50,40,${a})` : `rgba(255,250,240,${a})`); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 256, 256); }
+   475	    for (let i = 0; i < 1200; i++) { x.fillStyle = r() < 0.5 ? "rgba(0,0,0,.05)" : "rgba(255,255,255,.06)"; x.fillRect(r() * 256, r() * 256, 1 + r() * 3, 1 + r() * 3); }
+   476	    x.fillStyle = "rgba(60,50,40,.12)"; for (let i = 0; i < 6; i++) x.fillRect(0, r() * 256, 256, 1);
+   477	    return c;
+   478	  }
+   479	  function wallTexFor(K, CM) {
+   480	    if (K.tex.wall) return K.tex.wall;
+   481	    const id = K.id;
+   482	    return CM["_wall_" + id] ||= mkTex(plasterCanvas(hashStr(id), id === "arena" ? "#9aa0ae" : id === "ruins" ? "#c9bfb2" : "#f0e6d6"));
+   483	  }
+   484	  const emissiveVC = sh => { sh.fragmentShader = sh.fragmentShader.replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance *= vColor;\n#endif"); };
+   485	
+   486	  function buildRows(R, K, rnd, occ, Z0, Z1, tex, opts = {}) {
+   487	    const { world } = C, chunks = new Map(), CM = cache.common;
+   488	    const white = new T.Color(1, 1, 1);
+   489	    const chunk = z => { const k = Math.floor((Z0 - z) / 90); let c = chunks.get(k); if (!c) chunks.set(k, c = { f: new Batch(), r: new Batch(), w: new Batch() }); return c; };
+   490	    const wallTex = wallTexFor(K, CM), wtile = K.tile.wall || 5, cells = K.facs.filter(c => !/gate/.test(c.name || ""));
+   491	    const plainCol = (c, k) => new T.Color(c.r * k, c.g * k, c.b * k).convertSRGBToLinear();
+   492	    const wallK = S.cfg.plain, rr = (a, b) => a + rnd() * (b - a);
+   493	    const rt = K.tex.roof || null, rtile = (K.tile.roof || 3);
+   494	    const wuv = (P, hint) => P.map(p => (Math.abs(hint[2]) > 0.5 ? [p[0] / wtile, p[1] / wtile] : Math.abs(hint[0]) > 0.5 ? [p[2] / wtile, p[1] / wtile] : [p[0] / wtile, p[2] / wtile]));
+   495	    const wq = (ch, P, hint, col) => ch.w.quad(P, wuv(P, hint), col, hint);
+   496	    const wtri = (ch, P, hint, col) => ch.w.tri(P, wuv(P, hint), col, hint);
+   497	    const sides = opts.sides || [-1, 1];
+   498	    for (const side of sides) {
+   499	      let z = Z0 + 6 - rnd() * 6, prev = -1;
+   500	      while (z > Z1) {
+   501	        const r = rnd();
+   502	        if (r < R.lot) { const w = rr(R.lotW[0], R.lotW[1]); if (!opts.far) occ.push({ side, z0: z, z1: z - w, kind: "lot" }); z -= w; continue; }
+   503	        if (r < R.lot + R.alley) { const w = rr(3, 4.6); if (!opts.far) occ.push({ side, z0: z, z1: z - w, kind: "alley" }); z -= w; continue; }
+   504	        let fi = R.pick ? R.pick[Math.floor(rnd() * R.pick.length)] % cells.length : Math.floor(rnd() * cells.length);
+   505	        if (R.shed) fi = 0;
+   506	        if (fi === prev && cells.length > 1) fi = (fi + 1) % cells.length;
+   507	        prev = fi;
+   508	        const f = cells[fi], sc = rr(R.scale[0], R.scale[1]), w = f.w * sc, h = f.h * sc * (R.hvar ? rr(0.94, 1.12) : 1), depth = rr(R.depth[0], R.depth[1]);
+   509	        const z0 = z, z1 = z - w, xf = side * (R.front + (R.stagger ? (rnd() - 0.5) * R.stagger : 0)), xb = xf + side * depth, ch = chunk(z0 - w / 2);
+   510	        const avg = f.avg, vary = 0.9 + rnd() * 0.2, wall = plainCol(avg, wallK * vary), wallLo = plainCol(avg, wallK * 0.7 * vary), roofCol = plainCol(avg, wallK * 0.6);
+   511	        const zl = side < 0 ? z0 : z1, zr = side < 0 ? z1 : z0, hTop = R.ragged ? h * 0.97 : h;
+   512	        ch.f.quad([[xf, 0, zl], [xf, 0, zr], [xf, h, zr], [xf, h, zl]], [[f.u0, f.v0], [f.u1, f.v0], [f.u1, f.v1], [f.u0, f.v1]], white, [-side, 0, 0]);
+   513	        wq(ch, [[xf, 0, z0], [xb, 0, z0], [xb, hTop, z0], [xf, hTop, z0]], [0, 0, 1], [wallLo, wallLo, wall, wall]);
+   514	        wq(ch, [[xf, 0, z1], [xb, 0, z1], [xb, hTop, z1], [xf, hTop, z1]], [0, 0, -1], [wallLo, wallLo, wall, wall]);
+   515	        wq(ch, [[xb, 0, z0], [xb, 0, z1], [xb, hTop, z1], [xb, hTop, z0]], [side, 0, 0], [wallLo, wallLo, wall, wall]);
+   516	        if (R.roof === "gable") {
+   517	          const rise = depth * 0.3 + 0.4, xm = (xf + xb) / 2, ov = side * 0.35, yb = hTop - 0.15, fe = xf - ov, be = xb + ov, rl = Math.hypot(xm - fe, rise) / rtile;
+   518	          const ra = z0 + 0.25, rb2 = z1 - 0.25, rbm = rt ? ch.r : ch.w;
+   519	          const U = (a, b) => [a, b];
+   520	          const tint = rt ? white : roofCol;
+   521	          rbm.quad([[fe, yb, ra], [xm, hTop + rise, ra], [xm, hTop + rise, rb2], [fe, yb, rb2]], [U(ra / rtile, 0), U(ra / rtile, rl), U(rb2 / rtile, rl), U(rb2 / rtile, 0)], tint, [-side * 0.5, 1, 0]);
+   522	          rbm.quad([[xm, hTop + rise, ra], [be, yb, ra], [be, yb, rb2], [xm, hTop + rise, rb2]], [U(ra / rtile, rl), U(ra / rtile, 0), U(rb2 / rtile, 0), U(rb2 / rtile, rl)], tint, [side * 0.5, 1, 0]);
+   523	          wtri(ch, [[xf, hTop, z0], [xb, hTop, z0], [xm, hTop + rise, z0]], [0, 0, 1], wall);
+   524	          wtri(ch, [[xf, hTop, z1], [xb, hTop, z1], [xm, hTop + rise, z1]], [0, 0, -1], wall);
+   525	          const cz = z0 - w * (0.2 + rnd() * 0.5);
+   526	          ch.w.box(xm - 0.35, xm + 0.35, hTop + rise * 0.3, hTop + rise + 1.1, cz - 0.7, cz, plainCol(new T.Color(0.75, 0.42, 0.3), 1), { tile: wtile });
+   527	        } else {
+   528	          const roofC = plainCol(avg, wallK * 0.62 * vary), pc = plainCol(avg, wallK * 0.9 * vary), t = 0.3, ph = 0.45;
+   529	          ch.w.box(Math.min(xf, xb), Math.max(xf, xb), hTop - 0.4, hTop, z1, z0, roofC, { tile: wtile, top: roofC });
+   530	          ch.w.box(Math.min(xf, xf + side * t), Math.max(xf, xf + side * t), hTop, hTop + ph, z1, z0, pc, { tile: wtile });
+   531	          ch.w.box(Math.min(xf, xb), Math.max(xf, xb), hTop, hTop + ph, z0 - t, z0, pc, { tile: wtile });
+   532	          ch.w.box(Math.min(xf, xb), Math.max(xf, xb), hTop, hTop + ph, z1, z1 + t, pc, { tile: wtile });
+   533	          if (rnd() < 0.5) { const cx = xf + side * depth * 0.55, cz = z0 - w * (0.25 + 0.4 * rnd()); ch.w.box(Math.min(cx, cx + 1.3), Math.max(cx, cx + 1.3), hTop, hTop + 0.9 + rnd() * 0.7, cz - 1.1, cz, plainCol(avg, wallK * 0.6), { tile: wtile }); }
+   534	          if (R.roof === "stand") {
+   535	            const x2 = xb, x3 = xb + side * 5.5, hh = hTop + 3.2, sc2 = plainCol(new T.Color(0.3, 0.34, 0.5), 1);
+   536	            ch.w.box(Math.min(x2, x3), Math.max(x2, x3), 0, hh, z1, z0, sc2, { tile: wtile, top: plainCol(new T.Color(0.4, 0.45, 0.6), 1) });
+   537	          }
+   538	        }
+   539	        if (!opts.far) occ.push({ side, z0, z1, kind: R.shed ? "shed" : "bld" });
+   540	        z -= w + 0.05;
+   541	      }
+   542	    }
+   543	    // a wall of buildings across the end of the street, closing the vista
+   544	    if (opts.endZ !== undefined) {
+   545	      const zE = opts.endZ, gate = K.facs.find(c => /gate/.test(c.name || "")), flat = R.roof === "stand";
+   546	      const place = (f, xa, sc, hMul = 1) => {
+   547	        const w = f.w * sc, h = f.h * sc * hMul, ch = chunk(zE), xb = xa + w, avg = f.avg, wall = plainCol(avg, wallK);
+   548	        ch.f.quad([[xa, 0, zE], [xb, 0, zE], [xb, h, zE], [xa, h, zE]], [[f.u0, f.v0], [f.u1, f.v0], [f.u1, f.v1], [f.u0, f.v1]], white, [0, 0, 1]);
+   549	        wq(ch, [[xa, h, zE], [xb, h, zE], [xb, h, zE - 8], [xa, h, zE - 8]], [0, 1, 0], plainCol(avg, wallK * 0.6));
+   550	        wq(ch, [[xa, 0, zE], [xa, 0, zE - 8], [xa, h, zE - 8], [xa, h, zE]], [-1, 0, 0], wall);
+   551	        wq(ch, [[xb, 0, zE], [xb, 0, zE - 8], [xb, h, zE - 8], [xb, h, zE]], [1, 0, 0], wall);
+   552	        return xb;
+   553	      };
+   554	      const sc = R.scale[0] * 1.15 * (flat ? 1.1 : 1);
+   555	      let xl = gate ? -gate.w * (sc * 1.0) / 2 : -cells[0].w * sc / 2, xr = xl;
+   556	      if (gate) xr = place(gate, xl, sc * 1.0);
+   557	      let k = 0, xx = xr; while (xx < 52) xx = place(cells[(k++ + 1) % cells.length], xx, sc, 1);
+   558	      xx = xl; k = 2; while (xx > -52) { const f = cells[(k++) % cells.length]; xx -= f.w * sc; place(f, xx, sc, 1); }
+   559	      if (!gate && cells.length) { /* centre piece covered by the loops above */ }
+   560	    }
+   561	    const fm = new T.MeshLambertMaterial({ map: K.facTex, vertexColors: true, alphaTest: 0.5, emissive: new T.Color(1, 1, 1), emissiveMap: K.facTex, emissiveIntensity: S.themeId === "arena" ? 0.4 : 0.42 });
+   562	    fm.onBeforeCompile = emissiveVC;
+   563	    const rm = new T.MeshLambertMaterial({ map: rt, vertexColors: true });
+   564	    const wm = new T.MeshLambertMaterial({ map: wallTex, vertexColors: true, emissive: new T.Color(1, 1, 1), emissiveIntensity: 0.18 }); wm.onBeforeCompile = emissiveVC;
+   565	    for (const c of chunks.values()) {
+   566	      const m = new T.Mesh(c.f.geometry(), fm); m.castShadow = true; world.add(m);
+   567	      if (!c.w.empty) { const m3 = new T.Mesh(c.w.geometry(), wm); m3.castShadow = true; world.add(m3); }
+   568	      if (!c.r.empty) { const m2 = new T.Mesh(c.r.geometry(), rm); m2.castShadow = true; world.add(m2); }
+   569	    }
+   570	  }
+
+exec
+/bin/bash -lc "nl -ba index.html | sed -n '1,179p'; nl -ba js/scenery.js | sed -n '571,727p'" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+     1	<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+     2	<meta charset="utf-8">
+     3	<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+     4	<title>Squad Surge</title>
+     5	<link rel="icon" href="data:,">
+     6	<style>
+     7	@font-face{font-family:'Lilita One';src:url(assets/fonts/lilita-one.woff2) format('woff2');font-weight:400;font-display:block}
+     8	@font-face{font-family:'Nunito';src:url(assets/fonts/nunito-800.woff2) format('woff2');font-weight:800;font-display:block}
+     9	@font-face{font-family:'Nunito';src:url(assets/fonts/nunito-900.woff2) format('woff2');font-weight:900;font-display:block}
+    10	</style>
+    11	<style>
+    12	:root{--navy:#14213d;--ink:#0d1630;--blue:#2f7bff;--blue-d:#1a4fc4;--red:#e8392f;--yellow:#ffc928;--gold:#ffb300;--green:#38c95b;--card:#fff;--muted:#6b7591;--panel:#1b2a52}
+    13	*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    14	html,body{height:100%;margin:0;overflow:hidden;background:#0b1328;color-scheme:dark;font-family:Nunito,system-ui,sans-serif;color:#fff}
+    15	#game{position:relative;width:min(100vw,calc(100dvh*0.5625));height:100%;margin:0 auto;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;background:#f4c9a0}
+    16	#view{position:absolute;inset:0;width:100%;height:100%;display:block}
+    17	.font{font-family:'Lilita One',Nunito,sans-serif;letter-spacing:.5px}
+    18	.stroke{text-shadow:0 2px 0 var(--ink),0 -2px 0 var(--ink),2px 0 0 var(--ink),-2px 0 0 var(--ink),2px 2px 0 var(--ink),-2px 2px 0 var(--ink),2px -2px 0 var(--ink),-2px -2px 0 var(--ink),0 4px 0 var(--ink)}
+    19	button{font-family:'Lilita One',sans-serif;cursor:pointer;border:0;touch-action:manipulation}
+    20	button:focus-visible{outline:3px solid #fff;outline-offset:3px}
+    21	[hidden]{display:none!important}
+    22	/* HUD */
+    23	.hud{position:absolute;left:0;right:0;top:0;padding:max(10px,env(safe-area-inset-top)) 12px 0;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;z-index:4;pointer-events:none}
+    24	.hud>*{pointer-events:auto}
+    25	.chip{display:flex;align-items:center;gap:6px;min-width:84px;height:30px;padding:0 10px 0 4px;border-radius:16px;background:linear-gradient(#3d8bff,#1f5fd6);border:2px solid #0f3a8f;box-shadow:0 3px 0 #0f3a8f;font:18px 'Lilita One',sans-serif}
+    26	.chip img{width:26px;height:26px;object-fit:contain;margin-left:-2px}
+    27	.chip span{flex:1;text-align:right}
+    28	.round{width:44px;height:44px;border-radius:12px;background:linear-gradient(#4b97ff,#2160d8);border:2px solid #0f3a8f;box-shadow:0 3px 0 #0f3a8f;display:grid;place-items:center;color:#fff;font-size:22px}
+    29	.round svg{width:24px;height:24px}
+    30	.levelpill{position:absolute;left:50%;transform:translateX(-50%);top:max(10px,env(safe-area-inset-top));display:grid;justify-items:center;gap:2px;pointer-events:none}
+    31	.levelpill .name{display:flex;align-items:center;gap:6px;padding:4px 14px;border-radius:16px;background:linear-gradient(#5ab0ff,#2f7bff);border:2px solid #0f3a8f;font:15px 'Lilita One',sans-serif;white-space:nowrap}
+    32	.levelpill .lv{font:11px 'Lilita One',sans-serif;background:#0f3a8f;padding:1px 10px;border-radius:8px;margin-top:-6px}
+    33	.progress{width:min(52vw,230px);height:18px;border-radius:9px;background:#22305a;border:2px solid #0d1630;position:relative;overflow:hidden}
+    34	.progress i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(#7cf08f,#2bb64c);border-radius:7px}
+    35	.progress b{position:absolute;inset:0;display:grid;place-items:center;font:12px 'Lilita One',sans-serif}
+    36	.progress .flag{position:absolute;right:2px;top:1px;width:12px;height:12px;background:conic-gradient(#fff 0 25%,#111 0 50%,#fff 0 75%,#111 0);background-size:6px 6px;border-radius:2px}
+    37	.count{position:absolute;z-index:3;transform:translate(-50%,-100%);pointer-events:none;display:flex;align-items:center;gap:4px;padding:2px 10px 2px 4px;border-radius:14px;background:#1f5fd6;border:2px solid #0d1630;font:18px 'Lilita One',sans-serif;box-shadow:0 3px 0 #0d1630}
+    38	.count img{width:22px;height:22px}
+    39	.count .combo{position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);font:18px 'Lilita One',sans-serif;font-style:normal;color:#ffcf36;white-space:nowrap}
+    40	.count .combo.t2{color:#ff9d2f;font-size:21px}.count .combo.t3{color:#ff5a3c;font-size:24px}.count .combo.t4{color:#ff4fd2;font-size:27px}
+    41	.count .surge{position:absolute;left:8px;right:8px;top:calc(100% + 3px);height:6px;border-radius:3px;background:#0d1630cc;overflow:hidden}
+    42	.count .surge i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,#ffb300,#ffe066)}
+    43	.count.surging .surge i{background:linear-gradient(90deg,#ff7a00,#fff07a,#ff7a00);background-size:200% 100%;animation:surgeflow .5s linear infinite}
+    44	@keyframes surgeflow{to{background-position:200% 0}}
+    45	.scorebox{position:absolute;right:12px;top:calc(max(10px,env(safe-area-inset-top)) + 4px);z-index:4;text-align:right;pointer-events:none;line-height:1}
+    46	.scorebox .score{font:24px 'Lilita One',sans-serif;color:#fff}
+    47	.scorebox .best{font:11px 'Lilita One',sans-serif;color:#ffe066;margin-top:3px;text-shadow:0 1px 0 #0d1630,0 -1px 0 #0d1630,1px 0 0 #0d1630,-1px 0 0 #0d1630}
+    48	.scorebox .best.new{color:#7cf08f}
+    49	.bossbar{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);width:min(70vw,300px);z-index:4;text-align:center}
+    50	.bossbar .bar{height:18px;border-radius:9px;background:#3b0f12;border:3px solid #0d1630;overflow:hidden;box-shadow:0 3px 0 #0d1630}
+    51	.bossbar .bar i{display:block;height:100%;width:100%;background:linear-gradient(#ff8a6a,#e0352a 55%,#b81c14);box-shadow:inset 0 3px 0 #ffffff55;transition:width .15s}
+    52	.bossbar .label{font:16px 'Lilita One',sans-serif;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:6px}
+    53	.bossbar .label svg{width:20px;height:20px;flex:none}
+    54	.floats{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+    55	.float{position:absolute;transform:translate(-50%,-50%);font:22px 'Lilita One',sans-serif;white-space:nowrap;animation:rise .9s ease-out forwards}
+    56	@keyframes rise{from{opacity:1;transform:translate(-50%,-50%) scale(.7)}25%{transform:translate(-50%,-90%) scale(1.15)}to{opacity:0;transform:translate(-50%,-180%) scale(1)}}
+    57	.weapon-tag{position:absolute;left:12px;bottom:max(14px,env(safe-area-inset-bottom));z-index:4;display:flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;border-radius:12px;background:#0d1630cc;font:14px 'Lilita One',sans-serif}
+    58	.weapon-tag img{height:22px}
+    59	/* Tactics controls */
+    60	.belt{position:absolute;inset:0;z-index:5;pointer-events:none}
+    61	.belt-slot{position:absolute;bottom:calc(18px + env(safe-area-inset-bottom));width:70px;height:70px;border-radius:50%;border:3px solid #77c7ff;background:radial-gradient(#2859a0,#14213d);box-shadow:0 5px 0 #0d1630;pointer-events:auto;color:#fff;transition:box-shadow .6s,border-color .6s}
+    62	.belt-slot:first-child{left:max(16px,env(safe-area-inset-left))}.belt-slot:nth-child(2){right:max(16px,env(safe-area-inset-right))}
+    63	.belt-slot img{width:52px;height:52px;object-fit:contain}.belt-slot.empty:after{content:'+';font:30px Nunito;opacity:.25}
+    64	.belt-slot small{position:absolute;bottom:-9px;left:20px;background:#0d1630;border-radius:8px;padding:1px 5px}
+    65	.belt-slot.counter{border-color:#ffe066;box-shadow:0 0 0 4px #ffcb3c66,0 0 24px #ffd84aaa,0 5px 0 #0d1630}
+    66	.belt-slot.active{animation:beltpulse .7s ease-in-out infinite}
+    67	@keyframes beltpulse{50%{filter:brightness(1.5);transform:scale(1.06)}}
+    68	.surge-button{position:absolute;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:96px;min-height:55px;border-radius:28px;background:linear-gradient(#fff07a,#ffb300);border:3px solid #0d1630;color:#14213d;pointer-events:auto;font-size:17px;box-shadow:0 4px 0 #875100}
+    69	.swap-chip{position:absolute;bottom:calc(102px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);padding:5px 12px;border:2px solid #ffe066;border-radius:16px;background:#14213dee;font:16px 'Lilita One';white-space:nowrap}
+    70	.swap-chip img{width:32px;height:32px;vertical-align:middle;object-fit:contain}
+    71	.weapon-tag{bottom:calc(100px + env(safe-area-inset-bottom));font-size:11px;max-width:45%}
+    72	.count .surge{pointer-events:auto;cursor:pointer;height:14px;top:calc(100% + 3px);border:3px solid #0d1630}
+    73	.count.ready .surge{box-shadow:0 0 12px #ffd84a}
+    74	@media(prefers-reduced-motion:reduce){.belt-slot.active{animation:none}}
+    75	/* Home */
+    76	.home{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+    77	.home>*{pointer-events:auto}
+    78	.logo{margin:calc(max(10px,env(safe-area-inset-top)) + 58px) auto 0;text-align:center;line-height:.9;transform:rotate(-4deg)}
+    79	.logo img{display:block;width:80%;max-width:340px;margin:0 auto;filter:drop-shadow(0 8px 12px #0d163066)}
+    80	.logo.has-img{transform:none}.logo.has-img b{display:none}
+    81	.logo b{display:block;font:clamp(44px,15vw,72px) 'Lilita One',sans-serif;color:#fff;background:linear-gradient(#fff 30%,#bfe3ff 60%,#5fb4ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 4px 0 #0d1630) drop-shadow(0 -2px 0 #0d1630) drop-shadow(2px 0 0 #0d1630) drop-shadow(-2px 0 0 #0d1630)}
+    82	.hint{align-self:center;display:grid;justify-items:center;gap:6px;pointer-events:none}
+    83	.hint .pill{display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:8px;background:#0d1630cc;font:15px 'Lilita One',sans-serif}
+    84	.hint .arrows{display:flex;gap:4px}.hint .arrows i{width:20px;height:20px;border-radius:4px;background:#fff;color:#0d1630;display:grid;place-items:center;font-style:normal;font-size:13px}
+    85	.hint .line{width:170px;height:2px;background:#fff;position:relative}.hint .line:before,.hint .line:after{content:'';position:absolute;top:-4px;border:5px solid transparent}.hint .line:before{left:-6px;border-right-color:#fff}.hint .line:after{right:-6px;border-left-color:#fff}
+    86	.hand{width:34px;height:34px;animation:swipe 1.4s ease-in-out infinite;margin-top:-4px}
+    87	@keyframes swipe{0%,100%{transform:translateX(-70px)}50%{transform:translateX(70px)}}
+    88	.btn.playbtn{width:min(62%,250px);margin:14px auto calc(max(150px,20vh) + env(safe-area-inset-bottom));font-size:32px;padding:10px 0 14px;animation:pulse 1.2s ease-in-out infinite} /* sits above the squad */
+    89	@keyframes pulse{50%{transform:scale(1.08)}}
+    90	/* Modals */
+    91	.modal{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:20px;background:#0b1328b0}
+    92	.panel{width:100%;max-width:340px;border-radius:22px;background:linear-gradient(#2b4a9a,#1b2a52);border:3px solid #0d1630;box-shadow:0 6px 0 #0d1630,0 20px 50px #0008;padding:18px 18px 20px;text-align:center}
+    93	.panel h2{margin:0 0 4px;font:34px/1 'Lilita One',sans-serif}
+    94	.panel .sub{color:#bcd0ff;font-weight:800;margin:6px 0 12px}
+    95	.stars{display:flex;justify-content:center;gap:4px;margin:6px 0 4px}
+    96	.stars svg{width:54px;height:54px}.stars svg:nth-child(2){transform:translateY(-10px);width:64px;height:64px}
+    97	.btn{display:block;width:100%;padding:14px;border-radius:14px;font-size:22px;color:#fff;margin-top:10px;min-height:52px}
+    98	.btn.go{background:linear-gradient(#5be07a,#2bb64c);box-shadow:0 5px 0 #157a2f;border:2px solid #0d1630}
+    99	.btn.alt{background:linear-gradient(#5ab0ff,#2f7bff);box-shadow:0 5px 0 #0f3a8f;border:2px solid #0d1630}
+   100	.btn:active{transform:translateY(3px)}
+   101	.bigpct{font:54px/1 'Lilita One',sans-serif;color:#ffd84a}
+   102	.toggle{display:flex;justify-content:space-between;align-items:center;padding:12px 4px;font:18px 'Lilita One',sans-serif;border-bottom:1px solid #ffffff22}
+   103	.toggle button{min-width:84px;min-height:40px;border-radius:12px;background:#0d1630;color:#fff;font-size:16px}
+   104	.toggle button[aria-pressed=true]{background:#2bb64c}
+   105	.loading{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:#0b1328;font:22px 'Lilita One',sans-serif}
+   106	.loading>div{display:grid;justify-items:center;gap:14px}
+   107	.loading .loadlogo{width:min(72%,300px)}
+   108	.loading .loadbar{width:min(56%,220px);height:12px;border-radius:6px;background:#22305a;border:2px solid #0d1630;overflow:hidden}
+   109	.loading .loadbar i{display:block;height:100%;width:40%;border-radius:6px;background:linear-gradient(#7cf08f,#2bb64c);animation:loadslide 1.1s ease-in-out infinite}
+   110	@keyframes loadslide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+   111	.loading .loadtxt{font-size:16px;opacity:.8}
+   112	.loading .err{max-width:280px;text-align:center;color:#ffb4ab;font:15px Nunito,sans-serif;font-weight:800}
+   113	.lvgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:min(56vh,420px);overflow:auto;padding:4px 2px 8px;margin:8px 0 4px}
+   114	.lvtile{min-height:76px;border-radius:12px;background:linear-gradient(#5ab0ff,#2f7bff);border:2px solid #0d1630;box-shadow:0 3px 0 #0d1630;color:#fff;display:grid;justify-items:center;align-content:center;gap:2px;padding:6px 4px}
+   115	.lvtile b{font:24px/1 'Lilita One',sans-serif}.lvtile small{font:10px/1.1 'Lilita One',sans-serif;opacity:.9;text-align:center}
+   116	.lvtile .st{display:flex;gap:1px}.lvtile .st svg{width:14px;height:14px}
+   117	.lvtile.cur{background:linear-gradient(#5be07a,#2bb64c)}
+   118	.lvtile:disabled{background:#2a3760;color:#8090b8;box-shadow:none;cursor:default}
+   119	.flash{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(transparent 50%,#ff1e1e88);opacity:0;transition:opacity .25s}
+   120	@media (prefers-reduced-motion:reduce){.hand,.playbtn,.loading .loadbar i{animation:none}.float{animation-duration:.01s}}
+   121	</style>
+   122	<div id="game">
+   123	  <canvas id="view" aria-label="Squad Surge game view"></canvas>
+   124	  <div class="flash" id="flash"></div>
+   125	  <div class="floats" id="floats"></div>
+   126	  <div class="count" id="count" hidden><img src="assets/i-helmet.png" alt=""><span id="countN">1</span><em class="combo stroke" id="combo" hidden></em><i class="surge" id="surgeBar"><i id="surgeFill"></i></i></div>
+   127	  <div class="scorebox" id="scoreBox" hidden><div class="score stroke" id="scoreN">0</div><div class="best" id="scoreBest"></div></div>
+   128	
+   129	  <div class="hud" id="hud">
+   130	    <button class="round" id="levelsBtn" aria-label="Choose level"><svg viewBox="0 0 24 24" fill="#fff"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></button>
+   131	    <button class="round" id="pauseBtn" aria-label="Pause" hidden><svg viewBox="0 0 24 24" fill="#fff"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
+   132	    <button class="round" id="settingsBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="#fff"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L15 3.5h-4L10.7 6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></button>
+   133	  </div>
+   134	  <div class="levelpill" id="levelPill">
+   135	    <div class="name" id="levelName">OLD TOWN</div>
+   136	    <div class="lv" id="levelNo">Level 1</div>
+   137	    <div class="progress" id="progress" hidden><i id="progFill"></i><b id="progPct">0%</b><span class="flag"></span></div>
+   138	  </div>
+   139	  <div class="bossbar" id="bossbar" hidden><div class="label stroke" id="bossLabel"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" stroke="#0d1630" stroke-width="1.6" d="M12 2C7 2 3.5 5.6 3.5 10.2c0 2.6 1.2 4.6 3 5.8V19a1 1 0 0 0 1 1h1.5v-2h2v2h2v-2h2v2h1.5a1 1 0 0 0 1-1v-3c1.8-1.2 3-3.2 3-5.8C20.5 5.6 17 2 12 2z"/><circle cx="8.7" cy="11" r="2.1" fill="#0d1630"/><circle cx="15.3" cy="11" r="2.1" fill="#0d1630"/></svg>OGRE WARLORD</div><div class="bar"><i id="bossFill"></i></div></div>
+   140	  <div class="weapon-tag" id="weaponTag" hidden><img id="weaponImg" src="assets/w-pistol.png" alt=""><span id="weaponName">PISTOL</span></div>
+   141	
+   142	  <div class="belt" id="belt" hidden>
+   143	    <button class="belt-slot empty" id="belt0" data-slot="0" aria-label="Empty slot 1"><img alt="" hidden><small>1 / Q</small></button>
+   144	    <button class="belt-slot empty" id="belt1" data-slot="1" aria-label="Empty slot 2"><img alt="" hidden><small>2 / E</small></button>
+   145	    <button class="surge-button" id="surgeButton" hidden>SURGE READY</button>
+   146	    <div class="swap-chip" id="swapChip" hidden><img id="swapIcon" alt=""> SWAP? <small>tap a slot</small></div>
+   147	  </div>
+   148	  <div class="home" id="home">
+   149	    <div class="logo" id="logo"><img id="logoImg" src="assets/ui/logo.webp" alt="Squad Surge" hidden><b>SQUAD</b><b>SURGE</b></div>
+   150	    <div>
+   151	      <div class="hint"><div class="pill">HOLD &amp; DRAG <span class="arrows"><i>◀</i><i>▶</i></span></div><div class="line"></div>
+   152	        <svg class="hand" viewBox="0 0 24 24" fill="#fff" stroke="#0d1630" stroke-width="1.2"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V10h.5V8.5a1.5 1.5 0 0 1 3 0V10h.5v-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.6 14a1.5 1.5 0 0 1 2.4-1.8L9 14z"/></svg></div>
+   153	      <button class="btn go playbtn stroke" id="playBtn">PLAY</button>
+   154	    </div>
+   155	  </div>
+   156	
+   157	  <div class="modal" id="winModal" hidden><div class="panel" role="dialog" aria-labelledby="winTitle">
+   158	    <h2 id="winTitle" class="stroke">LEVEL COMPLETE!</h2>
+   159	    <div class="stars" id="stars"></div>
+   160	    <div class="sub" id="winSub"></div>
+   161	    <button class="btn go" id="nextBtn">NEXT LEVEL</button>
+   162	  </div></div>
+   163	
+   164	  <div class="modal" id="loseModal" hidden><div class="panel" role="dialog" aria-labelledby="loseTitle">
+   165	    <h2 id="loseTitle" class="stroke">SQUAD WIPED OUT</h2>
+   166	    <div class="sub">You reached</div>
+   167	    <div class="bigpct stroke" id="losePct">0%</div>
+   168	    <div class="sub" id="loseBest"></div>
+   169	    <button class="btn go" id="retryBtn">TRY AGAIN</button>
+   170	  </div></div>
+   171	
+   172	  <div class="modal" id="levelsModal" hidden><div class="panel" role="dialog" aria-labelledby="levelsTitle">
+   173	    <h2 id="levelsTitle" class="stroke">LEVELS</h2>
+   174	    <div class="lvgrid" id="lvgrid"></div>
+   175	    <button class="btn alt" id="levelsClose">BACK</button>
+   176	  </div></div>
+   177	
+   178	  <div class="modal" id="pauseModal" hidden><div class="panel" role="dialog" aria-labelledby="pauseTitle">
+   179	    <h2 id="pauseTitle" class="stroke">PAUSED</h2>
+   571	  function buildFallbackRows() { /* every theme ships facades; nothing to build without art */ }
+   572	
+   573	  // ------------------------------------------------------------------ theme extras
+   574	  function bridgeExtras(rnd, Z0, Z1, length) {
+   575	    const { world } = C, red = lin(0xd24a32), redD = lin(0xa23624), fix = [0.5, 0.5], tw = new Batch(), cb = new Batch(), rl = new Batch();
+   576	    const spacing = 60, towerH = 34, topY = 31, sag = 3.0;
+   577	    const zs = []; for (let z = -20; z > Z1; z -= spacing) zs.push(z);
+   578	    zs.unshift(-20 + spacing);
+   579	    for (const z of zs) {
+   580	      for (const s of [-1, 1]) {
+   581	        const x = s * 11.8;
+   582	        tw.box(x - 0.9, x + 0.9, 0, towerH, z - 1, z + 1, red, { bot: redD, fix, top: lin(0xf06a4a) });
+   583	        tw.box(x - 1.15, x + 1.15, 0, 1.4, z - 1.25, z + 1.25, redD, { fix });
+   584	      }
+   585	      for (const y of [25.5, 30]) tw.box(-11.8, 11.8, y, y + 1.3, z - 0.8, z + 0.8, red, { fix, bot: redD });
+   586	      for (const s of [-1, 1]) tw.box(s * 11.8 - 1.1, s * 11.8 + 1.1, towerH, towerH + 0.6, z - 1.2, z + 1.2, redD, { fix });
+   587	    }
+   588	    // cables and hangers between consecutive towers
+   589	    for (let i = 0; i + 1 < zs.length; i++) {
+   590	      const za = zs[i], zb = zs[i + 1];
+   591	      for (const s of [-1, 1]) {
+   592	        const x = s * 11.8; let prev = null;
+   593	        for (let k = 0; k <= 16; k++) {
+   594	          const t = k / 16, z = za + (zb - za) * t, y = 5 + (topY - 5) * Math.pow(2 * t - 1, 2), p = [x, y, z];
+   595	          if (prev) cb.beam(prev, p, 0.24, red, fix); prev = p;
+   596	          if (k > 0 && k < 16 && k % 1 === 0) cb.beam([x, y, z], [x, 1.1, z], 0.07, lin(0xe8e2d8), fix);
+   597	        }
+   598	      }
+   599	    }
+   600	    for (const s of [-1, 1]) { // guard rail: posts and two rails
+   601	      const x = s * 10.75;
+   602	      for (let z = Z0; z > Z1; z -= 3) rl.box(x - 0.1, x + 0.1, 0.2, 1.1, z - 0.1, z + 0.1, lin(0xe9edf2), { fix });
+   603	      for (const y of [0.55, 1.0]) rl.box(x - 0.07, x + 0.07, y, y + 0.12, Z1, Z0, lin(0xdfe6ee), { fix });
+   604	      rl.box(x - 0.22, x + 0.22, 0.2, 0.42, Z1, Z0, lin(0xa8b3c2), { fix });
+   605	    }
+   606	    for (const b of [tw, cb, rl]) { const m = new T.Mesh(b.geometry(), new T.MeshLambertMaterial({ vertexColors: true })); m.castShadow = b !== cb; world.add(m); }
+   607	  }
+   608	  function pierExtras(rnd, Z0, Z1, tex) {
+   609	    const { world } = C, b = new Batch(), fix = [0.5, 0.5], wood = lin(0x6e4c30), woodD = lin(0x3b2a1c), rope = lin(0xd9c79a);
+   610	    for (const s of [-1, 1]) {
+   611	      const x = s * 10.85;
+   612	      for (let z = Z0; z > Z1; z -= 5) { b.cyl(x, z, 0.28, -3.8, 0.2, woodD, 8, fix); b.box(x - 0.2, x + 0.2, 0.2, 1.15, z - 0.2, z + 0.2, wood, { fix, top: lin(0x8a6440) }); }
+   613	      for (let z = Z0; z > Z1; z -= 2.5) b.cyl(s * 11.6, z + 1.2, 0.34, -4.4, -0.3, woodD, 8, fix);
+   614	      for (const y of [0.55, 0.95]) b.box(x - 0.05, x + 0.05, y, y + 0.1, Z1, Z0, rope, { fix });
+   615	    }
+   616	    const m = new T.Mesh(b.geometry(), new T.MeshLambertMaterial({ vertexColors: true })); m.castShadow = true; world.add(m);
+   617	  }
+   618	  function mesas(rnd, Z0, Z1) {
+   619	    const { world } = C, b = new Batch(), fix = [0.5, 0.5];
+   620	    const bands = [0xc25a2c, 0xd9783c, 0xb04a26, 0xe08a48].map(lin);
+   621	    for (const s of [-1, 1]) for (let z = Z0 - 20 - rnd() * 30; z > Z1; z -= 70 + rnd() * 90) {
+   622	      const x = s * (62 + rnd() * 50), w = 16 + rnd() * 14, d = 14 + rnd() * 12, tiers = 3, h = 7 + rnd() * 8;
+   623	      for (let t = 0; t < tiers; t++) { const k = 1 - t * 0.16, th = h * (t === 0 ? 0.5 : 0.28); const y0 = t === 0 ? 0 : h * (0.5 + (t - 1) * 0.28);
+   624	        b.box(x - w * k / 2, x + w * k / 2, y0, y0 + th, z - d * k / 2, z + d * k / 2, bands[(t + (rnd() * 4 | 0)) % 4], { fix, bot: bands[2], top: lin(0xe7a060) }); }
+   625	    }
+   626	    const m = new T.Mesh(b.geometry(), new T.MeshLambertMaterial({ vertexColors: true })); world.add(m);
+   627	  }
+   628	  function arenaExtras(Z0, Z1) { /* stands come from buildRows; floodlight towers are props */ }
+   629	
+   630	  // ------------------------------------------------------------------ props (one instanced mesh per atlas)
+   631	  function buildProps(cfg, K, rnd, occ, Z0, Z1, waterY) {
+   632	    const { world } = C, items = K.items.filter(i => (i.weight ?? 1) > 0), aw = K.atlasImg.width, ah = K.atlasImg.height;
+   633	    const rr = (a, b) => a + rnd() * (b - a);
+   634	    const zoneOf = it => (it.zone === "lot" && cfg.remapLot ? "walk" : it.zone);
+   635	    const by = {}; for (const it of items) (by[zoneOf(it)] ||= []).push(it);
+   636	    const pick = list => { let t = 0; for (const i of list) t += i.weight ?? 1; let q = rnd() * t; for (const i of list) { q -= i.weight ?? 1; if (q <= 0) return i; } return list[0]; };
+   637	    const list = [], blobs = [];
+   638	    const blocked = (side, z, w) => occ.some(o => o.side === side && o.kind !== "lot" && o.kind !== "alley" && z < o.z0 + w / 2 && z > o.z1 - w / 2);
+   639	    const inGap = (side, z) => occ.some(o => o.side === side && (o.kind === "lot" || o.kind === "alley") && z <= o.z0 && z >= o.z1);
+   640	    const add = (it, x, y, z, ground = true, sink = 0, k = 1, fl = -1) => {
+   641	      const h = it.h * k * rr(0.92, 1.1), w = h * it.rect[2] / it.rect[3], flip = fl >= 0 ? fl : (it.flip !== false && rnd() < 0.5 ? 1 : 0);
+   642	      list.push({ it, x, y: y - sink * h, z, w, h, flip });
+   643	      if (ground) blobs.push({ x: x + h * 0.14 + w * 0.05, y: y + 0.03, z: z + h * 0.08, l: Math.max(w * 0.8, h * 0.5), wd: Math.max(w * 0.4, 0.5) });
+   644	    };
+   645	    const useBuildings = !!cfg.rows && cfg.rows !== "desert" && cfg.rows !== "pier";
+   646	    const tall = [];
+   647	    if (cfg.rhythm && by.curb) for (let z = Z0 - 4; z > Z1 + 10; z -= cfg.rhythm) { const it = pick(by.curb); for (const side of [-1, 1]) add(it, side * 7.6, 0.2, z, true, 0, 1, side < 0 ? 0 : 1); }
+   648	    for (const side of [-1, 1]) {
+   649	      if (by.curb && !cfg.rhythm) for (let z = Z0 - rr(0, 10); z > Z1 + 10; z -= rr(cfg.curb[0], cfg.curb[1])) {
+   650	        const it = pick(by.curb); if (blocked(side, z, 1.5)) continue;
+   651	        if (it.h >= 3) { if (tall.some(t => t.name === it.name && Math.abs(t.z - z) < 8)) continue; tall.push({ name: it.name, z }); }
+   652	        add(it, side * rr(7.15, 7.9), 0.2, z);
+   653	      }
+   654	      if (by.walk) for (let z = Z0 - rr(0, 4); z > Z1 + 10;) {
+   655	        const it = pick(by.walk), h = it.h * 1.25, w = h * it.rect[2] / it.rect[3]; let used = w;
+   656	        if (!blocked(side, z, w)) {
+   657	          const x = it.h > 3 ? rr(8.9, 9.6) : (rnd() < 0.4 ? rr(7.2, 8.0) : rr(8.25, 10.1));
+   658	          add(it, side * x, 0.2, z, true, 0, 1.25);
+   659	          if (it.h <= 2 && rnd() < 0.5) { const n = 1 + (rnd() < 0.5 ? 1 : 0); for (let k = 0; k < n; k++) { const i2 = pick(by.walk); if (i2.h > 2) continue; const x2 = Math.min(10.2, Math.max(7.2, x + rr(-1, 1))); add(i2, side * x2, 0.2, z + (k ? 1 : -1) * rr(0.5, 1.1), true, 0, 1.25); used += 0.9; } }
+   660	        }
+   661	        z -= used * 0.7 + rr(cfg.walk[0], cfg.walk[1]);
+   662	      }
+   663	      if (by.lot) {
+   664	        if (useBuildings) { for (const o of occ) if (o.side === side && (o.kind === "lot" || o.kind === "alley")) { const len = o.z0 - o.z1, n = Math.max(1, Math.round(len / 7)); for (let k = 0; k < n; k++) add(pick(by.lot), side * rr(12.5, 20), 0, o.z0 - (k + rnd() * 0.8) * len / n); } }
+   665	        else if (cfg.lotStep) for (let z = Z0 - rr(0, 8); z > Z1 + 10; z -= rr(cfg.lotStep[0], cfg.lotStep[1])) { const it = pick(by.lot); if (!blocked(side, z, 4)) add(it, side * rr(12.5, 40), 0, z); }
+   666	      }
+   667	      if (by.far && cfg.far) for (let z = Z0 - rr(0, 50); z > Z1 + 20; z -= rr(cfg.far[0], cfg.far[1])) add(pick(by.far), side * rr(cfg.far[2], cfg.far[3]), 0, z);
+   668	      if (by.water && cfg.water) for (let z = Z0 - rr(0, 30); z > Z1 + 20; z -= rr(16, 38)) add(pick(by.water), side * rr(15, 62), waterY, z, false, 0.12);
+   669	    }
+   670	    if (!list.length) return;
+   671	    // instanced billboards: bottom anchored, alpha tested, fogged, raw sRGB like the sprites
+   672	    const n = list.length, base = new T.PlaneBufferGeometry(1, 1); base.translate(0, 0.5, 0);
+   673	    const g = new T.InstancedBufferGeometry(); g.index = base.index; g.setAttribute("position", base.attributes.position); g.setAttribute("uv", base.attributes.uv);
+   674	    const off = new Float32Array(n * 3), size = new Float32Array(n * 2), rect = new Float32Array(n * 4), flip = new Float32Array(n);
+   675	    list.forEach((p, i) => {
+   676	      const [x, y, w, h] = p.it.rect; off.set([p.x, p.y, p.z], i * 3); size.set([p.w, p.h], i * 2); flip[i] = p.flip;
+   677	      rect.set([(x + 1) / aw, 1 - (y + h - 1) / ah, (w - 2) / aw, (h - 2) / ah], i * 4);
+   678	    });
+   679	    g.setAttribute("aOff", new T.InstancedBufferAttribute(off, 3)); g.setAttribute("aSize", new T.InstancedBufferAttribute(size, 2));
+   680	    g.setAttribute("aRect", new T.InstancedBufferAttribute(rect, 4)); g.setAttribute("aFlip", new T.InstancedBufferAttribute(flip, 1)); g.instanceCount = n;
+   681	    const mat = new T.ShaderMaterial({
+   682	      uniforms: T.UniformsUtils.merge([T.UniformsLib.fog, { tint: { value: new T.Color(1, 1, 1) } }]), fog: true,
+   683	      vertexShader: `attribute vec3 aOff; attribute vec2 aSize; attribute vec4 aRect; attribute float aFlip; varying vec2 vUv;
+   684	        #include <fog_pars_vertex>
+   685	        void main(){ vec4 mvPosition = modelViewMatrix * vec4(aOff, 1.0); float dd = length(mvPosition.xyz); mvPosition.xy += position.xy * aSize; gl_Position = projectionMatrix * mvPosition; if (dd < 6.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+   686	          float u = aFlip > 0.5 ? 1.0 - uv.x : uv.x; vUv = aRect.xy + vec2(u, uv.y) * aRect.zw;
+   687	          #include <fog_vertex>
+   688	        }`,
+   689	      fragmentShader: `uniform sampler2D map; uniform vec3 tint; varying vec2 vUv;
+   690	        #include <fog_pars_fragment>
+   691	        void main(){ vec4 t = texture2D(map, vUv); if (t.a < 0.5) discard; gl_FragColor = vec4(t.rgb * tint, 1.0);
+   692	          #include <fog_fragment>
+   693	        }` });
+   694	    mat.uniforms.map = { value: K.atlasTex }; mat.uniforms.tint.value.set(cfg.tint === 0xffffff ? 0xffffff : cfg.tint);
+   695	    mat.uniforms.tint.value.multiplyScalar(0.97);
+   696	    const mesh = new T.Mesh(g, mat); mesh.frustumCulled = false; mesh.renderOrder = 1; world.add(mesh);
+   697	    // soft blob shadows on the ground
+   698	    const bs = new T.InstancedMesh(new T.PlaneBufferGeometry(1, 1).rotateX(-Math.PI / 2), new T.MeshBasicMaterial({ map: cache.common.blob, transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), blobs.length);
+   699	    const m4 = new T.Matrix4(); blobs.forEach((b, i) => { m4.makeScale(b.l, 1, b.wd); m4.setPosition(b.x, b.y, b.z); bs.setMatrixAt(i, m4); });
+   700	    bs.instanceMatrix.needsUpdate = true; bs.frustumCulled = false; bs.renderOrder = 0; world.add(bs);
+   701	  }
+   702	
+   703	  // ------------------------------------------------------------------ per frame
+   704	  function updateSun() {
+   705	    const L = C.L, cfg = S.cfg; if (!cfg || !S.sun) return;
+   706	    const sx = L ? L.sx : 0, sz = L ? L.sz : 0, tx = sx * 0.4, tz = sz - 14;
+   707	    S.sun.target.position.set(tx, 0, tz);
+   708	    S.sun.position.set(tx + cfg.sunPos[0] * 4.2, cfg.sunPos[1] * 4.2, tz + cfg.sunPos[2] * 4.2);
+   709	    S.sun.target.updateMatrixWorld();
+   710	  }
+   711	  function update(dt) {
+   712	    if (!S.cfg) return;
+   713	    S.time += dt; if (S.water) S.water.uniforms.time.value = S.time;
+   714	    updateSun();
+   715	    if (S.pools && S.pools.length && C.L) for (const m of S.pools) m.position.set(m.userData.dx + C.L.sx * 0.3, 0.04, C.L.sz + m.userData.off);
+   716	    const cam = C.camera;
+   717	    S.sky.position.copy(cam.position);
+   718	    if (S.back.visible) {
+   719	      const th = Math.tan(cam.fov * Math.PI / 360), visH = 2 * D_BACK * th, visW = visH * cam.aspect;
+   720	      const Wi = Math.max(visW * 1.15, visH * 0.9), Hi = Wi / S.backAspect, yh = cam.position.y - D_BACK * 0.02;
+   721	      const u = S.backMat.uniforms; u.planeSize.value.set(Math.max(visW, visH) * 1.9, visH * 2.4); u.imgSize.value.set(Wi, Hi); u.uOff.value = cam.position.x * 0.0015;
+   722	      S.back.scale.set(u.planeSize.value.x, u.planeSize.value.y, 1); S.back.position.set(cam.position.x, yh, cam.position.z - D_BACK);
+   723	    }
+   724	  }
+   725	
+   726	  return { setup, preload, build, update };
+   727	})();
+
+codex
+The game already has mortar attacks and swarm/barricade encounters, but ordinary enemies all use the same approach-and-contact behavior. Guaranteed counter supplies and capped encounter losses help explain the low pressure. I’ll make the plan build on those systems and distinguish likely phone bottlenecks from measured results.
+apply patch
+patch: completed
+/home/user/my-first-repo/squad-surge/design/engine-audit.md
+diff --git a/squad-surge/design/engine-audit.md b/squad-surge/design/engine-audit.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..bb02d547f4b645a44fe2339b83856d14c3499375
+--- /dev/null
++++ b/squad-surge/design/engine-audit.md
+@@ -0,0 +1,44 @@
++**Squad Surge engine audit — 7 November 2026**
++
++Static review of the five requested files; phone performance estimates below are hypotheses, not benchmarks. Citations use repository paths and source line numbers.
++
++**Architecture today.** `index.html` owns mutable level state, input, simulation, rendering and HUD; modules share `ctx` and synchronous bus events (`index.html:400–425`). Each animation frame runs at most one variable simulation step, clamps elapsed time to 50 ms, applies hit-stop/slow-motion, then renders. There is no accumulator or interpolation; long stalls discard elapsed time (`index.html:877–893,1349–1360`). Powerups simulate on `tick`; Juice changes camera and presentation on `frame` (`js/powerups.js:299–326`; `js/juice.js:468–509`).
++
++Soldiers, enemies and boss are atlas-animated, camera-facing quads using custom `InstancedBufferGeometry`, not individual THREE.Sprites or volumetric characters. Bullets/effects share an additive instanced layer; ground shadows use `InstancedMesh`. Thus the core has up to six nonempty batch draws: soldiers, ordinary enemies, brutes, boss, effects and shadows (`index.html:278–364,1280–1318`). Scenery merges buildings into 90-unit chunks with up to three material meshes, and instances prop billboards/shadows (`js/scenery.js:486–489,561–568,671–700`). Gates/solids are separate mesh assemblies sharing resources: an ordinary gate has eleven component meshes before optional decorations; labels have individual canvas textures. Distance culling limits visible objects, but does not batch them (`js/objects3d.js:299–325,391–452,545–558`). Total draws depend on visible scenery, objects, effects and shadow passes.
++
++Formation uses golden-angle spiral slots, smoothed toward a moving center, with individual X positions clamped to road edges. There is no soldier separation or obstacle avoidance (`index.html:728–734,965–1002`). Gates select one half using the center; solids trigger when the center crosses their Z, count soldiers in an X column, remove casualties and break. Enemies collide with an approximate squad ellipse, not individuals (`index.html:1004–1031,1083–1104`).
++
++Autofire samples random soldiers; at most 48 effective shooters emit projectiles, with damage multiplied by squad/shooter count. Weapons vary rate, spread and splash; SURGE adds piercing. Bullets move at 72 units/s with 46-unit lifetime range. Collision uses swept Z crossings plus X bounds, testing solids, gates, enemies, then boss; array order/category priority can override the nearest physical hit (`index.html:209–239,1033–1079`).
++
++Levels are generated upfront: a hardcoded tutorial, then seeded selections from repeated segment templates, reserved threat corridors and supplies; length caps at 520. This is procedural composition, not streamed segments or a story-level script (`index.html:632–724`; `js/powerups.js:149–159`). The boss approaches, tracks X until its warning, repeatedly slams a radius-three area, accelerates attacks below half HP, and wipes the squad on contact; death hands off to the finale (`index.html:426–431,942–944,1106–1129,1172–1186`).
++
++**Hot spots and limits.** With B bullets and nearby E enemies, O solids and G gates, collision costs O(B(E+O+G)), after full-array filters. This is potentially quadratic as populations grow, not an all-pairs crowd solver. Explosions scan whole populations; removing K nearby soldiers repeatedly searches and splices N soldiers, O(KN), worst-case O(N²) (`index.html:739–746,935–938,1051–1079,1223–1229`). Dead enemies remain in arrays and are revisited (`index.html:1084–1104,1290–1297`).
++
++Allocation pressure includes one slot array per soldier per step, candidate filters, projectile/FX objects and splice results. Instance buffers are marked dirty every render. HUD text, attributes, classes, widths and positions are repeatedly written; Juice's subtree `hidden` observer can amplify these into modal queries (`index.html:350–364,444–459,998–1001,1039–1053,1133–1139,1329–1345`; `js/juice.js:322–340`). Hit labels redraw/upload textures when numbers change (`js/objects3d.js:285–291,454–457`). Existing pooling helps: 56 debris meshes, ten rings and eight bombs; these still draw separately (`js/objects3d.js:470–475`; `js/powerups.js:55–63`).
++
++The 600-soldier cap is explicit, but its rationale is undocumented. It plausibly bounds CPU work, visual density and gameplay growth; it is not a renderer limit—the soldier buffer holds 700. Damage still scales past 48 shooters (`index.html:732,1037–1044,1374–1381`). At 600, formation radius is approximately 12.6 on a road only 12 wide, collapsing many slots against boundaries and restricting center steering to ±0.6. Formation readability/control breaks before another hundred instances would necessarily exhaust graphics (`index.html:209,728–729,971–1001`). Buffer overflow silently drops visuals, including effects beyond 1,400 (`index.html:343–344,1379`).
++
++On a mid-range phone, likely first pressures are GPU fill/shadows and unbatched objects in decorated scenes, then collision/GC spikes during dense volleys and explosions. High quality uses up to 2× pixel ratio and a moving 1024² shadow map; adaptive quality disables shadows and lowers resolution, but cannot fix simulation complexity (`index.html:1244–1266`; `js/scenery.js:239–243,704–714`). Measure frame-time percentiles, allocation rate and renderer draw counts before claiming a specific FPS limit.
++
++**Why play repeats.** Zombies/grunts differ mainly in speed; brutes add HP, size and contact damage. All walk forward and drift toward squad X: no ordinary enemy shooting, flanking, directional shielding or telegraphed charge. Mortar towers do fire targeted shells; swarms run faster and resist bullets (`index.html:538–550,579–605,627–630,1081–1104,1158–1160`). Gaps do not reshape the crowd. Difficulty mostly increases HP/counts/rewards and boss HP, rather than tactical combinations. Guaranteed opening boosts, supplied counters, recovery corridors and threat loss caps protect snowballing squads; ordinary threat damage preserves at least 60% of starting strength or three soldiers (`index.html:529–550,628,639–647,668–713,722`; `js/powerups.js:149–157,308–312`).
++
++**Prioritised implementation plan.** Effort estimates are engineering days for one developer, excluding art and campaign production.
++
++1. **Fixed timestep and baseline profiling — 3–5 days; high reliability impact.** Add a 60 Hz accumulator, bounded catch-up, render interpolation and explicit pause/slow-motion clocks. Move authoritative changes out of presentation callbacks. Record representative phone traces before/after.
++2. **Deterministic replay/test mode — 4–6 days; high regression impact.** Extend `__game` (`index.html:1395–1396`): record tick-indexed inputs, level/version, seed and initial save-dependent settings; hash authoritative state. Replace gameplay `Math.random` and wall-clock dependencies with separate seeded streams/tick clocks (`index.html:630,638,880–886,1041`; `js/powerups.js:212`). Test identical results across render rates, gate crossings, splash chains and boss transitions.
++3. **Authored campaign interpreter — 5–8 days; highest variety impact.** Add validated JSON with stable event IDs, distance/time/condition triggers, ordered execution, objectives and checkpoints. Example record shapes:
++
++   ```json
++   {"version":1,"id":"bridge-02","theme":"bridge","length":320,
++    "events":[
++      {"id":"intro","atDistance":0,"event":"dialogue","text":"Hold the bridge"},
++      {"id":"wave1","atDistance":40,"wave":{"type":"rifleman","count":8,"lane":-1}},
++      {"id":"haz1","atDistance":90,"hazard":{"type":"crusher","period":3}},
++      {"id":"gate1","atDistance":120,"gate":{"left":["+",20],"right":["x",2]}},
++      {"id":"boss1","atDistance":300,"boss":{"type":"ogre","script":"bridge-ogre"}}]}
++   ```
++
++4. **Enemy/boss behavior scripts — 8–12 days; high tactical impact.** Implement telegraphed rifle bursts, flank waypoints, frontal shields and wind-up charges. Boss phase data specifies HP thresholds, attack sequences, summons and recovery windows; validate reachable dodges. Extend the existing factories and boss loop cited above.
++5. **Crowd/collision upgrade — 10–15 days; high fairness/scaling impact.** Introduce spatial hashing for swept bullet queries and bounded local neighbors; resolve nearest hits. Add velocity-based cohesion/separation, obstacle look-ahead, gap-dependent formation width/depth and per-unit contacts. Give deaths pooled knockback visuals. Stress-test 600 units at chokepoints; dense hash cells still need work limits.
++6. **Rendering/allocation pass — 5–8 days; high phone impact.** Preserve existing unit instancing; use `InstancedMesh` for units only if adopting actual 3D models. Batch repeated solid parts/debris, atlas labels, chunk/cull props, add distance LOD/shadow budgets, pool bullets/FX, cache slots and update HUD only on changes.
++7. **Dynamic difficulty hooks — 3–5 days; medium pacing impact.** Feed retention, damage, clear time and counter usage into bounded adjustments between encounters: wave budget, recovery spacing and supplies. Preserve telegraphs; record decisions in replays and disable adaptation for competitive seeds. Existing tactics/outcome events provide inputs (`index.html:770,1220,1241`).
+
+exec
+/bin/bash -lc "wc -w design/engine-audit.md; git status --short; git diff --stat; python3 - <<'PY'
+from pathlib import Path
+import re
+p=Path('design/engine-audit.md')
+s=p.read_text()
+for name,nums in re.findall(r'((?:index\\.html|js/(?:objects3d|scenery|powerups|juice)\\.js)):([\\d,–\\-]+)',s):
+    n=len(Path(name).read_text().splitlines())
+    assert all(1<=int(x)<=n for x in re.findall(r'\\d+',nums)), (name,nums)
+print('Citation line bounds checked.')
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+1095 design/engine-audit.md
+ M design/briefs/engine-audit.log
+?? design/engine-audit.md
+ squad-surge/design/briefs/engine-audit.log | 595 +++++++++++++++++++++++++++++
+ 1 file changed, 595 insertions(+)
+Citation line bounds checked.
+
+codex
+Created [design/engine-audit.md](/home/user/my-first-repo/squad-surge/design/engine-audit.md): 1,095 words covering architecture, bottlenecks, gameplay limits, and prioritized improvements with effort estimates and line citations. I edited no other files.
+tokens used
+137,388
+Created [design/engine-audit.md](/home/user/my-first-repo/squad-surge/design/engine-audit.md): 1,095 words covering architecture, bottlenecks, gameplay limits, and prioritized improvements with effort estimates and line citations. I edited no other files.
+codex exit 0

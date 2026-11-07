@@ -1,0 +1,1033 @@
+OpenAI Codex v0.167.0
+--------
+workdir: /home/user/my-first-repo/squad-surge
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a1b7a7-66ae-7c21-bd8a-5a4c10de5bc1
+--------
+user
+# Codex run E2: enemies and bosses for the Squad Surge "Campaign Update"
+
+Repo: /home/user/my-first-repo/squad-surge. Read first: `design/campaign.md` (sections 5 and 9 are your spec),
+`design/engine-audit.md`, and `index.html`, enough to understand enemies, the boss, sprite layers, the bus and ctx.
+
+Another run (E1) is implementing the ctx registry API in index.html RIGHT NOW. Code against the section 9 contract,
+defensively: check every function exists, and never throw.
+
+EDIT ONLY the new file `js/enemies.js`. Do not run git.
+
+Implement:
+- the six archetypes in section 5: shieldbearer, charger, bomber, rifleman, medic and splitter (with its mini)
+- every telegraph and readable visual, drawn with your own meshes in `ctx.telegraphGroup`:
+  - rifleman: a lane laser
+  - charger: a crouch plus a red lane arrow
+  - bomber: a fuse ring
+  - medic: a tether beam
+  - shieldbearer: a shield quad facing the squad
+  - boss weak point: a glowing marker
+- the six bosses from section 3, with the data-driven phases and the attacks named in section 5:
+  - Ogre Warlord (ogre)
+  - Iron Bulwark (bulwark)
+  - Dune Ravager (ravager)
+  - Harbor Gunner (gunner)
+  - Scrap Colossus (colossus): splits into two halves at 50%
+  - The Warlord, Reborn (warlord): 3 phases
+  Telegraph every attack for ≥ 0.9 s. Every boss must always leave a dodge lane.
+- Sprite sheets come from `assets/units2/<type>.webp`:
+  - 4×2 frames for enemies (same layout as assets/grunt.webp: look at how index.html picks frames)
+  - 3×2 for bosses (like assets/boss.webp)
+  An art run is generating them now. If one is missing, register the type with the fallback sheet (grunt or brute,
+  tinted) so it still renders.
+- Tuning constants at the top of the file, commented.
+- No per-frame allocation. Pool the telegraph meshes.
+- `node --check js/enemies.js`.
+
+Finish with a short summary.
+
+warning: Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.
+codex
+I’ll read the campaign spec and engine code, then implement `js/enemies.js` against the section 9 contract and run the syntax check.
+
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'campaign.md' -g 'engine-audit.md' -g 'index.html' -g 'enemies.js' -g 'package.json'" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+/home/user/my-first-repo/squad-surge
+index.html
+design/briefs/engine-audit.md
+design/campaign.md
+design/engine-audit.md
+
+exec
+/bin/bash -lc 'cat design/campaign.md' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+# Squad Surge "Campaign Update": story mode, real difficulty, engine upgrade
+
+Inputs: `design/engine-audit.md` (the code audit) and the genre research summarised below.
+
+**Owner's request:** "This game is super easy right now. Check the similar games and story mode, copy their best
+features, and improve our gaming engine as well."
+
+**Standing constraints:**
+- No shop, no currency and no purchasable upgrades. Stars, medals and cosmetics are progress records only.
+- Original work only: borrow genre mechanics, never another game's names, art, characters or levels.
+
+## 1. Why it is easy today (from the audit)
+
+- Enemies only walk forward. None shoot, shield, charge or split.
+- Difficulty is mostly HP and count scaling.
+- The squad snowballs to 500+.
+- Several safety nets protect the squad:
+  - the guaranteed opening boost
+  - supplied counters
+  - the threat loss cap (never below 60% of the squad)
+  - no real attrition
+
+## 2. Targets (first-attempt win rates, measured by bot)
+
+| Mission tag | "smart" bot (uses counters, dodges) | "never" bot (steers to gates only) |
+|---|---|---|
+| normal | 80–90% | 45–65% |
+| hard | 55–70% | 15–35% |
+| boss | 45–60% | 5–25% |
+
+- Chapter 1, missions 1–3 are onboarding: everyone wins.
+- Losing must feel fair:
+  - every threat is telegraphed for ≥ 0.8 s
+  - there is always a reachable safe lane
+  - no mandatory barricade under unavoidable mortars
+- After a loss: instant restart on the same seed, plus a specific hint about the decisive mistake.
+- After 2 consecutive fails, offer **Assist**: 20% fewer and weaker enemies plus one extra drop. After 4 fails, offer
+  Assist+ (−35%).
+- Assist is offered between attempts, never applied mid-run. An assisted win is marked and cannot earn the third star.
+
+## 3. Story: "Operation Homeward" (original)
+
+The Warlord's horde has cut the valley into six isolated districts. Captain **Rook** leads the Surge squad home
+district by district, rescuing settlers and relighting each district's signal tower. **Mira**, the radio scout,
+calls out what's ahead. Each chapter ends with a boss guarding the tower. Cleared districts visibly recover on the
+map.
+
+| Chapter | District (theme) | New enemy | New mechanic | Boss |
+|---|---|---|---|---|
+| 1 | Old Town (town) | the brute | trade-off gates and weapon cases | **Ogre Warlord**: slam, then summons when enraged |
+| 2 | Red Bridge (bridge) | **shieldbearer** | mortars; collapsing bridge lanes | **Iron Bulwark**: a shield wall that exposes a weak core after each slam |
+| 3 | Dust Road (desert) | **charger** and **bomber** | lane rushes; fuse explosions | **Dune Ravager**: telegraphed lane charges, then double charges |
+| 4 | The Pier (pier) | **rifleman** and **medic** | crossfire gates; healer tethers | **Harbor Gunner**: lane barrages plus rifleman summons |
+| 5 | Broken Blocks (ruins) | **splitter** | barricades; interactive collapses (shoot to open a shortcut) | **Scrap Colossus**: splits into two halves at 50% |
+| 6 | The Arena (arena) | everything combined | everything | **The Warlord, Reborn**: 3 phases combining all patterns |
+
+Each chapter has 6 missions:
+1. teach
+2. practice
+3. twist
+4. recovery or rescue
+5. **HARD** combination
+6. **BOSS**
+
+That is 36 missions in total. Every mission has two radio lines before it starts, optional in-run radio lines, and
+one line after a win.
+
+## 4. Mission data format (`js/campaign.js` exports `window.Campaign`)
+
+```js
+Campaign = {
+  version: 1,
+  chapters: [{ id: 1, name: "Old Town", theme: "town", blurb: "...", boss: "ogre", missions: ["c1m1", ...] }],
+  missions: { "c1m1": {
+    id: "c1m1", chapter: 1, n: 1, tag: "normal" | "hard" | "boss", theme: "town", title: "Out of the Barracks",
+    seed: 101, length: 260, start: 5,                     // start = initial squad; length in metres
+    brief: [["rook", "..."], ["mira", "..."]], win: ["rook", "..."],
+    skill: { id: "noWaste", text: "Win without wasting a power-up" },  // the third-star objective (see 7)
+    events: [ /* sorted by `at` (metres from the start); see below */ ],
+    boss: { type: "ogre", hp: 900 }                       // omitted means no boss: the mission ends at the finish arch
+  } } }
+```
+
+Event types (`at` is in metres; lanes are −1, 0, +1, which map to x = −3.4, 0, +3.4):
+
+| Event | Shape | Notes |
+|---|---|---|
+| `gate` | `{left: Half, right: Half, moving?: true}` | `Half` is one of: `["+", n]`, `["x", n]`, `["-", n]`, `{powerup: "shield"\|"airstrike"\|"giant"}`, `{recruit: "piercer"\|"grenadier"\|"defender", n}`, `{rescue: n, cost: m}` (lose m soldiers now, rescue n settlers for the story tally and score). Add `jackpot: true` for a golden half. |
+| `wave` | `{type, count, lane?: -1\|0\|1, spread?: 3, depth?: 6, formation?: "block"\|"line"\|"wedge"}` | `type` is any enemy type, including the new ones in 5 |
+| `solid` | `{kind, x?, n?, hp, reward?, weapon?}` | `kind` is blockBlue, blockYellow, crate, tyres, weaponCase, ammo or barrel |
+| `threat` | `{kind: "swarm"\|"barricade"\|"mortars"}` | The existing Tactics threats |
+| `drop` | `{powerup}` or `{pair: [a, b]}` | Airdrops |
+| `hazard` | `{kind: "crusher"\|"saw"\|"collapse", lane, period?}` | `collapse`: a bridge lane falls away and is telegraphed |
+| `scenery` | `{kind: "fuelTruck"\|"shortcut", lane}` | Shoot a fuel truck to explode nearby enemies. Shoot a shortcut wall to skip the next hazard. |
+| `radio` | `{who: "rook"\|"mira"\|"warlord", text}` | |
+
+## 5. Enemy archetypes and bosses (`js/enemies.js`)
+
+Each archetype is readable, telegraphed and has a counter.
+
+| Type | Behaviour | Counter |
+|---|---|---|
+| shieldbearer | A frontal shield blocks bullets from within ±25° in front, so it takes damage only when the squad centre is more than 2.2 to its side. | splash (grenadier), AIRSTRIKE, GIANT, piercer |
+| charger | Stops, crouches for 0.9 s with a red lane arrow, then rushes down its lane at 3× speed, killing the soldiers it touches (cap 8 per charge). | sidestep |
+| bomber | Within 9 m it lights a 2.2 s fuse with a visible ring; the blast (radius 2.4) kills soldiers. Killed early, it explodes where it stands and damages enemies. | kill it early, or step out |
+| rifleman | Stops about 20 m ahead and paints a lane laser for 1.0 s, then fires a burst that kills up to max(2, 3%) soldiers in that lane. Killing it during the lock cancels the shot. | change lane, or kill it fast |
+| medic | Tethers to the nearest brute or boss (a visible beam) and heals it 6% of max HP per second. | kill the medic first |
+| splitter | On death, splits into 3 small fast minis. | space, splash, AIRSTRIKE |
+
+**Bosses** (data-driven phases):
+
+```js
+{ hp, phases: [{ at: 1.0, attacks: ["slam"], cadence: 2.6 }, { at: 0.5, attacks: ["slam", "summon"], cadence: 1.9 }],
+  weak: { after: "slam", dur: 1.4, mult: 2.5 } }
+```
+
+- Attacks: slam, summon(type, n), charge(lanes), barrage(lanes), shieldWall, split.
+- Every attack is telegraphed for ≥ 0.9 s.
+- The weak window is shown with a glowing marker and takes multiplied damage.
+
+## 6. Squad depth without upgrades (run-only)
+
+- **Specialists**, recruited at gates for the current run only, each with fixed stats and a tinted sprite plus a small
+  icon:
+  - **piercer**: bullets pass through shields
+  - **grenadier**: splash
+  - **defender**: soaks one ranged hit per defender, protecting the lane-side soldiers
+- **Trade-off gates:**
+  - a rescue costs soldiers now
+  - x2 through a rifleman crossfire versus +20 in a safe lane
+  - a power-up versus soldiers (already in place)
+- **Anti-snowball:**
+  - campaign squad cap 300
+  - waves are authored for the squad sizes expected at that point
+  - no automatic opening boost in campaign missions
+
+## 7. Stars and meta (no currency)
+
+- ★1 for the win.
+- ★2 for keeping ≥ 65% of the peak squad (this already exists).
+- ★3 for the mission's skill objective. The ids are:
+  - `noWaste`: no wasted power-up
+  - `rescueAll`: take every rescue gate
+  - `perfect2`: 2 PERFECT counters
+  - `medicsFirst`: every medic dies before its patient
+  - `noCharge`: no soldiers lost to chargers
+  - `bossClean`: lose < 20 soldiers during the boss
+  - `fast`: finish without a slowdown from a rescue
+  - `noAssist`: an assisted win never earns ★3
+- **Elite** versions of a chapter's missions unlock at 15/18 stars in that chapter. They use the same layouts with:
+  - enemies ×1.3
+  - no drops
+  - one extra threat
+- Chapter completion awards an armory cosmetic (existing) and shows a vignette.
+- The existing daily challenge stays.
+- The old procedural levels remain as **ARCADE** mode.
+
+## 8. Engine upgrade (from the audit, prioritised)
+
+1. **Fixed 60 Hz timestep:**
+   - an accumulator, with at most 5 catch-up steps
+   - separate clocks for sim time, real time and slow-mo
+   - nothing authoritative inside presentation callbacks
+2. **Determinism:**
+   - every gameplay random number comes from seeded streams (no Math.random in the simulation)
+   - a replay/test mode that records tick-indexed inputs
+   - state hashing for bot regression tests
+3. **Spatial hash** (cell 2 m) for bullets against enemies, solids and gates:
+   - nearest-hit resolution
+   - compact dead enemies each step
+   - O(K) soldier removal (swap-pop, no splice)
+4. **Crowd:**
+   - soldiers get velocity-based cohesion toward their slot plus local separation (spatial grid)
+   - the formation compresses through gaps (walls, barricade gaps, hazard lanes) and springs back out afterwards
+   - per-soldier contacts for hazards, chargers and blasts
+   - pooled death knockback visuals
+5. **Allocation and rendering:**
+   - pool bullets and FX
+   - cache formation slots
+   - update the HUD only when values change
+   - batch repeated gate and solid parts where cheap
+   - keep the instanced sprite layers
+6. **Campaign interpreter** for the format in 4. The procedural generator stays for ARCADE and daily.
+7. **Difficulty systems:**
+   - Assist offers
+   - failure-cause tracking (`cause`: `threat:<kind>`, `rifleman`, `charger`, `bomber`, `boss:<attack>`, `gate`,
+     `swarm`, `attrition`)
+   - same-seed instant restart
+
+## 9. Contracts
+
+### ctx additions, provided by index.html
+
+| Function | Purpose |
+|---|---|
+| `ctx.registerEnemy(type, def)` | `def = {sheet: url, cols: 4, rows: 2, hp, r, h, sp, dmg, scale, init(e), update(e, dt), onBullet(e, b) → false to block, onDeath(e)}`. Sheets load into new SpriteLayers. |
+| `ctx.registerBoss(type, def)` | Same idea, plus `phases`, `weak`, `attacks: {name: fn}` |
+| `ctx.spawnEnemy(type, x, z, opts)` | |
+| `ctx.squad` | `{x, z, count, radius, soldiers}` (read-only use) |
+| `ctx.killSoldiersInRect(x0, x1, z0, z1, max, cause)` | Returns the number killed |
+| `ctx.killSoldiersInCircle(x, z, r, max, cause)` | |
+| `ctx.damageEnemiesInCircle(x, z, r, dmg)` | |
+| `ctx.rng(stream)` | A seeded gameplay random number |
+| `ctx.telegraphGroup` | A THREE.Group for telegraph meshes. Modules own their own meshes. |
+| `ctx.goMission(id, {assist})` | |
+| `ctx.goArcade(level)` | |
+| `ctx.restartSame()` | Restart on the same seed |
+| `ctx.mission` | The current mission def |
+| `ctx.missionState` | `{rescued, recruits, causes, assisted}` |
+
+### Events
+
+| Event | Payload |
+|---|---|
+| `missionStart` | `{id, assist}` |
+| `missionEnd` | `{id, result, stars: [b1, b2, b3], keptPct, skillOk, cause, rescued, assisted}` |
+| `radio` | `{who, text}` |
+| `recruit` | `{kind, n}` |
+| `rescue` | `{n, cost}` |
+| `bossPhase` | `{type, phase}` |
+| `bossWeak` | `{on}` |
+| `enemyTelegraph` | `{type, kind, x, z}` |
+| `hazard` | `{kind, lane}` |
+| `assistOffer` | `{id, level: 1\|2}` |
+
+## 10. Ownership (parallel Codex runs; never edit outside your column; never run git)
+
+| Run | Files |
+|---|---|
+| E1 engine and systems | index.html, js/objects3d.js, js/powerups.js, tools/bot-*.js |
+| E2 enemies and bosses | js/enemies.js (new) |
+| C campaign content | js/campaign.js (new), design/campaign-script.md |
+| U story UI | js/story.js (new), js/meta.js, js/juice.js |
+| A art | assets/units2/*, assets/story/*, art-src/units2/*, art-src/story/* |
+
+- index.html (E1) loads js/enemies.js, js/campaign.js and js/story.js after the existing modules.
+- Every module must work when another is missing:
+  - campaign absent: no Story button
+  - an enemies sheet absent: fall back to a tinted grunt sheet
+
+exec
+/bin/bash -lc 'cat design/engine-audit.md' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+**Squad Surge engine audit — 7 November 2026**
+
+Static review of the five requested files; phone performance estimates below are hypotheses, not benchmarks. Citations use repository paths and source line numbers.
+
+**Architecture today.** `index.html` owns mutable level state, input, simulation, rendering and HUD; modules share `ctx` and synchronous bus events (`index.html:400–425`). Each animation frame runs at most one variable simulation step, clamps elapsed time to 50 ms, applies hit-stop/slow-motion, then renders. There is no accumulator or interpolation; long stalls discard elapsed time (`index.html:877–893,1349–1360`). Powerups simulate on `tick`; Juice changes camera and presentation on `frame` (`js/powerups.js:299–326`; `js/juice.js:468–509`).
+
+Soldiers, enemies and boss are atlas-animated, camera-facing quads using custom `InstancedBufferGeometry`, not individual THREE.Sprites or volumetric characters. Bullets/effects share an additive instanced layer; ground shadows use `InstancedMesh`. Thus the core has up to six nonempty batch draws: soldiers, ordinary enemies, brutes, boss, effects and shadows (`index.html:278–364,1280–1318`). Scenery merges buildings into 90-unit chunks with up to three material meshes, and instances prop billboards/shadows (`js/scenery.js:486–489,561–568,671–700`). Gates/solids are separate mesh assemblies sharing resources: an ordinary gate has eleven component meshes before optional decorations; labels have individual canvas textures. Distance culling limits visible objects, but does not batch them (`js/objects3d.js:299–325,391–452,545–558`). Total draws depend on visible scenery, objects, effects and shadow passes.
+
+Formation uses golden-angle spiral slots, smoothed toward a moving center, with individual X positions clamped to road edges. There is no soldier separation or obstacle avoidance (`index.html:728–734,965–1002`). Gates select one half using the center; solids trigger when the center crosses their Z, count soldiers in an X column, remove casualties and break. Enemies collide with an approximate squad ellipse, not individuals (`index.html:1004–1031,1083–1104`).
+
+Autofire samples random soldiers; at most 48 effective shooters emit projectiles, with damage multiplied by squad/shooter count. Weapons vary rate, spread and splash; SURGE adds piercing. Bullets move at 72 units/s with 46-unit lifetime range. Collision uses swept Z crossings plus X bounds, testing solids, gates, enemies, then boss; array order/category priority can override the nearest physical hit (`index.html:209–239,1033–1079`).
+
+Levels are generated upfront: a hardcoded tutorial, then seeded selections from repeated segment templates, reserved threat corridors and supplies; length caps at 520. This is procedural composition, not streamed segments or a story-level script (`index.html:632–724`; `js/powerups.js:149–159`). The boss approaches, tracks X until its warning, repeatedly slams a radius-three area, accelerates attacks below half HP, and wipes the squad on contact; death hands off to the finale (`index.html:426–431,942–944,1106–1129,1172–1186`).
+
+**Hot spots and limits.** With B bullets and nearby E enemies, O solids and G gates, collision costs O(B(E+O+G)), after full-array filters. This is potentially quadratic as populations grow, not an all-pairs crowd solver. Explosions scan whole populations; removing K nearby soldiers repeatedly searches and splices N soldiers, O(KN), worst-case O(N²) (`index.html:739–746,935–938,1051–1079,1223–1229`). Dead enemies remain in arrays and are revisited (`index.html:1084–1104,1290–1297`).
+
+Allocation pressure includes one slot array per soldier per step, candidate filters, projectile/FX objects and splice results. Instance buffers are marked dirty every render. HUD text, attributes, classes, widths and positions are repeatedly written; Juice's subtree `hidden` observer can amplify these into modal queries (`index.html:350–364,444–459,998–1001,1039–1053,1133–1139,1329–1345`; `js/juice.js:322–340`). Hit labels redraw/upload textures when numbers change (`js/objects3d.js:285–291,454–457`). Existing pooling helps: 56 debris meshes, ten rings and eight bombs; these still draw separately (`js/objects3d.js:470–475`; `js/powerups.js:55–63`).
+
+The 600-soldier cap is explicit, but its rationale is undocumented. It plausibly bounds CPU work, visual density and gameplay growth; it is not a renderer limit—the soldier buffer holds 700. Damage still scales past 48 shooters (`index.html:732,1037–1044,1374–1381`). At 600, formation radius is approximately 12.6 on a road only 12 wide, collapsing many slots against boundaries and restricting center steering to ±0.6. Formation readability/control breaks before another hundred instances would necessarily exhaust graphics (`index.html:209,728–729,971–1001`). Buffer overflow silently drops visuals, including effects beyond 1,400 (`index.html:343–344,1379`).
+
+On a mid-range phone, likely first pressures are GPU fill/shadows and unbatched objects in decorated scenes, then collision/GC spikes during dense volleys and explosions. High quality uses up to 2× pixel ratio and a moving 1024² shadow map; adaptive quality disables shadows and lowers resolution, but cannot fix simulation complexity (`index.html:1244–1266`; `js/scenery.js:239–243,704–714`). Measure frame-time percentiles, allocation rate and renderer draw counts before claiming a specific FPS limit.
+
+**Why play repeats.** Zombies/grunts differ mainly in speed; brutes add HP, size and contact damage. All walk forward and drift toward squad X: no ordinary enemy shooting, flanking, directional shielding or telegraphed charge. Mortar towers do fire targeted shells; swarms run faster and resist bullets (`index.html:538–550,579–605,627–630,1081–1104,1158–1160`). Gaps do not reshape the crowd. Difficulty mostly increases HP/counts/rewards and boss HP, rather than tactical combinations. Guaranteed opening boosts, supplied counters, recovery corridors and threat loss caps protect snowballing squads; ordinary threat damage preserves at least 60% of starting strength or three soldiers (`index.html:529–550,628,639–647,668–713,722`; `js/powerups.js:149–157,308–312`).
+
+**Prioritised implementation plan.** Effort estimates are engineering days for one developer, excluding art and campaign production.
+
+1. **Fixed timestep and baseline profiling — 3–5 days; high reliability impact.** Add a 60 Hz accumulator, bounded catch-up, render interpolation and explicit pause/slow-motion clocks. Move authoritative changes out of presentation callbacks. Record representative phone traces before/after.
+2. **Deterministic replay/test mode — 4–6 days; high regression impact.** Extend `__game` (`index.html:1395–1396`): record tick-indexed inputs, level/version, seed and initial save-dependent settings; hash authoritative state. Replace gameplay `Math.random` and wall-clock dependencies with separate seeded streams/tick clocks (`index.html:630,638,880–886,1041`; `js/powerups.js:212`). Test identical results across render rates, gate crossings, splash chains and boss transitions.
+3. **Authored campaign interpreter — 5–8 days; highest variety impact.** Add validated JSON with stable event IDs, distance/time/condition triggers, ordered execution, objectives and checkpoints. Example record shapes:
+
+   ```json
+   {"version":1,"id":"bridge-02","theme":"bridge","length":320,
+    "events":[
+      {"id":"intro","atDistance":0,"event":"dialogue","text":"Hold the bridge"},
+      {"id":"wave1","atDistance":40,"wave":{"type":"rifleman","count":8,"lane":-1}},
+      {"id":"haz1","atDistance":90,"hazard":{"type":"crusher","period":3}},
+      {"id":"gate1","atDistance":120,"gate":{"left":["+",20],"right":["x",2]}},
+      {"id":"boss1","atDistance":300,"boss":{"type":"ogre","script":"bridge-ogre"}}]}
+   ```
+
+4. **Enemy/boss behavior scripts — 8–12 days; high tactical impact.** Implement telegraphed rifle bursts, flank waypoints, frontal shields and wind-up charges. Boss phase data specifies HP thresholds, attack sequences, summons and recovery windows; validate reachable dodges. Extend the existing factories and boss loop cited above.
+5. **Crowd/collision upgrade — 10–15 days; high fairness/scaling impact.** Introduce spatial hashing for swept bullet queries and bounded local neighbors; resolve nearest hits. Add velocity-based cohesion/separation, obstacle look-ahead, gap-dependent formation width/depth and per-unit contacts. Give deaths pooled knockback visuals. Stress-test 600 units at chokepoints; dense hash cells still need work limits.
+6. **Rendering/allocation pass — 5–8 days; high phone impact.** Preserve existing unit instancing; use `InstancedMesh` for units only if adopting actual 3D models. Batch repeated solid parts/debris, atlas labels, chunk/cull props, add distance LOD/shadow budgets, pool bullets/FX, cache slots and update HUD only on changes.
+7. **Dynamic difficulty hooks — 3–5 days; medium pacing impact.** Feed retention, damage, clear time and counter usage into bounded adjustments between encounters: wave budget, recovery spacing and supplies. Preserve telegraphs; record decisions in replays and disable adaptation for competitive seeds. Existing tactics/outcome events provide inputs (`index.html:770,1220,1241`).
+
+exec
+/bin/bash -lc 'for p in /AGENTS.md /home/AGENTS.md /home/user/AGENTS.md /home/user/my-first-repo/AGENTS.md /home/user/my-first-repo/squad-surge/AGENTS.md; do if [ -f "$p" ]; then cat "$p"; fi; done
+rg --files js .agents .codex 2>/dev/null
+rg -n '"'ctx|bus|SpriteLayer|enemy|boss|registerEnemy|registerBoss|script src' index.html" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+js/powerups.js
+js/objects3d.js
+js/meta.js
+js/juice.js
+js/scenery.js
+js/finale.js
+49:.bossbar{position:absolute;left:50%;top:calc(max(10px,env(safe-area-inset-top)) + 64px);transform:translateX(-50%);width:min(70vw,300px);z-index:4;text-align:center}
+50:.bossbar .bar{height:18px;border-radius:9px;background:#3b0f12;border:3px solid #0d1630;overflow:hidden;box-shadow:0 3px 0 #0d1630}
+51:.bossbar .bar i{display:block;height:100%;width:100%;background:linear-gradient(#ff8a6a,#e0352a 55%,#b81c14);box-shadow:inset 0 3px 0 #ffffff55;transition:width .15s}
+52:.bossbar .label{font:16px 'Lilita One',sans-serif;margin-bottom:3px;display:flex;align-items:center;justify-content:center;gap:6px}
+53:.bossbar .label svg{width:20px;height:20px;flex:none}
+139:  <div class="bossbar" id="bossbar" hidden><div class="label stroke" id="bossLabel"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" stroke="#0d1630" stroke-width="1.6" d="M12 2C7 2 3.5 5.6 3.5 10.2c0 2.6 1.2 4.6 3 5.8V19a1 1 0 0 0 1 1h1.5v-2h2v2h2v-2h2v2h1.5a1 1 0 0 0 1-1v-3c1.8-1.2 3-3.2 3-5.8C20.5 5.6 17 2 12 2z"/><circle cx="8.7" cy="11" r="2.1" fill="#0d1630"/><circle cx="15.3" cy="11" r="2.1" fill="#0d1630"/></svg>OGRE WARLORD</div><div class="bar"><i id="bossFill"></i></div></div>
+189:<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+190:<script src="js/scenery.js"></script>
+191:<script src="js/objects3d.js"></script>
+192:<script src="js/juice.js"></script>
+193:<script src="js/powerups.js"></script>
+194:<script src="js/finale.js"></script>
+195:<script src="js/meta.js"></script>
+242:  { id: "town", name: "OLD TOWN", sky: ["#f9c48f", "#fde8c9"], fog: 0xf6d2aa, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "zombie", deco: "city", landmark: "tower" },
+243:  { id: "bridge", name: "GOLDEN BRIDGE", sky: ["#6fb6ff", "#d8eeff"], fog: 0xbfe0ff, ground: null, water: 0x2f8fd0, road: "t-asphalt", side: "t-concrete", enemy: "grunt", deco: "bridge" },
+244:  { id: "pier", name: "OLD PIER", sky: ["#7fd3e6", "#e9fbff"], fog: 0xc6eef5, ground: null, water: 0x1d9fb8, road: "t-concrete", side: "t-cobble", enemy: "zombie", deco: "pier" },
+245:  { id: "ruins", name: "RUINED CITY", sky: ["#9aa7b8", "#e7d6c2"], fog: 0xcfc6bb, ground: "t-dirt", road: "t-asphalt", side: "t-cobble", enemy: "grunt", deco: "city" },
+246:  { id: "desert", name: "DESERT HIGHWAY", sky: ["#ffb36b", "#ffe9b8"], fog: 0xf5d6a0, ground: "t-dirt", road: "t-asphalt", side: "t-dirt", enemy: "zombie", deco: "desert" },
+247:  { id: "arena", name: "WAR ARENA", sky: ["#24345f", "#5a6d9a"], fog: 0x3b4c78, ground: null, water: 0x1a2546, road: "t-concrete", side: "t-concrete", enemy: "grunt", deco: "arena" },
+321:class SpriteLayer {
+371:  return { c, ctx: c.getContext("2d"), tex, last: null };
+375:  const { ctx, c } = L; ctx.clearRect(0, 0, c.width, c.height);
+376:  ctx.font = `${Math.round(c.height * size)}px 'Lilita One', sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+377:  ctx.lineJoin = "round"; ctx.lineWidth = c.height * 0.12; ctx.strokeStyle = "#0d1630";
+378:  ctx.strokeText(text, c.width / 2, c.height * 0.54); ctx.fillStyle = color; ctx.fillText(text, c.width / 2, c.height * 0.54);
+383:let actx = null;
+387:    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+388:    const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+392:    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + cfg[2] + 0.02);
+404:// event bus: the game emits, the look-and-feel modules listen (design/overhaul.md section 6)
+405:const bus = {
+408:  emit(name, data) { const hs = this.h[name]; if (hs) for (const fn of hs) { try { fn(data); } catch (e) { console.error(`bus ${name}`, e); } } },
+412:const ctx = {
+413:  THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng,
+426:const SLAM_R = 3.0, SLAM_WARN = 1.6, SLAM_AT = 2.6; // boss slam: red ring warns, then hits soldiers inside it
+464:function beltChanged() { bus.emit("belt", { slots: L.belt.slice() }); updateBeltHUD(); }
+469:  bus.emit("swapExpired", { type }); updateBeltHUD();
+478:    bus.emit("swapOffer", { type, until: L.swap.until }); updateBeltHUD(); return true;
+480:  L.belt[slot] = type; beltChanged(); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+483:  if (!L || L.coach || (state !== "play" && state !== "boss")) return;
+489:    bus.emit("tacticsCoach", { kind: t.counter, slot }); return;
+495:  ctx.addScore(300 * L.level, { raw: true, reason: "perfect" });
+497:  for (const t of COMBO_TIERS) if (before < t[0] && L.combo >= t[0]) bus.emit("combo", { count: L.combo, tier: COMBO_TIERS.length - COMBO_TIERS.indexOf(t), name: t[2], mult: t[1] });
+502:    if (L.threat || (state === "boss" && L.boss.hp > 0)) return true;
+507:  if (state === "boss" && L.boss.hp > 0) return true;
+514:  if (!L || (slot !== 0 && slot !== 1) || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+518:    bus.emit("swapDone", { type, slot }); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+526:  bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
+532:  bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
+541:      const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
+552:  bus.emit("threatLive", { id: t.id, kind: t.kind }); coachCounter(); updateBeltHUD();
+560:  bus.emit("threatEnd", { id: t.id, kind: t.kind, countered: t.countered, lost: t.lost }); updateBeltHUD();
+566:  if (state === "boss" && !L.threat && L.boss.hp > 0) {
+567:    const t = { id: `slam-${L.slamId = (L.slamId || 0) + 1}`, kind: "slam", counter: "shield", z: L.boss.z, actors: [], age: 0, lost: 0, countered: false };
+590:        bus.emit("explosion", { x: t.targetX, z: t.targetZ, radius: 2.8 });
+627:function enemy(type, x, z, level) {
+651:  const etype = theme.enemy, d = level;
+654:    for (let i = 0; i < n; i++) enemies.push(enemy(etype, (r() * 2 - 1) * spread, z - r() * depth, level));
+655:    if (mod === "brutes") enemies.push(enemy("brute", (rj() * 2 - 1) * 3, z - depth * 0.5, level));
+658:  if (level === 1) { // tutorial: shoot the gate up, small hordes, one lane strip, case, tiny boss
+712:        for (let i = 0; i < 1 + Math.floor(d / 3); i++) enemies.push(enemy("brute", (r() * 2 - 1) * 3.5, z - i * 3, level));
+722:  const bossHp = Math.round(40 * Math.pow(level, 1.3) + 40);
+724:  return { level, theme, length, gates, solids, enemies, threats, expectedKills: enemies.length, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
+736:  if (L.boss.state === "wait") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
+737:  if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
+740:  if (L.bankLocked && state === "boss") return; // victory is locked during the pre-finale celebration
+748:  if (n > 0) bus.emit("soldiersLost", { n, total: L.soldiers.length });
+761:let state = "loading"; // loading | home | play | boss | win | lose | paused
+772:    peakSquad: 0, bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
+779:  bus.emit("generate", { L, level, rng: rng((opts.seed ?? level) * 4241 + 7), length: L.length, theme: L.theme, mode: L.mode, modifier: mod });
+780:  bus.emit("levelStart", { level, name: levelName(level), theme: L.theme, mode: L.mode, modifier: mod });
+791:function setWeapon(i) { L.weapon = i; $("weaponImg").src = WEAPONS[i].img; weaponLabel(); bus.emit("weapon", { index: i, name: WEAPONS[i].name }); }
+796:  const playing = s === "play" || s === "boss" || s === "bonus";
+797:  show("belt", s === "play" || s === "boss");
+799:  show("weaponTag", s === "play" || s === "boss"); show("count", playing); show("scoreBox", playing || s === "paused");
+801:  show("bossbar", s === "boss"); show("winModal", s === "win"); show("loseModal", s === "lose"); show("pauseModal", s === "paused");
+802:  if (from !== s) bus.emit("state", { from, to: s });
+829:  if (state !== "play" && state !== "boss") return;
+843:  if ((state === "play" || state === "boss") && !e.repeat) {
+855:  if (state === "play" || state === "boss" || state === "bonus") { resumeState = state; setState("paused"); }
+870:document.addEventListener("visibilitychange", () => { if (document.hidden && (state === "play" || state === "boss" || state === "bonus")) togglePause(); });
+904:  bus.emit("score", { delta: pts, total: L.score, reason: o.reason || "", x: o.x, z: o.z });
+910:  if (L.surge >= 1) { L.surgeReady = true; bus.emit("surgeReady", {}); updateBeltHUD(); }
+913:  if (!L || !L.surgeReady || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+915:  const perfect = !!L.threat || state === "boss";
+918:  bus.emit("powerupUse", { type: "surge", slot: null, perfect, misused: false, wasted: false, threatKind: L.threat ? L.threat.kind : null });
+919:  bus.emit("surge", { on: true, perfect });
+922:function breakCombo() { if (L.combo >= 5) bus.emit("comboEnd", { count: L.combo }); L.combo = 0; L.comboT = 0; }
+926:  for (const t of COMBO_TIERS) if (L.combo === t[0]) bus.emit("combo", { count: L.combo, tier: COMBO_TIERS.length - COMBO_TIERS.indexOf(t), name: t[2], mult: t[1] });
+930:  bus.emit("kill", { e, points: pts, combo: L.combo });
+932:function setShield(sec) { const was = L.shieldT > 0; L.shieldT = Math.max(0, sec); if (was !== L.shieldT > 0) bus.emit("shield", { on: L.shieldT > 0 }); }
+933:function setGiant(sec) { const was = L.giantT > 0; L.giantT = Math.max(0, sec); if (was !== L.giantT > 0) bus.emit("giant", { on: L.giantT > 0 }); }
+935:function damageArea(x, z, radius, dmg, opts = {}) { // explosions from modules (barrels, airstrikes): enemies, solids and the boss
+938:  const b = L.boss; if (!opts.skipBoss && state === "boss" && b.hp > 0 && Math.hypot(b.x - x, b.z - z) < radius + 2.6) { b.hp -= dmg; b.flash = 0.08; if (b.hp <= 0) bossDown(); }
+939:  bus.emit("explosion", { x, z, radius });
+941:function finishLevel(mult) { if (state !== "bonus" && state !== "boss") return; L.finaleMult = Math.max(1, mult || 1); L.mult = L.finaleMult + L.bankBonus; win(); } // called by js/finale.js
+942:function endBoss() { // after the boss falls: hand over to the finale if there is one
+943:  if (window.Finale && Finale.start && Finale.start(ctx)) { L.bonusT = 0; setState("bonus"); bus.emit("bonusState", {}); }
+951:  bus.emit("tick", { dt, L, state });
+979:      L.sz = -L.length; setState("boss"); L.boss.state = "walk"; vibe(80);
+980:      L.boss.z = Math.min(L.boss.z, L.sz - squadRadius(L.soldiers.length) - 10); // fair fight window for any squad size
+981:      if (L.threat) endThreat(L.threat); // belt effects carry into the boss fight
+982:      bus.emit("bossStart", { boss: L.boss });
+988:  if (L.surgeT > 0) { L.surgeT -= dt; L.surge = Math.max(0, L.surgeT / SURGE_TIME); if (L.surgeT <= 0) { L.surge = 0; L.comboT = COMBO_WINDOW; bus.emit("surge", { on: false }); } }
+990:  if (L.shieldT > 0) { L.shieldT -= dt; if (L.shieldT <= 0) bus.emit("shield", { on: false }); }
+991:  if (L.giantT > 0) { L.giantT -= dt; if (L.giantT <= 0) bus.emit("giant", { on: false }); }
+994:    L.milestone = m; bus.emit("squadMilestone", { n: m });
+1019:    bus.emit("gatePass", { gate: g, half: h, before, after });
+1054:  const b0 = L.boss;
+1065:        if (h && h.op === "+") { h.acc = (h.acc || 0) + b.dmg * 0.35; if (h.acc >= 1) { const inc = Math.floor(h.acc); h.acc -= inc; h.v = Math.min(h.v + inc, 99); refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
+1066:        else if (h && h.op === "x") { h.acc = (h.acc || 0) + b.dmg * 0.02; if (h.acc >= 1 && h.v < 3) { h.acc = 0; h.v++; refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
+1073:    if (!hit && state === "boss" && b0.hp > 0 && Math.abs(b.x - b0.x) < 2.6 && b.z <= b0.z + 0.5) {
+1077:      if (b0.hp <= 0) bossDown();
+1106:  // boss
+1107:  if (state === "boss" && b0.hp > 0) {
+1110:    if (b0.slamT < SLAM_WARN) b0.x += (L.sx - b0.x) * dt * 0.4; // the boss stops aiming once the warning ring shows: dodge sideways
+1111:    if (!b0.enraged && b0.hp < b0.maxHp * 0.5) { b0.enraged = true; bus.emit("bossEnrage", { boss: b0 }); floatText(b0.x, 7, b0.z, "ENRAGED!", "#ff6a5a"); sfx("bad"); vibe(80); }
+1113:    if (prevSlam < SLAM_WARN && b0.slamT >= SLAM_WARN) bus.emit("bossWarn", { boss: b0 });
+1122:      if (k) bus.emit("soldiersLost", { n: k, total: L.soldiers.length });
+1123:      bus.emit("bossSlam", { boss: b0, killed: k });
+1129:    $("bossFill").style.width = `${Math.max(0, b0.hp / b0.maxHp) * 100}%`;
+1139:  bus.emit("tick", { dt, L, state });
+1140:  if (L.soldiers.length === 0 && (state === "play" || state === "boss")) lose();
+1143:  o.hp -= dmg; Obj3D.solidHit(o); bus.emit("solidHit", { o });
+1148:  o.alive = false; Obj3D.solidBreak(o); bus.emit("solidBreak", { o, earned });
+1155:  if (o.ammo) { L.rateMult = Math.min(2.2, L.rateMult * 1.35); weaponLabel(); bus.emit("rateUp", { mult: L.rateMult }); floatText(o.x, 2.6, o.z, "FIRE RATE UP!", "#9dff7a"); sfx("gate"); vibe(40); }
+1161:  e.hp -= dmg; e.flash = 0.07; bus.emit("enemyHit", { e });
+1163:    e.state = "dying"; e.dieT = 0; bus.emit("enemyDie", { e }); onKill(e);
+1169:  if (state !== "boss" || L.boss.hp <= 0) return;
+1170:  L.boss.hp -= n; L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
+1172:function bossDown() {
+1178:  bus.emit("bank", { count, bonus: L.bankBonus });
+1180:  L.boss.state = "down"; L.shake = 0.6; sfx("boom"); vibe(200);
+1181:  for (let k = 0; k < 6; k++) L.fx.push({ x: L.boss.x + (Math.random() - 0.5) * 4, y: Math.random() * 4, z: L.boss.z + 1, f: 9, t: -k * 0.08, dur: 0.6, size: 4 });
+1182:  L.bossSoldiers = L.soldiers.length; // stars are decided here; the finale cannot lower them
+1183:  addScore(400 + 100 * L.level, { x: L.boss.x, z: L.boss.z, reason: "boss" });
+1186:  bus.emit("bossDown", { boss: L.boss });
+1206:  if (state !== "boss" && state !== "bonus") return;
+1207:  const n = L.bossSoldiers || L.soldiers.length, kept = Math.min(1, n / Math.max(1, L.peakSquad));
+1220:  bus.emit("win", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars, keptPct, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
+1234:  $("losePct").textContent = state === "boss" ? "BOSS" : `${pct}%`;
+1236:  const atBoss = state === "boss", bossPct = atBoss ? Math.max(1, Math.round(L.boss.hp / L.boss.maxHp * 100)) : null;
+1237:  if (atBoss) $("losePct").textContent = `BOSS ${bossPct}%`;
+1241:  bus.emit("lose", { tactics: { ...L.tactics }, pct, atBoss, bossPct, score: L.score, mode: L.mode, modifier: L.modifier, level: L.level });
+1248:bus.on("state", () => { quality.warm = 0; quality.t = 0; quality.frames = 0; }); // ignore shader-compile stutter after a switch
+1258:  if (!quality.auto || quality.level === 0 || (state !== "play" && state !== "boss" && state !== "bonus")) return;
+1278:  bus.emit("frame", { dt, realDt: hud.realDt, camera, look: lookAt, L, state }); // Juice may move the camera (then re-aim it at `look`) and change the fov
+1280:  const { sold, enem, brute, boss, fx, shadow } = layers;
+1281:  sold.begin(); enem.begin(); brute.begin(); boss.begin(); fx.begin(); shadow.begin();
+1282:  const firing = state === "play" || state === "boss";
+1289:  const eTex = L.theme.enemy;
+1299:  const b = L.boss;
+1300:  if (state !== "bonus" && (b.hp > 0 || b.state === "down")) { // the fallen boss leaves the stage for the finale
+1303:    // boss flickers when hit instead of washing out white under heavy fire
+1304:    const bt = layers.boss.mesh.material.uniforms.tint.value.copy(spriteTint); // an enraged boss pulses red
+1306:    boss.push(b.x, 0, b.z, BOSS_H, BOSS_H, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); shadow.push(b.x + SHADOW_DX * 3, b.z + SHADOW_DZ * 3, 8);
+1318:  sold.end(); enem.end(); brute.end(); boss.end(); fx.end(); shadow.end();
+1319:  const warn = state === "boss" && L.boss.hp > 0 && L.boss.slamT >= SLAM_WARN;
+1322:    const [cx, cz] = slamCenter(L.boss), p = (L.boss.slamT - SLAM_WARN) / (SLAM_AT - SLAM_WARN);
+1355:    const sim = state === "play" || state === "boss" || state === "bonus", gdt = sim ? dt * timeScale(dt) : dt;
+1368:      loadTex("brute", "assets/brute.webp"), loadTex("boss", "assets/boss.webp"), loadTex("fx", "assets/fx.jpg"),
+1376:    sold: new SpriteLayer(TEX.soldier, 4, 2, 700),
+1377:    enem: null, brute: new SpriteLayer(TEX.brute, 4, 2, 80),
+1378:    boss: new SpriteLayer(TEX.boss, 3, 2, 1),
+1379:    fx: new SpriteLayer(TEX.fx, 4, 4, 1400, { additive: true }),
+1381:  const enemyLayers = { zombie: new SpriteLayer(TEX.zombie, 4, 2, 900), grunt: new SpriteLayer(TEX.grunt, 4, 2, 900) };
+1382:  Object.defineProperty(layers, "enem", { get: () => { const k = L.theme.enemy; const other = k === "zombie" ? "grunt" : "zombie"; enemyLayers[other].begin(); enemyLayers[other].end(); return enemyLayers[k]; } });
+1384:  Scenery.setup(ctx); Obj3D.setup(ctx); Juice.setup(ctx);
+1386:  for (const m of [window.Powerups, window.Finale, window.Meta]) { try { m?.setup?.(ctx); } catch (e) { console.error("module setup failed", e); } }
+1396:window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, goLevel, save, bus, ctx, cam: CAM, quality };
+
+exec
+/bin/bash -lc "sed -n '270,445p' index.html
+sed -n '1060,1135p' index.html
+sed -n '1270,1320p' index.html
+head -n 80 js/powerups.js
+tail -n 45 js/powerups.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+  return new Promise((res, rej) => loader.load(file, t => { t.anisotropy = 4; TEX[name] = t; res(t); }, undefined, () => rej(new Error(`Could not load ${file}`))));
+}
+function resize() {
+  const w = gameEl.clientWidth, h = gameEl.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+addEventListener("resize", resize);
+
+// ---------- instanced sprite layers ----------
+const SPRITE_VS = `
+#include <fog_pars_vertex>
+attribute vec3 aOff; attribute vec2 aScale; attribute vec3 aFrame;
+uniform vec2 grid; varying vec2 vUv; varying float vA; varying float vFlash;
+void main(){
+  vec4 mvPosition = modelViewMatrix * vec4(aOff, 1.0);
+  mvPosition.xy += position.xy * aScale;
+  gl_Position = projectionMatrix * mvPosition;
+  float f = aFrame.x; float c = mod(f, grid.x); float r = floor(f / grid.x + 0.001);
+  vUv = vec2((c + uv.x) / grid.x, 1.0 - (r + 1.0 - uv.y) / grid.y);
+  vA = aFrame.y; vFlash = aFrame.z;
+  #include <fog_vertex>
+}`;
+const SPRITE_FS = `
+#include <fog_pars_fragment>
+uniform sampler2D map; uniform vec3 tint; uniform vec4 recolor; varying vec2 vUv; varying float vA; varying float vFlash;
+vec3 rgb2hsv(vec3 c){ vec4 K = vec4(0.0, -1.0/3.0, 2.0/3.0, -1.0); vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g)); vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r)); float d = q.x - min(q.w, q.y); return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x); }
+vec3 hsv2rgb(vec3 c){ vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0/3.0, 1.0/3.0)) * 6.0 - 3.0); return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y); }
+void main(){
+  vec4 t = texture2D(map, vUv);
+  if (t.a * vA < 0.5) discard;
+  vec3 col = t.rgb;
+  if (recolor.w > 0.5) { // squad colour: re-hue only the blue uniform and helmet
+    vec3 h = rgb2hsv(col);
+    float m = (1.0 - smoothstep(0.05, 0.11, abs(h.x - 0.6))) * smoothstep(0.18, 0.32, h.y);
+    col = mix(col, hsv2rgb(vec3(recolor.x, clamp(h.y * recolor.y, 0.0, 1.0), clamp(h.z * recolor.z, 0.0, 1.0))), m);
+  }
+  gl_FragColor = vec4(mix(col * tint, vec3(1.0), vFlash), 1.0);
+  #include <fog_fragment>
+}`;
+const FX_FS = `
+#include <fog_pars_fragment>
+uniform sampler2D map; uniform vec3 tracer; varying vec2 vUv; varying float vA; varying float vFlash;
+void main(){
+  vec4 t = texture2D(map, vUv); vec3 c = t.rgb * vA;
+  if (vFlash > 0.5) c *= tracer; // bullets are pushed with flash = 1: tint them with the tracer colour
+  gl_FragColor = vec4(c, 1.0);
+  #ifdef USE_FOG
+    gl_FragColor.rgb *= 1.0 - smoothstep(fogNear, fogFar, fogDepth); // additive: fade out instead of tinting
+  #endif
+}`;
+const spriteLayers = [];
+class SpriteLayer {
+  constructor(tex, cols, rows, max, { additive = false, anchor = 0 } = {}) {
+    const base = new THREE.PlaneBufferGeometry(1, 1); base.translate(0, 0.5 - anchor, 0);
+    const g = new THREE.InstancedBufferGeometry();
+    g.index = base.index; g.setAttribute("position", base.attributes.position); g.setAttribute("uv", base.attributes.uv);
+    this.off = new Float32Array(max * 3); this.sc = new Float32Array(max * 2); this.fr = new Float32Array(max * 3);
+    this.aOff = new THREE.InstancedBufferAttribute(this.off, 3).setUsage(THREE.DynamicDrawUsage);
+    this.aSc = new THREE.InstancedBufferAttribute(this.sc, 2).setUsage(THREE.DynamicDrawUsage);
+    this.aFr = new THREE.InstancedBufferAttribute(this.fr, 3).setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute("aOff", this.aOff); g.setAttribute("aScale", this.aSc); g.setAttribute("aFrame", this.aFr);
+    g.instanceCount = 0;
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]); // merge first: it would clone a texture value
+    Object.assign(uniforms, { map: { value: tex }, grid: { value: new THREE.Vector2(cols, rows) }, tint: { value: new THREE.Color(1, 1, 1) }, recolor: { value: new THREE.Vector4(0, 1, 1, 0) }, tracer: { value: new THREE.Vector3(1, 1, 1) } });
+    const mat = new THREE.ShaderMaterial({
+      uniforms, fog: true,
+      vertexShader: SPRITE_VS, fragmentShader: additive ? FX_FS : SPRITE_FS,
+      transparent: additive, depthWrite: !additive, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    });
+    this.mesh = new THREE.Mesh(g, mat); this.mesh.frustumCulled = false; this.mesh.renderOrder = additive ? 5 : 1;
+    this.g = g; this.max = max; this.n = 0; this.additive = additive; scene.add(this.mesh); spriteLayers.push(this);
+  }
+  begin() { this.n = 0; }
+  push(x, y, z, w, h, frame, alpha = 1, flash = 0) {
+    if (this.n >= this.max) return;
+    const i = this.n++;
+    this.off[i * 3] = x; this.off[i * 3 + 1] = y; this.off[i * 3 + 2] = z;
+    this.sc[i * 2] = w; this.sc[i * 2 + 1] = h;
+    this.fr[i * 3] = frame; this.fr[i * 3 + 1] = alpha; this.fr[i * 3 + 2] = flash;
+  }
+  end() { this.g.instanceCount = this.n; this.aOff.needsUpdate = this.aSc.needsUpdate = this.aFr.needsUpdate = true; }
+}
+// flat blob shadows on the ground
+class ShadowLayer {
+  constructor(max) {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(0,0,0,.62)"); gr.addColorStop(0.35, "rgba(0,0,0,.5)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+    const base = new THREE.PlaneBufferGeometry(1, 1); base.rotateX(-Math.PI / 2);
+    this.mesh = new THREE.InstancedMesh(base, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }), max);
+    this.mesh.frustumCulled = false; this.mesh.renderOrder = 0; this.max = max; this.m = new THREE.Matrix4(); scene.add(this.mesh);
+  }
+  begin() { this.n = 0; }
+  push(x, z, s) { if (this.n >= this.max) return; this.m.makeScale(s, 1, s * 0.7); this.m.setPosition(x, 0.03, z); this.mesh.setMatrixAt(this.n++, this.m); }
+  end() { this.mesh.count = this.n; this.mesh.instanceMatrix.needsUpdate = true; }
+}
+
+// ---------- label textures (numbers on gates / blocks) ----------
+function makeLabel(w, h) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
+  return { c, ctx: c.getContext("2d"), tex, last: null };
+}
+function drawLabel(L, text, color = "#fff", size = 0.62) {
+  if (L.last === text) return; L.last = text;
+  const { ctx, c } = L; ctx.clearRect(0, 0, c.width, c.height);
+  ctx.font = `${Math.round(c.height * size)}px 'Lilita One', sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.lineJoin = "round"; ctx.lineWidth = c.height * 0.12; ctx.strokeStyle = "#0d1630";
+  ctx.strokeText(text, c.width / 2, c.height * 0.54); ctx.fillStyle = color; ctx.fillText(text, c.width / 2, c.height * 0.54);
+  L.tex.needsUpdate = true;
+}
+
+// ---------- audio ----------
+let actx = null;
+function sfx(type, pitch = 1) {
+  if (!save.sound) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+    const cfg = { shot: [520, 180, 0.03, 0.035, "square"], hit: [220, 90, 0.05, 0.05, "triangle"], gate: [500, 1000, 0.18, 0.12, "sine"], bad: [300, 110, 0.25, 0.12, "sawtooth"], boom: [120, 40, 0.35, 0.2, "sawtooth"], coin: [900, 1500, 0.1, 0.08, "sine"], pop: [700, 380, 0.07, 0.045, "triangle"], rocket: [180, 70, 0.12, 0.06, "sawtooth"], win: [440, 880, 0.5, 0.15, "triangle"] }[type];
+    o.type = cfg[4]; o.frequency.setValueAtTime(cfg[0] * pitch, t); o.frequency.exponentialRampToValueAtTime(cfg[1] * pitch, t + cfg[2]);
+    g.gain.setValueAtTime(cfg[3], t); g.gain.exponentialRampToValueAtTime(0.0001, t + cfg[2]);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + cfg[2] + 0.02);
+  } catch (e) { console.warn("audio unavailable", e); save.sound = false; }
+}
+const vibe = ms => { if (save.vibe && navigator.vibrate) navigator.vibrate(ms); };
+
+// ---------- RNG ----------
+function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+
+// ---------- world / level ----------
+let L = null;               // current level state
+const world = new THREE.Group(); scene.add(world);   // scenery, owned by js/scenery.js
+const track = new THREE.Group(); scene.add(track);   // gate and solid visuals, owned by js/objects3d.js
+// event bus: the game emits, the look-and-feel modules listen (design/overhaul.md section 6)
+const bus = {
+  h: {},
+  on(name, fn) { (this.h[name] ||= []).push(fn); },
+  emit(name, data) { const hs = this.h[name]; if (hs) for (const fn of hs) { try { fn(data); } catch (e) { console.error(`bus ${name}`, e); } } },
+};
+const spriteTint = new THREE.Color(1, 1, 1);
+function setSpriteTint(color) { spriteTint.set(color); for (const l of spriteLayers) if (!l.additive) l.mesh.material.uniforms.tint.value.copy(spriteTint); }
+const ctx = {
+  THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng,
+  get WEAPONS() { return WEAPONS; }, get L() { return L; }, get state() { return state; }, get layers() { return layers; },
+  sfx: (...a) => sfx(...a), vibe: ms => vibe(ms), floatText: (...a) => floatText(...a),
+  get belt() { return L.belt; }, usePowerup: slot => usePowerup(slot), collectPowerup: type => collectPowerup(type),
+  get tactics() { return L.tactics; }, get threat() { return L.threat; }, get surgeReady() { return !!L.surgeReady; },
+  useSurge: () => useSurge(), damageBoss: n => damageBoss(n),
+  // Surge Update seams (design/engagement.md section 3)
+  slowMo: (...a) => slowMo(...a), hitStop: s => hitStop(s), addScore: (p, o) => addScore(p, o),
+  spawnSolid: (...a) => spawnSolid(...a), damageArea: (...a) => damageArea(...a),
+  addSoldiers: n => addSoldiers(n), killSoldiers: (n, nearX = null, force = true) => killSoldiers(n, nearX, force),
+  setShield: s => setShield(s), setGiant: s => setGiant(s), finishLevel: m => finishLevel(m), goMode: o => goMode(o),
+  setSkin: (a, b) => setSkin(a, b), squadRadius: n => squadRadius(n), persist: () => persist(), MODIFIERS, SKINS, TRACERS, SPEED, COMBO_TIERS,
+};
+const SLAM_R = 3.0, SLAM_WARN = 1.6, SLAM_AT = 2.6; // boss slam: red ring warns, then hits soldiers inside it
+const slamRing = new THREE.Mesh(new THREE.RingBufferGeometry(SLAM_R - 0.5, SLAM_R, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, depthWrite: false }));
+slamRing.rotation.x = -Math.PI / 2; slamRing.renderOrder = 2; slamRing.visible = false; scene.add(slamRing);
+const slamFill = new THREE.Mesh(new THREE.CircleBufferGeometry(SLAM_R - 0.5, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.18, depthWrite: false }));
+slamFill.rotation.x = -Math.PI / 2; slamFill.renderOrder = 2; slamFill.visible = false; scene.add(slamFill);
+const slamCenter = b => [b.x, b.z + 7];
+let layers = null;          // sprite layers
+const floatsEl = $("floats");
+const tmpV = new THREE.Vector3(), lookAt = new THREE.Vector3();
+const CHAR_K = 1.15, SOLDIER_H = 1.3 * CHAR_K, BOSS_H = 9.5; // visual sizes only; hit boxes are unchanged
+const SHADOW_DX = 0.25, SHADOW_DZ = 0.3;                        // blob shadows lean away from the sun
+
+const LEVEL_NAMES = ["OLD TOWN", "RED BRIDGE", "SALT PIER", "BROKEN BLOCKS", "DUNE ROAD", "IRON ARENA", "MARKET STREET", "STORM BRIDGE", "FOG HARBOR", "ASH DISTRICT", "SUN CANYON", "LAST STAND"];
+function levelName(level) { const lap = Math.ceil(level / LEVEL_NAMES.length); return LEVEL_NAMES[(level - 1) % LEVEL_NAMES.length] + (lap > 1 ? ` ${lap}` : ""); }
+function themeFor(level) { return THEMES[(level - 1) % THEMES.length]; }
+
+// ---------- tactics: belt, learning, encounter lifecycle ----------
+const THREAT_COUNTER = { swarm: "airstrike", barricade: "giant", mortars: "shield", slam: "shield" };
+function updateBeltHUD() {
+  if (!L || !L.belt) return;
+      if (o.alive && Math.abs(b.x - o.x) < o.hw && oz >= o.z && b.z <= o.z) { hitSolid(o, b.dmg); if (b.splash) explode(b.x, o.z, b.dmg, b.splash); hit = true; break; }
+    }
+    if (!hit) for (const g of gatesNear) {
+      if (oz >= g.z && b.z <= g.z) {
+        const h = g.halves.find(h => Math.abs(b.x - h.x) < h.hw);
+        if (h && h.op === "+") { h.acc = (h.acc || 0) + b.dmg * 0.35; if (h.acc >= 1) { const inc = Math.floor(h.acc); h.acc -= inc; h.v = Math.min(h.v + inc, 99); refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
+        else if (h && h.op === "x") { h.acc = (h.acc || 0) + b.dmg * 0.02; if (h.acc >= 1 && h.v < 3) { h.acc = 0; h.v++; refreshGate(g); bus.emit("gateShot", { gate: g, half: h }); } }
+        hit = true; break;
+      }
+    }
+    if (!hit) for (const e of active) {
+      if (e.hp > 0 && Math.abs(b.x - e.x) < e.r + 0.08 && oz >= e.z - 0.3 && b.z <= e.z + 0.3) { hitEnemy(e, b.dmg); if (b.splash) explode(e.x, e.z, b.dmg, b.splash, e); if (b.pierce > 0) { b.pierce--; b.z -= 0.7; } else hit = true; break; }
+    }
+    if (!hit && state === "boss" && b0.hp > 0 && Math.abs(b.x - b0.x) < 2.6 && b.z <= b0.z + 0.5) {
+      b0.hp -= b.dmg * (b.splash ? 1.2 : 1) * (L.giantT > 0 ? 2 : 1); b0.flash = 0.08; hit = true;
+      if (b.splash) L.fx.push({ x: b.x, y: 1.5 + Math.random() * 3, z: b0.z + 1, f: 9, t: 0, dur: 0.4, size: 2.6 });
+      else if (Math.random() < 0.3) L.fx.push({ x: b.x, y: 2 + Math.random() * 3, z: b0.z + 1, f: 4, t: 0, dur: 0.2, size: 1.3 });
+      if (b0.hp <= 0) bossDown();
+    }
+    if (hit || b.life <= 0) L.bullets.splice(i, 1);
+  }
+  // enemies
+  L.boomSfx -= dt;
+  const R = squadRadius(L.soldiers.length);
+  for (const e of L.enemies) {
+    if (e.state === "dead") continue;
+    e.t += dt; e.flash = Math.max(0, e.flash - dt);
+    if (e.state === "dying") { e.dieT += dt; if (e.dieT > 0.9) e.state = "dead"; continue; }
+    if (e.state === "idle" && e.z > L.sz - 48) e.state = "walk";
+    if (e.state !== "walk") continue;
+    e.z += e.sp * dt;
+    const dx = L.sx - e.x; e.x += Math.sign(dx) * Math.min(Math.abs(dx), dt * e.sp * 0.35);
+    // separation
+    if (L.soldiers.length && Math.hypot(e.x - L.sx, (e.z - L.sz) * 1.2) < R * (L.giantT > 0 ? 1.4 : 1) + e.r) {
+      const guarded = L.shieldT > 0 || L.giantT > 0;
+      if (!guarded) {
+        const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
+        killSoldiers(loss, e.x); if (e.threat) e.threat.lost += loss;
+      }
+      e.hp = 0; e.state = "dying"; e.dieT = 0.3;
+      if (guarded) onKill(e); // trampled by a GIANT squad or bounced off the SHIELD
+      L.fx.push({ x: e.x, y: 0.8, z: e.z, f: 5, t: 0, dur: 0.3, size: 1.4 }); vibe(20);
+      if (e.type === "brute" && !guarded) { flashRed(); L.shake = 0.3; floatText(e.x, 2.5, e.z, `-${e.dmg}`, "#ff6a5a"); }
+    }
+    if (e.z > L.sz + 12) e.state = "dead";
+  }
+  // boss
+  if (state === "boss" && b0.hp > 0) {
+    b0.t += dt; b0.flash = Math.max(0, b0.flash - dt);
+    b0.z += 1.1 * dt;
+    if (b0.slamT < SLAM_WARN) b0.x += (L.sx - b0.x) * dt * 0.4; // the boss stops aiming once the warning ring shows: dodge sideways
+    if (!b0.enraged && b0.hp < b0.maxHp * 0.5) { b0.enraged = true; bus.emit("bossEnrage", { boss: b0 }); floatText(b0.x, 7, b0.z, "ENRAGED!", "#ff6a5a"); sfx("bad"); vibe(80); }
+    const prevSlam = b0.slamT; b0.slamT += dt * (b0.enraged ? 1.4 : 1);
+    if (prevSlam < SLAM_WARN && b0.slamT >= SLAM_WARN) bus.emit("bossWarn", { boss: b0 });
+    if (b0.slamT > SLAM_AT) {
+      b0.slamT = 0; L.shake = 0.4; sfx("boom"); vibe(120);
+      const [cx, cz] = slamCenter(b0), cap = 2 + L.level;
+      let k = 0;
+      if (L.shieldT <= 0 && L.giantT <= 0) for (let i = L.soldiers.length - 1; i >= 0 && k < cap; i--) {
+        const sd = L.soldiers[i];
+        if (Math.hypot(sd.x - cx, sd.z - cz) < SLAM_R) { L.fx.push({ x: sd.x, y: 0.6, z: sd.z, f: 4, t: 0, dur: 0.35, size: 1.1 }); L.soldiers.splice(i, 1); k++; }
+      }
+      if (k) bus.emit("soldiersLost", { n: k, total: L.soldiers.length });
+      bus.emit("bossSlam", { boss: b0, killed: k });
+      if (L.threat && L.threat.kind === "slam") { L.threat.lost += k; endThreat(L.threat); }
+      if (k) { flashRed(); floatText(L.sx, 2.5, L.sz, `-${k}`, "#ff6a5a"); } else if (L.sz - b0.z < 14) floatText(L.sx, 2.5, L.sz, "DODGED!", "#7fd0ff");
+      L.fx.push({ x: cx, y: 0.3, z: cz, f: 9, t: 0, dur: 0.5, size: SLAM_R * 1.6 });
+    }
+    if (b0.z + 2.6 > L.sz - R) killSoldiers(L.soldiers.length, null, true);
+    $("bossFill").style.width = `${Math.max(0, b0.hp / b0.maxHp) * 100}%`;
+  }
+  if (L.winT > 0) { L.winT -= dt; if (L.winT <= 0) endBoss(); }
+  // fx
+  for (let i = L.fx.length - 1; i >= 0; i--) { const f = L.fx[i]; f.t += dt; if (f.t >= f.dur) L.fx.splice(i, 1); }
+  L.shake = Math.max(0, L.shake - dt);
+  // progress & end
+function popScale(t) { const c = 2.2; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); } // ease-out-back 0..1
+function render(dt) {
+  const n = L.soldiers.length, R = squadRadius(n);
+  const shake = L.shake > 0 && !matchMedia("(prefers-reduced-motion: reduce)").matches ? (Math.random() - 0.5) * L.shake * 0.8 : 0;
+  const camH = CAM.h + Math.min(6, R * 1.2), camBack = CAM.back + Math.min(6, R);
+  camera.position.set(L.sx * 0.45 + shake, camH, L.sz + camBack);
+  lookAt.set(L.sx * 0.45, 0, L.sz - CAM.ahead); camera.lookAt(lookAt);
+  camera.fov = BASE_FOV;
+  bus.emit("frame", { dt, realDt: hud.realDt, camera, look: lookAt, L, state }); // Juice may move the camera (then re-aim it at `look`) and change the fov
+  camera.updateProjectionMatrix();
+  const { sold, enem, brute, boss, fx, shadow } = layers;
+  sold.begin(); enem.begin(); brute.begin(); boss.begin(); fx.begin(); shadow.begin();
+  const firing = state === "play" || state === "boss";
+  L.giantK += ((L.giantT > 0 ? 1.7 : 1) - L.giantK) * Math.min(1, dt * 8); // GIANT power-up grows the squad
+  for (const s of L.soldiers) {
+    s.ph += dt * 11; const f = Math.floor(s.ph) % 4 + (firing ? 4 : 0);
+    const age = s.born === undefined ? 1 : (L.time - s.born) / 0.25, k = (age >= 1 ? 1 : popScale(Math.max(0, age))) * L.giantK;
+    sold.push(s.x, 0, s.z, SOLDIER_H * 0.512 * k, SOLDIER_H * k, f); shadow.push(s.x + SHADOW_DX, s.z + SHADOW_DZ, 1.0 * k);
+  }
+  const eTex = L.theme.enemy;
+  for (const e of L.enemies) {
+    if (e.state === "dead" || e.z < L.sz - 120) continue;
+    let f, a = 1;
+    if (e.state === "dying") { f = 4 + Math.min(3, Math.floor(e.dieT / 0.15)); a = e.dieT > 0.6 ? 1 - (e.dieT - 0.6) / 0.3 : 1; }
+    else f = e.state === "walk" ? Math.floor(e.t * 8) % 4 : 0;
+    const layer = e.type === "brute" ? brute : enem;
+    layer.push(e.x, 0, e.z, e.h * CHAR_K * ENEMY_ASPECT[e.type === "brute" ? "brute" : eTex], e.h * CHAR_K, f, a, e.flash > 0 ? 0.7 : 0);
+    if (e.state !== "dying") shadow.push(e.x + SHADOW_DX, e.z + SHADOW_DZ, e.r * 2.5);
+  }
+  const b = L.boss;
+  if (state !== "bonus" && (b.hp > 0 || b.state === "down")) { // the fallen boss leaves the stage for the finale
+    let f = b.state === "down" ? 5 : b.slamT > 2.2 ? 4 : b.slamT > 1.8 ? 3 : Math.floor(b.t * 4) % 3;
+    if (b.state === "wait") f = 3;
+    // boss flickers when hit instead of washing out white under heavy fire
+    const bt = layers.boss.mesh.material.uniforms.tint.value.copy(spriteTint); // an enraged boss pulses red
+    if (b.enraged && b.hp > 0) { const p = 0.5 + 0.5 * Math.sin(L.time * 9); bt.g *= 0.72 + 0.18 * p; bt.b *= 0.62 + 0.2 * p; }
+    boss.push(b.x, 0, b.z, BOSS_H, BOSS_H, f, 1, b.flash > 0 && Math.floor(L.time * 14) % 3 === 0 ? 0.4 : 0); shadow.push(b.x + SHADOW_DX * 3, b.z + SHADOW_DZ * 3, 8);
+  }
+  const tr = TRACERS[save.tracer] || TRACERS.gold, tu = layers.fx.mesh.material.uniforms.tracer.value, sk = L.surgeT > 0 ? 1.45 : 1;
+  if (tr.rainbow) { const c = rainbowColor.setHSL((L.time * 0.6) % 1, 1, 0.6); tu.set(c.r * 1.6, c.g * 1.6, c.b * 1.6); }
+  else tu.set(tr.rgb[0], tr.rgb[1], tr.rgb[2]);
+  if (L.surgeT > 0) tu.multiplyScalar(1.5); // SURGE: hotter, bigger tracers
+  for (const bl of L.bullets) bl.splash ? fx.push(bl.x, 0.85, bl.z, 0.6 * sk, 2.4 * sk, 12, 1, 1) : fx.push(bl.x, 1.0, bl.z, 0.3 * sk, 1.6 * sk, 12, 1, 1);
+  for (const f of L.fx) {
+    if (f.t < 0) continue;
+    const p = f.t / f.dur, base = f.f, frame = base === 9 ? 8 + Math.min(3, Math.floor(p * 4)) : base === 4 ? 4 + Math.min(3, Math.floor(p * 4)) : base === 1 ? 1 : base;
+    fx.push(f.x, f.y - f.size / 2, f.z, f.size, f.size, frame, base >= 14 ? 1 - p : 1);
+  }
+  sold.end(); enem.end(); brute.end(); boss.end(); fx.end(); shadow.end();
+  const warn = state === "boss" && L.boss.hp > 0 && L.boss.slamT >= SLAM_WARN;
+  slamRing.visible = slamFill.visible = warn;
+"use strict";
+// Powerups: airdrops (cargo plane, parachute crate, a shootable supply crate holding a power-up), the four power-ups
+// (SHIELD, AIRSTRIKE, GIANT, JACKPOT) and explosive barrels. See design/engagement.md F5 / F6.
+// Everything simulates on the bus `tick` (game time, so slow-mo applies); billboards are oriented on `frame`.
+// Visual objects live in their own group in the scene (Obj3D.clear() only empties the track group) and are shared
+// pools built once; per-level things (labels) are disposed on generate / levelStart / win / lose.
+window.Powerups = (() => {
+  let C = null, THREE = null, root = null, ready = false, L = null, T = 0;
+  const S = { drop: null, strike: null, labels: [], rings: [], bombs: [], shieldDur: 6, giantDur: 6, bOp: 0, giantRingT: 0, plan: [], barrels: [] };
+  const W = { cargo: null, jet: null, chute: null };            // textures
+  let planeM = null, chuteM = null, chuteGeoFull = null, chuteGeoCanopy = null, jets = [], bubble = null, shieldRing = null, giantRing = null, ringGeo = null, bombGeo = null, bombMat = null;
+  const WEIGHTS = [["airstrike", 35], ["shield", 30], ["giant", 30], ["jackpot", 5]];
+  const NAMES = { shield: "SHIELD!", airstrike: "AIRSTRIKE!", giant: "GIANT!", jackpot: "JACKPOT!" };
+  const CH_W = 4.0, CH_H = 4.0 * 499 / 361;
+  const sRGB = () => C.renderer.outputEncoding === THREE.sRGBEncoding;
+
+  // ---------------------------------------------------------------- shared visuals
+  function loadTex(url) {
+    const t = new THREE.TextureLoader().load(url); t.anisotropy = 4; t.encoding = sRGB() ? THREE.sRGBEncoding : THREE.LinearEncoding; return t;
+  }
+  function spriteMat(map) { return new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false, fog: false }); }
+  function sprite(map, w, h, order) {
+    const m = new THREE.Mesh(new THREE.PlaneBufferGeometry(1, 1), spriteMat(map)); m.scale.set(w, h, 1); m.renderOrder = order || 8; m.visible = false; m.frustumCulled = false; root.add(m); return m;
+  }
+  const BUBBLE_VS = "varying vec3 vN; varying vec3 vV; varying float vY; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); vY = position.y; gl_Position = projectionMatrix * mv; }";
+  const BUBBLE_FS = "uniform vec3 uColor; uniform float uOp; uniform float uTime; varying vec3 vN; varying vec3 vV; varying float vY;" +
+    "void main(){ float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.2); float band = 0.5 + 0.5 * sin(vY * 9.0 - uTime * 2.5);" +
+    "float a = (0.07 + 0.8 * f + 0.07 * band) * uOp; gl_FragColor = vec4(uColor * (0.8 + 0.7 * f), a); }";
+  const RING_VS = "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }";
+  const RING_FS = "uniform vec3 uColor; uniform float uFrac; uniform float uOp; varying vec2 vUv;" +
+    "void main(){ vec2 p = vUv - 0.5; float r = length(p) * 2.0; float ang = atan(p.x, p.y) / 6.2831853; if (ang < 0.0) ang += 1.0;" +
+    "float ring = smoothstep(0.86, 0.9, r) * (1.0 - smoothstep(0.96, 1.0, r)); float on = ang < uFrac ? 1.0 : 0.16; float tip = 1.0 - smoothstep(0.0, 0.03, abs(ang - uFrac));" +
+    "gl_FragColor = vec4(uColor * (1.0 + 0.8 * tip), ring * on * uOp); }";
+  function ringMat(color) {
+    return new THREE.ShaderMaterial({ uniforms: { uColor: { value: new THREE.Color(color) }, uFrac: { value: 1 }, uOp: { value: 1 } }, vertexShader: RING_VS, fragmentShader: RING_FS, transparent: true, depthWrite: false, fog: false });
+  }
+  function build() {
+    if (ready) return; ready = true;
+    root = new THREE.Group(); C.scene.add(root);
+    W.cargo = loadTex("assets/fx-extra/cargo-plane.webp"); W.jet = loadTex("assets/fx-extra/jet.webp"); W.chute = loadTex("assets/fx-extra/parachute-crate.webp");
+    planeM = sprite(W.cargo, 9, 9 * 390 / 686, 8);
+    for (let i = 0; i < 2; i++) jets.push(sprite(W.jet, 8, 8 * 261 / 631, 8));
+    chuteM = sprite(W.chute, CH_W, CH_H, 8);
+    chuteGeoFull = chuteM.geometry;
+    chuteGeoCanopy = new THREE.PlaneBufferGeometry(1, 0.7); { const uv = chuteGeoCanopy.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setY(i, 0.3 + 0.7 * uv.getY(i)); }
+    // shield bubble: fresnel rim, additive
+    bubble = new THREE.Mesh(new THREE.SphereBufferGeometry(1, 28, 18), new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Color(0.3, 0.85, 1.0) }, uOp: { value: 0 }, uTime: { value: 0 } }, vertexShader: BUBBLE_VS, fragmentShader: BUBBLE_FS,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    bubble.renderOrder = 6; bubble.visible = false; bubble.frustumCulled = false; root.add(bubble);
+    // ground timer rings: a thin ring that depletes clockwise as the power-up runs out
+    const flat = new THREE.PlaneBufferGeometry(1, 1).rotateX(-Math.PI / 2);
+    shieldRing = new THREE.Mesh(flat, ringMat(0x5ad8ff)); giantRing = new THREE.Mesh(flat, ringMat(0xffa23a));
+    for (const r of [shieldRing, giantRing]) { r.renderOrder = 3; r.visible = false; r.frustumCulled = false; root.add(r); }
+    // pooled expanding rings (shockwaves, bursts, dust)
+    ringGeo = new THREE.RingBufferGeometry(0.8, 1, 48).rotateX(-Math.PI / 2);
+    for (let i = 0; i < 10; i++) {
+      const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false, fog: false })); m.visible = false; m.renderOrder = 4; m.frustumCulled = false; root.add(m);
+      S.rings.push({ m, t: 0, life: 1, r0: 1, r1: 2, op: 1, on: false });
+    }
+    // bombs
+    bombGeo = new THREE.CylinderBufferGeometry(0.2, 0.2, 1.0, 8); bombMat = new THREE.MeshBasicMaterial({ color: 0x23262e, toneMapped: false, fog: false });
+    for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(bombGeo, bombMat); m.visible = false; m.frustumCulled = false; root.add(m); S.bombs.push(m); }
+  }
+  function ring(x, z, r0, r1, life, color, additive, op) {
+    const r = S.rings.find(q => !q.on) || S.rings[0];
+    Object.assign(r, { t: 0, life, r0, r1, op: op == null ? 1 : op, on: true });
+    r.m.material.color.set(color); r.m.material.blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending; r.m.position.set(x, 0.07, z); r.m.visible = true; r.m.scale.setScalar(r0);
+  }
+  function updateRings(dt) {
+    for (const r of S.rings) {
+      if (!r.on) continue; r.t += dt; const u = r.t / r.life;
+      if (u >= 1) { r.on = false; r.m.visible = false; continue; }
+      r.m.scale.setScalar(r.r0 + (r.r1 - r.r0) * (1 - (1 - u) * (1 - u))); r.m.material.opacity = r.op * (1 - u) * (1 - u * 0.3);
+    }
+  }
+  // world-space "SHOOT IT!" labels (first time only), billboarded and bobbing above a solid
+  function addLabel(o, text, color, y) {
+    const lab = C.makeLabel(512, 128); lab.tex.encoding = sRGB() ? THREE.sRGBEncoding : THREE.LinearEncoding; C.drawLabel(lab, text, color, 0.62);
+    const m = new THREE.Mesh(new THREE.PlaneBufferGeometry(1, 1), new THREE.MeshBasicMaterial({ map: lab.tex, transparent: true, depthWrite: false, toneMapped: false, fog: false }));
+      if (far < -2 || far > 90) { l.m.visible = false; continue; }
+      l.m.visible = true; l.m.position.set(l.o.x, l.y + 0.25 * Math.sin(T * 4), l.o.z); const k = 1 + 0.06 * Math.sin(T * 8); l.m.scale.set(4.6 * k, 1.15 * k, 1);
+      if (l.o.kind === "barrel" && far < 40 && !C.save.seenBarrel) { C.save.seenBarrel = true; try { C.persist(); } catch (e) {} }
+    }
+    // first-time barrel hint: shown on the first barrel once the squad is within sight
+    if (!C.save.seenBarrel && !S.barrelHintFor) { // create once per level
+      const b = S.barrels.find(q => q.alive && L.sz - q.z > -2 && L.sz - q.z < 80);
+      if (b) { S.barrelHintFor = b; addLabel(b, "SHOOT!", "#ff9a7a", 4.0); }
+    }
+    void cam;
+  }
+  function onTick(ev) {
+    L = ev.L; if (!L) return; T += ev.dt; build();
+    if (ev.state === "play" && !S.drop) {
+      for (const p of S.plan) {
+        if (p.fired || L.sz <= p.z + 12) { if (!p.fired && L.sz <= p.z + 12) p.fired = true; continue; }
+        if (L.sz <= p.z + p.lead + C.SPEED * (L.speedMul || 1) * (TR + TF)) { startDrop(p); break; }
+      }
+    }
+    updateDrop(ev.dt);
+    // Teaching supplies are guaranteed even if the player steers past the crate.
+    // Both the ordinary shot/contact path and this fallback use _pu to award once.
+    for (const p of S.plan) if (p.guaranteed && p.o && !p.o._pu && L.sz <= p.z + 4) {
+      C.damageArea(p.o.x, p.o.z, 0.01, p.o.hp, { skipBoss: true });
+    }
+    updateStrike(ev.dt); updateRings(ev.dt); updateSquad(ev.dt); updateLabels();
+  }
+  function onFrame(ev) { // billboards face the camera
+    if (!ready) return; const q = ev.camera.quaternion;
+    if (planeM.visible) planeM.quaternion.copy(q); if (chuteM.visible) chuteM.quaternion.copy(q);
+    for (const j of jets) if (j.visible) j.quaternion.copy(q);
+    for (const l of S.labels) if (l.m.visible) l.m.quaternion.copy(q);
+  }
+
+  function setup(ctx) {
+    C = ctx; THREE = ctx.THREE; const b = ctx.bus;
+    b.on("generate", ev => { S.barrelHintFor = null; onGenerate(ev); });
+    b.on("levelStart", () => { const plan = S.plan, bar = S.barrels; reset(); S.plan = plan; S.barrels = bar; S.barrelHintFor = null; for (const p of S.plan) { p.fired = false; } });
+    b.on("tick", onTick); b.on("frame", onFrame); b.on("solidBreak", onSolidBreak);
+    b.on("win", hideSquadFx); b.on("lose", hideSquadFx);
+    b.on("state", ev => { if (ev.to === "home" || ev.to === "levels") hideSquadFx(); });
+  }
+  // test hooks: Powerups.force("shield" | "airstrike" | "giant" | "jackpot")
+  return { setup, activate: type => { if (C && C.L) { L = C.L; usePower(type); } }, force: type => { if (C && C.L) { L = C.L; usePower(type); } } };
+})();
+
+exec
+/bin/bash -lc "sed -n '400,428p' index.html
+sed -n '620,635p' index.html
+rg --files -g '*AGENTS.md' -g '*test*' -g '*playwright*' -g '*three*' -g '*package*' -g '*units2*'
+ls -la js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+// ---------- world / level ----------
+let L = null;               // current level state
+const world = new THREE.Group(); scene.add(world);   // scenery, owned by js/scenery.js
+const track = new THREE.Group(); scene.add(track);   // gate and solid visuals, owned by js/objects3d.js
+// event bus: the game emits, the look-and-feel modules listen (design/overhaul.md section 6)
+const bus = {
+  h: {},
+  on(name, fn) { (this.h[name] ||= []).push(fn); },
+  emit(name, data) { const hs = this.h[name]; if (hs) for (const fn of hs) { try { fn(data); } catch (e) { console.error(`bus ${name}`, e); } } },
+};
+const spriteTint = new THREE.Color(1, 1, 1);
+function setSpriteTint(color) { spriteTint.set(color); for (const l of spriteLayers) if (!l.additive) l.mesh.material.uniforms.tint.value.copy(spriteTint); }
+const ctx = {
+  THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng,
+  get WEAPONS() { return WEAPONS; }, get L() { return L; }, get state() { return state; }, get layers() { return layers; },
+  sfx: (...a) => sfx(...a), vibe: ms => vibe(ms), floatText: (...a) => floatText(...a),
+  get belt() { return L.belt; }, usePowerup: slot => usePowerup(slot), collectPowerup: type => collectPowerup(type),
+  get tactics() { return L.tactics; }, get threat() { return L.threat; }, get surgeReady() { return !!L.surgeReady; },
+  useSurge: () => useSurge(), damageBoss: n => damageBoss(n),
+  // Surge Update seams (design/engagement.md section 3)
+  slowMo: (...a) => slowMo(...a), hitStop: s => hitStop(s), addScore: (p, o) => addScore(p, o),
+  spawnSolid: (...a) => spawnSolid(...a), damageArea: (...a) => damageArea(...a),
+  addSoldiers: n => addSoldiers(n), killSoldiers: (n, nearX = null, force = true) => killSoldiers(n, nearX, force),
+  setShield: s => setShield(s), setGiant: s => setGiant(s), finishLevel: m => finishLevel(m), goMode: o => goMode(o),
+  setSkin: (a, b) => setSkin(a, b), squadRadius: n => squadRadius(n), persist: () => persist(), MODIFIERS, SKINS, TRACERS, SPEED, COMBO_TIERS,
+};
+const SLAM_R = 3.0, SLAM_WARN = 1.6, SLAM_AT = 2.6; // boss slam: red ring warns, then hits soldiers inside it
+const slamRing = new THREE.Mesh(new THREE.RingBufferGeometry(SLAM_R - 0.5, SLAM_R, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, depthWrite: false }));
+slamRing.rotation.x = -Math.PI / 2; slamRing.renderOrder = 2; slamRing.visible = false; scene.add(slamRing);
+  const o = { kind, x, z, hw: SOLID_HW[kind], hp, maxHp: hp, alive: true, ...extra };
+  Obj3D.solid(o); labelSolid(o); return o;
+}
+function labelSolid(o) {
+  if (o.kind === "blockBlue" || o.kind === "blockYellow") Obj3D.solidLabel(o, `+${o.reward}`, "#fff");
+  else Obj3D.solidLabel(o, `${Math.ceil(o.hp)}`, o.kind === "weaponCase" || o.kind === "airdrop" ? "#ffe066" : o.kind === "ammo" ? "#9dff7a" : o.kind === "barrel" ? "#ff9a7a" : "#fff");
+}
+function enemy(type, x, z, level) {
+  const hpScale = 1 + (level - 1) * 0.1;
+  const def = { zombie: { hp: 2, r: 0.42, h: 1.45, sp: 2.6, dmg: 1 }, grunt: { hp: 2, r: 0.42, h: 1.45, sp: 3.2, dmg: 1 }, brute: { hp: 22, r: 0.85, h: 2.3, sp: 2.2, dmg: 5 } }[type];
+  return { type, x, z, hp: def.hp * hpScale, maxHp: def.hp * hpScale, r: def.r, h: def.h, sp: def.sp * (0.85 + Math.random() * 0.3), dmg: def.dmg, state: "idle", t: Math.random() * 4, flash: 0, dieT: 0 };
+}
+function generateLevel(level, opts = {}) {
+  const theme = themeFor(level), seeded = opts.seed !== undefined;
+  const r = seeded ? rng(opts.seed * 7919 + level * 131) : rng(level * 9973 + 17);
+  const rj = rng((seeded ? opts.seed : level) * 7777 + 3); // jackpots use their own stream so layouts stay the same
+total 248
+drwxr-xr-x  2 root root  4096 Nov  7 13:26 .
+drwxr-xr-x 11 root root  4096 Nov  7 20:16 ..
+-rw-r--r--  1 root root 12468 Nov  6 19:06 finale.js
+-rw-r--r--  1 root root 30968 Nov  7 13:02 juice.js
+-rw-r--r--  1 root root 63875 Nov  7 13:26 meta.js
+-rw-r--r--  1 root root 44033 Nov  7 12:25 objects3d.js
+-rw-r--r--  1 root root 23083 Nov  7 12:29 powerups.js
+-rw-r--r--  1 root root 58142 Nov  6 16:42 scenery.js
+

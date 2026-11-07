@@ -31,7 +31,7 @@ def run_once(prompt: str, refs: list[str], count: int, timeout: int) -> tuple[li
     )
     cmd = [
         shutil.which("codex") or "codex", "exec", "--ephemeral", "--skip-git-repo-check", "--json",
-        "-m", "gpt-6-astra", "-c", 'model_reasoning_effort="medium"', "-c", 'service_tier="default"',
+        "-m", "gpt-6-astra", "-c", 'model_reasoning_effort="medium"', "-c", 'service_tier="priority"',
         "-s", "read-only", "-C", tempfile.gettempdir(),
     ]
     for ref in refs:
