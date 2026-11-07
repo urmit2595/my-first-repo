@@ -14,14 +14,18 @@ const tryF = f => { try { return f(); } catch (e) { console.error("meta", e); } 
 function fresh() {
   return { v: 1, uid: 1, started: false, medals: 0, missions: [], trophies: {}, seenUnlock: {}, skin: null, tracer: null,
     daily: { best: {}, stars: {}, lastDay: null, streak: 0, bestStreak: 0, freezes: 0, wins: 0, played: {} },
-    stats: { kills: 0, wins: 0, gates: 0, maxCombo: 0, maxSquad: 0, maxMult: 0, maxScore: 0, surges: 0, barrels: 0, slams: 0, airdrops: 0, noLoss: 0, missions: 0, maxRunKills: 0, jackpots: 0, bosses: 0, pu: {} } };
+    stats: { perfect: 0, wasted: 0, banked: 0, threatsCountered: 0, bankLevels: 0, cleanWins: 0, kills: 0, wins: 0, gates: 0, maxCombo: 0, maxSquad: 0, maxMult: 0, maxScore: 0, surges: 0, barrels: 0, slams: 0, airdrops: 0, noLoss: 0, missions: 0, maxRunKills: 0, jackpots: 0, bosses: 0, pu: {} } };
 }
 function load() {
   let m = null;
   try { m = JSON.parse(localStorage.getItem(KEY)); } catch (e) { m = null; }
   const f = fresh();
   if (!m || typeof m !== "object") return f;
-  m = Object.assign(f, m); m.daily = Object.assign(f.daily, m.daily || {}); m.stats = Object.assign(f.stats, m.stats || {});
+  // Merge nested defaults before replacing their parent (also migrates pre-tactics saves).
+  const daily = Object.assign({}, f.daily, m.daily || {}), stats = Object.assign({}, f.stats, m.stats || {});
+  m = Object.assign(f, m, { daily, stats });
+  for (const k of ["perfect", "wasted", "banked", "threatsCountered", "bankLevels", "cleanWins"])
+    if (!Number.isFinite(m.stats[k]) || m.stats[k] < 0) m.stats[k] = 0;
   if (!Array.isArray(m.missions)) m.missions = [];
   return m;
 }
@@ -126,6 +130,13 @@ function recordDaily(data) {
 /* ---------------- missions ---------------- */
 // k = feed kind; mode sum (accumulates) or max (best value seen). All are normal-play goals.
 const POOL = [
+  { id: "tPerfect", k: "tPerfectRun", mode: "max", t: "Score {n} PERFECT uses in one run", base: 3, per: 0, m: 2, ic: "target" },
+  { id: "tBank", k: "tBank", t: "Bank {n} power-ups", base: 2, per: 0, m: 1, ic: "airdrop" },
+  { id: "tSwarm", k: "tCounter_swarm", t: "Counter {n} SWARM with AIRSTRIKE", base: 1, per: 0, m: 2, ic: "pu-airstrike" },
+  { id: "tClean", k: "tClean", t: "Win without wasting a power-up", base: 1, per: 0, m: 2, ic: "target" },
+  { id: "tBarricade", k: "tCounter_barricade", t: "Counter {n} BARRICADES as GIANT", base: 2, per: 0, m: 2, ic: "pu-giant" },
+  { id: "tMortars", k: "tCounter_mortars", t: "Counter {n} MORTARS with SHIELD", base: 2, per: 0, m: 2, ic: "pu-shield" },
+  { id: "tSurge", k: "tSurge", t: "Score {n} PERFECT SURGE uses", base: 2, per: 0, m: 2, ic: "bolt" },
   { id: "kill1", k: "kill", t: "Kill {n} enemies", base: 120, per: 30, step: 10, m: 1, ic: "skull", endow: 1 },
   { id: "kill2", k: "kill", t: "Kill {n} enemies", base: 350, per: 70, step: 10, m: 2, ic: "skull", endow: 1 },
   { id: "runkill", k: "runkills", mode: "max", t: "Kill {n} enemies in one level", base: 40, per: 8, step: 5, m: 2, ic: "target" },
@@ -289,6 +300,9 @@ function nextUnlockGoal() {
 /* ---------------- trophies ---------------- */
 const S = () => M.stats;
 const TROPHIES = [
+  { id: "tactician", n: "TACTICIAN", d: "10 lifetime PERFECT uses", ic: "target", f: () => S().perfect >= 10, p: () => [S().perfect, 10] },
+  { id: "hoarder", n: "HOARDER", d: "Bank 2 power-ups in 5 levels", ic: "airdrop", f: () => S().bankLevels >= 5, p: () => [S().bankLevels, 5] },
+  { id: "neverWasted", n: "NEVER WASTED", d: "Win 5 levels without wasting a power-up", ic: "pu-shield", f: () => S().cleanWins >= 5, p: () => [S().cleanWins, 5] },
   { id: "first", n: "FIRST WIN", d: "Win a level", ic: "crown", f: () => S().wins >= 1 },
   { id: "vet", n: "VETERAN", d: "Win 25 levels", ic: "crown", f: () => S().wins >= 25, p: () => [S().wins, 25] },
   { id: "k100", n: "MOW 'EM DOWN", d: "100 kills in one level", ic: "skull", f: () => S().maxRunKills >= 100, p: () => [S().maxRunKills, 100] },
@@ -576,6 +590,7 @@ function onWin(d) {
   d = d || {};
   const L = ctx.L || {};
   const noLoss = run.lost === 0;
+  finishTactics(true);
   S().wins++; S().bosses++; S().maxSquad = Math.max(S().maxSquad, d.n || 0);
   const total = d.total != null ? d.total : d.score;
   if (total != null) S().maxScore = Math.max(S().maxScore, total);
@@ -612,8 +627,10 @@ function buildResults(d, x) {
   if (x.bc) add("BEST COMBO", x.bc);
   add("SQUAD", d.n || 0);
   if (d.mult > 1) add("FINALE", d.mult, v => "x" + (Math.round(v * 10) / 10));
+  add("TACTICS", run.perfect, () => `${run.perfect} PERFECT · +${run.bankBonus.toFixed(1)}× banked · ${run.wasted} wasted`);
   const hasTotal = x.total != null;
   let html = `<div class="mt-grid">` + rows.map((r, i) => `<div class="mt-r" data-i="${i}"><span>${r.lab}</span><b>${r.fmtFn ? r.fmtFn(r.val) : fmt(r.val)}</b></div>`).join("") + `</div>`;
+  if (run.perfect >= 2 && run.wasted === 0) html += '<div class="mt-hint" style="color:#ffd84a">★ TACTICIAN</div>';
   if (hasTotal) html += `<div class="mt-total" id="mtTotal"><span class="lb">SCORE</span><span class="num" id="mtNum">0</span><span class="mt-best" id="mtBest">NEW BEST!</span><span class="mt-spark" id="mtSpark"></span></div>`;
   const n = d.n || 0, lv = d.level || (ctx.L && ctx.L.level) || 1, t3 = 30 + 10 * lv, t2 = 10 + 3 * lv;
   if ((d.stars || 0) < 3) {
@@ -686,6 +703,7 @@ function burst(el) {
 /* ---------------- near-miss (lose) ---------------- */
 function onLose(d) {
   d = d || {};
+  finishTactics(false);
   const L = ctx.L || {};
   if (active()) { feed("combo", L.bestCombo || run.combo || 0); feed("runkills", run.kills); }
   S().maxCombo = Math.max(S().maxCombo, L.bestCombo || run.combo || 0);
@@ -699,6 +717,9 @@ function onLose(d) {
   if (d.atBoss && d.bossPct != null) { head = `Boss at ${Math.round(d.bossPct)}%!`; sub = d.bossPct <= 30 ? "So close. One more push." : "Hit it harder next time."; }
   else { const p = d.pct != null ? d.pct : Math.floor((L.reached || 0) * 100); head = `${p}% of the way`; sub = p >= 70 ? "Almost there." : "Grab more gates to grow the squad."; }
   const lines = [`<div class="ln">${sub}</div>`];
+  const near = d.atBoss ? d.bossPct != null && d.bossPct <= 30 : (d.pct != null ? d.pct : (L.reached || 0) * 100) >= 70;
+  const tip = near && tacticsTip();
+  if (tip) lines.push(`<div class="ln">${tip}</div>`);
   const prevPct = gsave().best && gsave().best[lv];
   if (bestS) lines.push(`<div class="ln">Best score ${fmt(bestS)}${d.score != null ? " · this run " + fmt(d.score) : ""}</div>`);
   else if (d.score != null) lines.push(`<div class="ln">Score ${fmt(d.score)}</div>`);
@@ -728,9 +749,46 @@ function decorateLevels() {
   }
 }
 
+/* ---------------- tactics tracking ---------------- */
+const COUNTERS = { swarm: "airstrike", barricade: "giant", mortars: "shield", mortar: "shield", boss: "shield", slam: "shield" };
+const threatKind = k => String(k || "").toLowerCase() === "mortar" ? "mortars" : String(k || "").toLowerCase();
+function currentBelt() { return Array.isArray(ctx.belt) ? ctx.belt : run.belt; }
+function rememberThreat(d) {
+  const kind = threatKind(d.kind);
+  if (!kind) return null;
+  const key = d.id != null ? d.id : kind;
+  let t = run.threats.get(key);
+  if (!t) { t = { kind, counter: COUNTERS[kind], matched: false, heldAtHit: false, lost: 0, ended: false }; run.threats.set(key, t); }
+  run.liveThreat = t;
+  return t;
+}
+function finishTactics(won) {
+  if (run.tacticsFinished) return;
+  run.tacticsFinished = true;
+  // Completion feeds once per run, so newly drawn missions cannot reuse the same run's peak.
+  feed("tPerfectRun", run.perfect);
+  if (won && run.wasted === 0) { S().cleanWins++; feed("tClean", 1); }
+  if (won && run.banked >= 2) S().bankLevels++;
+}
+function tacticsTip() {
+  let missed = null;
+  for (const t of run.threats.values()) if (t.lost > 0 && !t.countered) missed = t;
+  if (missed && missed.counter) {
+    const tool = missed.counter.toUpperCase();
+    const danger = missed.kind === "mortars" ? "mortars hit" : missed.kind === "swarm" ? "swarm hit" : missed.kind === "barricade" ? "barricade hit" : "boss slammed";
+    if (missed.heldAtHit) return `You had ${tool === "AIRSTRIKE" ? "an" : "a"} ${tool} when the ${danger} — tap it!`;
+    return `Save ${tool === "AIRSTRIKE" ? "an" : "a"} ${tool} for the ${missed.kind === "swarm" ? "swarm before the boss" : missed.kind === "barricade" ? "barricade" : missed.kind === "mortars" ? "mortars" : "boss slam"}.`;
+  }
+  if (run.misused) return "Match the power-up icon on the threat warning for a PERFECT counter.";
+  if (run.wasted) return "Wait for a threat warning before using its matching power-up.";
+  if (run.ready) return "Your SURGE was ready — tap it during a threat or the boss fight!";
+  if (run.belt.some(Boolean)) return "Use your saved power-ups before the squad runs out!";
+  return "Save a matching power-up for the next threat warning.";
+}
+
 /* ---------------- run tracking ---------------- */
 function newRun() {
-  run = { kills: 0, lost: 0, combo: 0, done: [], snap: M.missions.map(m => ({ uid: m.uid, prog: m.prog })), cTick: 0 };
+  run = { perfect: 0, wasted: 0, misused: 0, banked: 0, bankBonus: 0, bankSeen: false, tacticsFinished: false, ready: false, belt: [null, null], threats: new Map(), liveThreat: null, kills: 0, lost: 0, combo: 0, done: [], snap: M.missions.map(m => ({ uid: m.uid, prog: m.prog })), cTick: 0 };
 }
 function wire() {
   const on = (n, f) => bus.on(n, d => tryF(() => f(d || {})));
@@ -747,6 +805,43 @@ function wire() {
     if (d.to !== "win") cleanupResults();
     refreshHome();
   });
+  on("belt", d => { if (Array.isArray(d.slots)) run.belt = d.slots.slice(0, 2); });
+  on("surgeReady", () => { run.ready = true; });
+  on("powerupUse", d => {
+    if (run.tacticsFinished) return;
+    if (d.perfect) { run.perfect++; S().perfect++; if (d.type === "surge") feed("tSurge", 1); }
+    if (d.wasted) { run.wasted++; S().wasted++; }
+    if (d.misused) run.misused++;
+    if (d.type === "surge") run.ready = false;
+    if (d.slot === 0 || d.slot === 1) run.belt[d.slot] = null;
+    const t = run.liveThreat;
+    if (t && d.perfect && d.type === t.counter && (!d.threatKind || threatKind(d.threatKind) === t.kind)) t.matched = true;
+    persist(); checkTrophies();
+  });
+  on("bank", d => {
+    if (run.bankSeen || run.tacticsFinished) return;
+    run.bankSeen = true;
+    run.banked = Number.isFinite(d.count) ? Math.max(0, Math.floor(d.count)) : 0;
+    run.bankBonus = Number.isFinite(d.bonus) ? Math.max(0, d.bonus) : run.banked * .5;
+    S().banked += run.banked; feed("tBank", run.banked); persist();
+  });
+  on("threat", rememberThreat);
+  on("threatLive", rememberThreat);
+  on("threatEnd", d => {
+    const kind = threatKind(d.kind), key = d.id != null ? d.id : kind;
+    let t = run.threats.get(key);
+    if (!t) t = rememberThreat(d);
+    if (!t || t.ended || run.tacticsFinished) return;
+    t.ended = true; t.countered = !!d.countered;
+    t.lost = Math.max(t.lost, Number.isFinite(d.lost) ? d.lost : 0);
+    if (d.countered) {
+      S().threatsCountered++;
+      // PERFECT SURGE alone is not proof that the named matching tool cleared a threat.
+      if (t.matched) feed("tCounter_" + t.kind, 1);
+    }
+    if (run.liveThreat === t) run.liveThreat = null;
+    persist(); checkTrophies();
+  });
   on("enemyDie", d => {
     run.kills++; S().kills++; feed("kill", 1);
     if (d.e && d.e.type === "brute") feed("brute", 1);
@@ -758,7 +853,11 @@ function wire() {
   });
   on("soldiersAdded", d => { if (d.total != null) { S().maxSquad = Math.max(S().maxSquad, d.total); feed("squad", d.total); } });
   on("squadMilestone", d => { if (d.n) S().maxSquad = Math.max(S().maxSquad, d.n); });
-  on("soldiersLost", d => { run.lost += d.n || 1; });
+  on("soldiersLost", d => {
+    const lost = d.n || 1; run.lost += lost;
+    const t = run.liveThreat;
+    if (t && !t.ended) { t.lost += lost; if (currentBelt().includes(t.counter)) t.heldAtHit = true; }
+  });
   on("surge", d => { if (d.on) { S().surges++; feed("surge", 1); } });
   on("comboEnd", d => { if (d.count) { S().maxCombo = Math.max(S().maxCombo, d.count); feed("combo", d.count); } });
   on("combo", d => { if (d.count) { run.combo = Math.max(run.combo, d.count); feed("combo", d.count); } });

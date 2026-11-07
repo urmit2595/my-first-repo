@@ -80,6 +80,95 @@ window.Juice = (() => {
       document.head.appendChild(style);
     }
 
+    // Tactics overlays are event-driven; no DOM queries or allocations in the frame loop.
+    const tacticsStyle = document.createElement("style");
+    tacticsStyle.textContent = `
+#game .jt-chip{position:absolute;z-index:6;pointer-events:none;background:#17223aef;border:2px solid #705934;border-radius:16px;padding:7px 10px;color:#ffe392;font:16px 'Lilita One',sans-serif;text-align:center;max-width:90%;box-sizing:border-box}
+#game .jt-chip[hidden]{display:none}
+#game .jt-chip img{width:30px;height:30px;vertical-align:middle;object-fit:contain;margin-right:6px}
+#game .jt-threat{top:110px;left:50%;transform:translateX(-50%);white-space:nowrap}
+#game .jt-swap{bottom:calc(100px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);white-space:nowrap}
+#game .jt-swap svg{width:30px;height:30px;vertical-align:middle;margin-left:6px;transform:rotate(-90deg)}
+#game .jt-swap circle{fill:none;stroke:#ffd84a;stroke-width:3;stroke-dasharray:76;stroke-dashoffset:0}
+#game .jt-coach{width:220px;transform:translateX(-50%)}
+#game .jt-coach span{position:absolute;top:100%;font-size:32px;left:var(--finger,50%);transform:translateX(-50%);animation:jt-point .6s ease-in-out infinite alternate}
+#game .jt-waste{font-size:13px;color:#b6bdc8;border-color:#707887;transform:translate(-50%,-100%)}
+#game .jt-ring{position:absolute;inset:-18px;border:4px solid #ffd84a;border-radius:50%;pointer-events:none;animation:jt-burst .65s ease-out forwards}
+@keyframes jt-point{to{margin-top:8px;filter:drop-shadow(0 0 7px #ffd84a)}}
+@keyframes jt-burst{from{transform:scale(.5);opacity:1}to{transform:scale(1.5);opacity:0}}
+@media(prefers-reduced-motion:reduce){#game .jt-coach span{animation:none}#game .jt-ring{animation:juice-fade .65s forwards}}
+`;
+    document.head.appendChild(tacticsStyle);
+    function chip(cls) {
+      const el = document.createElement("div"); el.className = "jt-chip " + cls;
+      el.hidden = true; el.setAttribute("role", "status"); game.appendChild(el); return el;
+    }
+    const threatChip = chip("jt-threat"), swapChip = chip("jt-swap"), coachChip = chip("jt-coach"), wasteChip = chip("jt-waste");
+    const counters = { swarm: "airstrike", barricade: "giant", mortars: "shield", mortar: "shield", boss: "shield", slam: "shield" };
+    const toolType = t => ["airstrike", "shield", "giant", "surge"].includes(t) ? t : null;
+    const toolIcon = t => toolType(t) ? `<img alt="" src="assets/ui/icons/${t === "surge" ? "surge" : "pu-" + t}.webp">` : "";
+    let threatId = null, readyShown = false, coachTimer = 0, coachRetry = 0, swapTimer = 0, wasteTimer = 0;
+    function slotButton(slot) {
+      if (slot !== 0 && slot !== 1) return null;
+      return game.querySelector('[data-slot="' + slot + '"]') || $("beltSlot" + slot) || $("belt" + slot) || $("powerup" + slot);
+    }
+    function clearCoach() { clearTimeout(coachTimer); clearTimeout(coachRetry); coachChip.hidden = true; }
+    function clearSwap() { clearTimeout(swapTimer); swapChip.hidden = true; }
+    function clearTactics() {
+      clearCoach(); clearSwap(); clearTimeout(wasteTimer); wasteChip.hidden = threatChip.hidden = true;
+      threatId = null; readyShown = false;
+    }
+    on("threat", (d = {}) => {
+      const kind = String(d.kind || "").toLowerCase(), counter = toolType(d.counter) || counters[kind];
+      const label = kind === "swarm" ? "SWARM AHEAD" : kind === "barricade" ? "BARRICADE" : kind === "mortars" || kind === "mortar" ? "MORTARS" : "BOSS SLAM";
+      threatId = d.id; threatChip.innerHTML = toolIcon(counter) + "⚠ " + label; threatChip.hidden = false;
+    });
+    on("threatEnd", (d = {}) => { if (d.id == null || threatId == null || d.id === threatId) { threatChip.hidden = true; threatId = null; } });
+    on("swapOffer", (d = {}) => {
+      clearSwap();
+      swapChip.innerHTML = toolIcon(d.type) + 'SWAP?<svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12"/></svg>';
+      swapChip.setAttribute("aria-label", "Swap power-up? Three seconds to choose a slot"); swapChip.hidden = false;
+      const ring = swapChip.querySelector("circle");
+      if (ring.animate) ring.animate([{ strokeDashoffset: 0 }, { strokeDashoffset: 76 }], { duration: 3000, fill: "forwards" });
+      swapTimer = setTimeout(clearSwap, 3000);
+    });
+    on("swapDone", clearSwap); on("swapExpired", clearSwap);
+    on("tacticsCoach", (d = {}) => {
+      clearCoach();
+      const kind = String(d.kind || "").toLowerCase(), type = toolType(kind) || counters[kind];
+      if (!type || (d.slot !== 0 && d.slot !== 1)) return;
+      const expires = Date.now() + 4000;
+      const place = safe(() => {
+        if (Date.now() >= expires) return;
+        const button = slotButton(d.slot);
+        if (!button || !button.getBoundingClientRect().width) { coachRetry = setTimeout(place, 100); return; }
+        const r = button.getBoundingClientRect(), g = game.getBoundingClientRect();
+        const target = r.left + r.width / 2 - g.left, center = clamp(target, Math.min(115, g.width / 2), Math.max(g.width - 115, g.width / 2));
+        coachChip.innerHTML = "Tap to " + (type === "airstrike" ? "call an AIRSTRIKE!" : type === "giant" ? "go GIANT!" : "activate " + type.toUpperCase() + "!") + "<span>👇</span>";
+        coachChip.style.left = center + "px"; coachChip.style.bottom = (g.bottom - r.top + 38) + "px";
+        coachChip.style.setProperty("--finger", (110 + target - center) + "px"); coachChip.hidden = false;
+      });
+      place(); coachTimer = setTimeout(clearCoach, 4000);
+    });
+    on("powerupUse", (d = {}) => {
+      clearCoach();
+      const type = toolType(d.type);
+      if (d.perfect && type) enqueue("PERFECT " + type.toUpperCase() + "!", { color: "#ffd84a", size: 9, ring: true });
+      else if (d.wasted) {
+        const button = slotButton(d.slot), g = game.getBoundingClientRect(), r = button && button.getBoundingClientRect();
+        wasteChip.textContent = "WASTED"; wasteChip.style.left = (r ? r.left + r.width / 2 - g.left : g.width / 2) + "px";
+        wasteChip.style.top = (r ? r.top - g.top - 8 : g.height - 100) + "px"; wasteChip.hidden = false;
+        clearTimeout(wasteTimer); wasteTimer = setTimeout(() => { wasteChip.hidden = true; }, 1200);
+      } else if (d.misused) enqueue("MISFIRE", { color: "#a8b0be", size: 5 });
+      if (type === "surge") readyShown = false;
+    });
+    on("bank", (d = {}) => {
+      const count = Number.isFinite(d.count) ? d.count : 0, bonus = Number.isFinite(d.bonus) ? d.bonus : count * .5;
+      enqueue(`BANKED ×${count} → +${bonus.toFixed(1)}×`, { color: "#ffd84a", size: 7 });
+    });
+    on("surgeReady", () => { if (!readyShown) { readyShown = true; enqueue("SURGE READY!", { color: "#ffd84a", icon: "surge" }); } });
+    on("surge", d => { if (d && d.on) readyShown = false; });
+
     function stop(el) {
       const animation = animations.get(el);
       if (animation) { animations.delete(el); animation.cancel(); }
@@ -127,6 +216,8 @@ window.Juice = (() => {
     function nextCallout() {
       current = callouts.shift() || null; calloutAge = 0;
       if (!current) { banner.hidden = true; return; }
+      const oldRing = banner.querySelector(".jt-ring"); if (oldRing) oldRing.remove();
+      if (current.ring) { const ring = document.createElement("i"); ring.className = "jt-ring"; banner.appendChild(ring); }
       title.textContent = current.text; subtitle.textContent = current.sub;
       subtitle.hidden = !current.sub;
       icon.hidden = !current.icon;
@@ -143,6 +234,7 @@ window.Juice = (() => {
       });
     }
     function clearMoments() {
+      clearTactics();
       callouts.length = 0; current = null; banner.hidden = true;
       trauma = pullback = surgeKick = flash = 0;
       surgeOn = shieldOn = giantOn = false;
