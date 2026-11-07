@@ -7574,3 +7574,945 @@ First-attempt results: fresh save, no Assist; errors excluded from win rates.
 └─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
 Causes of loss {"never:threat:swarm":1,"never:boss:slam":2,"never:boss:shieldWall":1,"never:splitter_mini":1,"never:swarm":1,"never:boss:charge":1}
 
+codex
+The full CPU sweep completed all 72 runs without runtime errors. It’s still too forgiving: smart won every mission, while never won 91.7% of normal, 83.3% of hard, and 33.3% of boss missions. Replay, render-rate independence, Assist, contacts, and nearest-hit checks pass. I’m testing campaign damage tuning against those results while measuring the engine’s CPU cost.
+
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node /tmp/e1-perf.js > /tmp/e1-perf.log' in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();s=s.replace('const FIXED_DT = 1/60, MAX_CATCHUP = 5, HASH_CELL = 2;', '''const FIXED_DT = 1/60, MAX_CATCHUP = 5, HASH_CELL = 2;
+const CAMPAIGN_TUNING = { normalDamage: .6, hardDamage: .4, bossDamage: .45, gateCharge: .015, gateGrowth: 6 };''');s=s.replace('function damage() { return WEAPONS[L.weapon].dmg * (L.surgeT > 0 ? 2 : 1); }','function damage() { return WEAPONS[L.weapon].dmg * (L.surgeT > 0 ? 2 : 1) * ("'!L.mission || onboarding() ? 1 : CAMPAIGN_TUNING[L.mission.tag + "Damage"]); }'"');s=s.replace('(L.mission?.015:.35)', '(L.mission?CAMPAIGN_TUNING.gateCharge:.35)').replace('L.mission?h.initialV+6:99','L.mission?h.initialV+CAMPAIGN_TUNING.gateGrowth:99');s=s.replace('    const count = Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3)));','    const factor = L.missionState?.assisted === 2 ? .65 : L.missionState?.assisted ? .8 : 1;\\n    const count = Math.round(Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3))) * factor);');s=s.replace('e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6);','e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6) * factor;');s=s.replace('const e=enemy(type,x,z,L.level,{authored:"'!!L.mission,...opts});'"','const factor=L.missionState?.assisted===2?.65:L.missionState?.assisted?.8:1;\\n  if(opts.campaignChild && factor<1 && gameplayRng(\"assist\")>factor)return null;\\n  const e=enemy(type,x,z,L.level,{authored:"'!!L.mission,...opts});'"');s=s.replace('  const factor=L.missionState?.assisted===2?.65:L.missionState?.assisted?.8:1;e.hp*=factor;', '  e.hp*=factor;');s=s.replace('draw: () => render(FIXED_DT) };','draw: () => render(FIXED_DT), tuning: CAMPAIGN_TUNING };');p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('(def.sp || 3)', '(def.sp ?? 3)').replace('dmg: def.dmg || 1', 'dmg: def.dmg ?? 1');s=s.replace('e.h * CHAR_K * ENEMY_ASPECT[e.type === \"brute\" ? \"brute\" : eTex], e.h * CHAR_K,','e.h * CHAR_K * (e.scale ?? e.def?.scale ?? 1) * (e.def ? .85 : ENEMY_ASPECT[e.type === \"brute\" ? \"brute\" : eTex]), e.h * CHAR_K * (e.scale ?? e.def?.scale ?? 1),');p.write_text(s)
+PY
+cat /tmp/e1-perf.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"engine":"baseline","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[5.780843914999999,6.208106918333334,6.1838928200000005,6.332495258333332],"median":6.208106918333334,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('SLAM_WARN = 1.6, SLAM_AT = 2.6','SLAM_WARN = 1.6, SLAM_AT = 2.9');s=s.replace('h.warned=true;h.age=0;', 'h.warned=true;h.age=-dt;');s=s.replace('b.warnT=.9;b.lockX', 'b.warnT=.9+dt;b.lockX');p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c1m1-c6m6 --runs 1 > /tmp/e1-campaign-tuned.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 68133ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('L.soldiers.some(s => Math.hypot(e.x-s.x, e.z-s.z) < e.r+0.35)', 'crowdGrid.query(e.x-e.r-.5,e.x+e.r+.5,e.z-e.r-.5,e.z+e.r+.5).some(s => (e.x-s.x)**2+(e.z-s.z)**2 < (e.r+.35)**2)');p.write_text(s)
+PY
+cat /tmp/e1-perf.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"engine":"baseline","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[5.780843914999999,6.208106918333334,6.1838928200000005,6.332495258333332],"median":6.208106918333334,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+{"engine":"updated","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[21.922896694999995,21.483116793333338,21.88264924833334,22.31127875333334],"median":21.922896694999995,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();old='Object.defineProperties(ctx,{squad:{get:()=>({x:L?.sx||0,z:L?.sz||0,count:L?.soldiers.length||0,radius:squadRadius(L?.soldiers.length||0),soldiers:L?.soldiers||[]})},mission:';new='const squadView = Object.freeze({ get x(){return L?.sx||0;}, get z(){return L?.sz||0;}, get count(){return L?.soldiers.length||0;}, get radius(){return squadRadius(L?.soldiers.length||0);}, get soldiers(){return L?.soldiers||[];} });\\nObject.defineProperties(ctx,{squad:{get:()=>squadView},mission:';assert old in s;s=s.replace(old,new);p.write_text(s)
+PY
+cp /tmp/e1-check.js tools/bot-engine-check.js
+python - <<'PY'
+from pathlib import Path
+p=Path('tools/bot-engine-check.js');s=p.read_text();s='#"'!/usr/bin/env node'"\\n\"use strict\";\\n// CPU contract checks. Run from repository root with THREE_LOCAL pointing to Three r128.\\n'+s;s=s.replace(\" // Every mission must generate even when the enemy module is unavailable.\",\" // Every authored mission generates and advances without an error.\");s=s.replace('function fixture(baseline=false)', 'function fixture(withEnemies=true)');s=s.replace(' if(baseline)src=src.replace(\"\\'index.html\\'\",\"\\'/tmp/e1-baseline.html\\'\").replace(\"\\'js/objects3d.js\\'\",\"\\'/tmp/e1-objects-baseline.js\\'\").replace(\"\\'js/powerups.js\\'\",\"\\'/tmp/e1-powerups-baseline.js\\'\");\\n','');s=s.replace(\"+(baseline?'':'fixedStep,\", \"+('fixedStep,\");s=s.replace(' if("'!baseline){for(const file of'"', ' {for(const file of');s=s.replace('s.Enemies.setup(s.H.ctx);', 'if(withEnemies)s.Enemies.setup(s.H.ctx);');s=s.replace(\" console.log('PASS: 36 mission generation/first-tick smoke.');\", \"\"\" console.log('PASS: 36 mission generation/first-tick smoke.');
+ const missing=fixture(false);await missing.H.goMission('c6m6');missing.H.fixedStep();assert(missing.H.L.enemies.length>0);assert.equal(missing.H.L.boss.def,undefined);
+ console.log('PASS: absent enemy module falls back to base units and boss.');\"\"\");p.write_text(s)
+PY
+node --check tools/bot-engine-check.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "tail -4 /tmp/e1-campaign-tuned.log; sed -n '1,18p' tools/bot-engine-check.js; node --check tools/bot-tactics.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"id":"c5m1","policy":"never","run":1,"engine":"simulation","result":"win","stars":[true,true,true],"keptPct":72,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":5,"tag":"normal","hash":"685ac06c","score":1410,"peak":44,"profile":{"steps":2471,"simMs":1223.9073920001028,"maxSimMs":3.9902769999971497,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":14528,"meanSimMs":0.49530853581550094,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c5m1","policy":"smart","run":1,"engine":"simulation","result":"win","stars":[true,true,true],"keptPct":97,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":5,"tag":"normal","hash":"0624f057","score":1920,"peak":44,"profile":{"steps":2471,"simMs":1279.874867999897,"maxSimMs":6.65503699999681,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":13612,"meanSimMs":0.5179582630513545,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c5m2","policy":"never","run":1,"engine":"simulation","result":"lose","stars":[false,false,false],"keptPct":0,"skillOk":false,"cause":"swarm","rescued":0,"assisted":0,"chapter":5,"tag":"normal","hash":"28d2d522","score":755,"peak":46,"profile":{"steps":1278,"simMs":656.4279700000043,"maxSimMs":4.144232999999076,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":28611,"meanSimMs":0.5136369092331802,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c5m2","policy":"smart","run":1,"engine":"simulation","result":"win","stars":[true,true,true],"keptPct":95,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":5,"tag":"normal","hash":"d422702f","score":28910,"peak":46,"profile":{"steps":2542,"simMs":1296.8564859999751,"maxSimMs":16.04931999999826,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":24196,"meanSimMs":0.5101717096774095,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+#!/usr/bin/env node
+"use strict";
+// CPU contract checks. Run from repository root with THREE_LOCAL pointing to Three r128.
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+function fixture(withEnemies=true){
+ let src=fs.readFileSync('tools/check-tactics.js','utf8').split('const H=sandbox.H,events=[];')[0].replace(/^#!.*\n/,'');
+ src=src.replace('performance:{now:()=>10000}',"performance:require('perf_hooks').performance");
+ src=src.replace('ctx,startLevel,setState,step,','ctx,enemy,hitEnemy,win,lose,startLevel,setState,step,'+('fixedStep,advanceClock,stateHash,playReplay,get replay(){return replay},get profile(){return profileSnapshot()},goMission,updateBullets,killSoldiersInCircle,registerBoss,spawnEnemy,'));
+ const s=new Function('require',src+'\nreturn sandbox;')(require);
+ {for(const file of ['js/enemies.js','js/campaign.js'])vm.runInContext(fs.readFileSync(file,'utf8'),s);if(withEnemies)s.Enemies.setup(s.H.ctx);}return s;
+}
+(async()=>{
+ let s=fixture(),H=s.H;await H.goMission('c2m1');assert(H.L.enemies.some(e=>e.type==='shieldbearer'));assert.equal(H.L.soldiers.length,H.L.mission.start);assert(H.L.noBoss);
+ H.ctx.addSoldiers(1000);assert.equal(H.L.soldiers.length,300);
+ H.L.soldiers.length=0;H.ctx.addSoldiers(4);H.L.soldiers.forEach((s,i)=>{s.x=i<2?-3:3;s.z=0;});assert.equal(H.killSoldiersInCircle(-3,0,1,8,'bomber'),2);assert.equal(H.L.missionState.causes.bomber,2);
+ H.L.soldiers[0].specialist='defender';H.L.soldiers[0].armor=1;const before=H.L.soldiers.length;H.ctx.killSoldiersInRect(2,4,-1,1,1,'rifleman');assert.equal(H.L.soldiers.length,before);assert.equal(H.L.soldiers[0].armor,0);
+ // Nearest hit must win over category ordering. Enemy in front of solid.
+ H.L.enemies=[];H.L.solids=[];H.L.gates=[];const e=H.spawnEnemy('grunt',0,-2,{hp:100});const o=H.ctx.spawnSolid('crate',0,-4,100);H.L.bullets.length=0;H.L.bullets.push({x:0,z:0,vx:0,life:1,dmg:10,splash:0,pierce:0});H.updateBullets(.1);assert.equal(e.hp,90);assert.equal(o.hp,100);
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();s=s.replace('l.mesh.material.uniforms.tint.value.copy(spriteTint);', 'l.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(l.baseTint || new THREE.Color(1,1,1));');s=s.replace('layer.mesh.material.uniforms.tint.value.set(def.tint || 0xb6c6e8);','layer.baseTint=new THREE.Color(def.tint || 0xb6c6e8);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);');s=s.replace('layer.mesh.material.uniforms.tint.value.set(def.tint || 0xffffff);','layer.baseTint.set(def.tint || 0xffffff);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);');s=s.replace('l.mesh.material.uniforms.tint.value.set(SPECIALISTS[k].color);specialistLayers[k]=l;', 'l.baseTint=new THREE.Color(SPECIALISTS[k].color);l.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(l.baseTint);specialistLayers[k]=l;');p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+ exited 1 in 86358ms:
+{"id":"c5m6","policy":"smart","run":1,"result":"ERROR","error":"Mission exceeded 300 simulation seconds","errors":[]}
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();a=s.index('  // A nearby wall or a telegraphed hazard leaves an interval');b=s.index('  crowdGrid.clear();',a);s=s[:a]+'''  // Subtract obstacle spans; choose the reachable free interval nearest the steering target.
+  const gaps = crowdGaps; gaps.length=2; gaps[0]=-5.7; gaps[1]=5.7;
+  const block = (a,b) => {
+    for(let i=gaps.length-2;i>=0;i-=2){const lo=gaps[i],hi=gaps[i+1];if(b<=lo||a>=hi)continue;
+      if(a<=lo&&b>=hi){gaps[i]=gaps[gaps.length-2];gaps[i+1]=gaps[gaps.length-1];gaps.length-=2;}
+      else if(a<=lo)gaps[i]=b;else if(b>=hi)gaps[i+1]=a;else{gaps[i+1]=a;gaps.push(b,hi);}
+    }
+  };
+  for(const o of L.solids)if(o.alive&&o.z<L.sz+radius&&o.z>L.sz-20&&"'!["airdrop","ammo","weaponCase","barrel","fuelTruck"].includes(o.kind))block(o.x-o.hw-.15,o.x+o.hw+.15);
+  for(const h of L.hazards||[])if(!h.done&&h.warned&&Math.abs(h.z-L.sz)<20)block(h.x-1.5,h.x+1.5);
+  let best=Infinity;
+  for(let i=0;i<gaps.length;i+=2){const lo=gaps[i],hi=gaps[i+1];if(hi-lo<.35)continue;const w=Math.min(width,(hi-lo)/2),c=Math.max(lo+w,Math.min(hi-w,L.sx));const cost=Math.abs(c-L.sx);if(cost<best){best=cost;centre=c;width=w;}}
+  const target=Math.max(.03,Math.min(1,width/radius));L.compression+=(target-L.compression)*Math.min(1,dt*(target<L.compression?10:3));
+'"'''+s[b:];s=s.replace('const bulletGrid=new SpatialHash(),crowdGrid=new SpatialHash(.65);','const bulletGrid=new SpatialHash(),crowdGrid=new SpatialHash(.65),crowdGaps=[];');p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "tail -24 /tmp/e1-campaign-tuned.log; python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('const w=Math.min(width,(hi-lo)/2)', 'const w=Math.min(5.3,radius,(hi-lo)/2)');p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-engine-check.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 1681ms:
+First-attempt results: fresh save, no Assist; errors excluded from win rates.
+┌─────────┬─────────────┬─────────┬──────┬──────────┬────────┬──────────┬────────┐
+│ (index) │ group       │ policy  │ wins │ attempts │ errors │ winRate  │ stars  │
+├─────────┼─────────────┼─────────┼──────┼──────────┼────────┼──────────┼────────┤
+│ 0       │ 'normal'    │ 'never' │ 20   │ 24       │ 0      │ '83.3%'  │ '1.88' │
+│ 1       │ 'normal'    │ 'smart' │ 24   │ 24       │ 0      │ '100.0%' │ '2.58' │
+│ 2       │ 'hard'      │ 'never' │ 2    │ 6        │ 0      │ '33.3%'  │ '0.50' │
+│ 3       │ 'hard'      │ 'smart' │ 5    │ 6        │ 0      │ '83.3%'  │ '1.83' │
+│ 4       │ 'boss'      │ 'never' │ 0    │ 6        │ 0      │ '0.0%'   │ '0.00' │
+│ 5       │ 'boss'      │ 'smart' │ 4    │ 5        │ 0      │ '80.0%'  │ '1.60' │
+│ 6       │ 'chapter 1' │ 'never' │ 4    │ 6        │ 0      │ '66.7%'  │ '1.83' │
+│ 7       │ 'chapter 1' │ 'smart' │ 6    │ 6        │ 0      │ '100.0%' │ '2.67' │
+│ 8       │ 'chapter 2' │ 'never' │ 3    │ 6        │ 0      │ '50.0%'  │ '1.17' │
+│ 9       │ 'chapter 2' │ 'smart' │ 5    │ 6        │ 0      │ '83.3%'  │ '2.00' │
+│ 10      │ 'chapter 3' │ 'never' │ 4    │ 6        │ 0      │ '66.7%'  │ '1.33' │
+│ 11      │ 'chapter 3' │ 'smart' │ 6    │ 6        │ 0      │ '100.0%' │ '2.33' │
+│ 12      │ 'chapter 4' │ 'never' │ 4    │ 6        │ 0      │ '66.7%'  │ '1.50' │
+│ 13      │ 'chapter 4' │ 'smart' │ 6    │ 6        │ 0      │ '100.0%' │ '2.33' │
+│ 14      │ 'chapter 5' │ 'never' │ 3    │ 6        │ 0      │ '50.0%'  │ '1.17' │
+│ 15      │ 'chapter 5' │ 'smart' │ 5    │ 5        │ 0      │ '100.0%' │ '2.60' │
+│ 16      │ 'chapter 6' │ 'never' │ 4    │ 6        │ 0      │ '66.7%'  │ '1.00' │
+│ 17      │ 'chapter 6' │ 'smart' │ 5    │ 6        │ 0      │ '83.3%'  │ '2.00' │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
+Causes of loss {"never:swarm":7,"never:boss:slam":3,"smart:swarm":1,"never:threat:swarm":2,"never:boss:charge":1,"never:boss:barrage":1,"smart:rifleman":1}
+PASS: authored waves, squad cap, geometric contacts, defender armor, nearest hit, Assist/reset/offers, same-seed replay, 30/60/120 Hz hashes.
+PASS: 36 mission generation/first-tick smoke.
+PASS: absent enemy module falls back to base units and boss.
+
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node /tmp/e1-perf.js > /tmp/e1-perf-final.log' in /home/user/my-first-repo/squad-surge
+codex
+The checks pass across all 36 missions, including replay equality and a missing-enemy-module fallback. The sweep also found a bot issue: after the Colossus splits, smart kept shooting between its halves. I’m fixing that targeting. The stress test exposed an expensive full-squad scan for enemy contacts, which I’ve replaced with a crowd-grid query before remeasuring.
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('tools/bot-campaign.js');s=p.read_text();s=s.replace('else {const shield=L.enemies.find', 'else if(g.state===\"boss\"&&L.enemies.some(e=>e.type===\"colossus_half\"&&e.hp>0))x=L.enemies.find(e=>e.type===\"colossus_half\"&&e.hp>0).x;\\n        else {const shield=L.enemies.find');s=s.replace('const row={id,policy,run:run+1,result:\"ERROR\",error:e.message,errors};', 'const row={id,chapter:Math.floor(ordinal(id)/6)+1,tag:ordinal(id)%6===5?\"boss\":ordinal(id)%6===4?\"hard\":\"normal\",policy,run:run+1,result:\"ERROR\",error:e.message,errors};');p.write_text(s)
+p=Path('index.html');s=p.read_text().replace('normalDamage: .6, hardDamage: .4, bossDamage: .45','normalDamage: .35, hardDamage: .3, bossDamage: .4, firstBossDamage: .7');s=s.replace('CAMPAIGN_TUNING[L.mission.tag + \"Damage\"]', '(L.mission.chapter===1 && L.mission.tag===\"boss\" ? CAMPAIGN_TUNING.firstBossDamage : CAMPAIGN_TUNING[L.mission.tag + \"Damage\"])');p.write_text(s)
+PY
+node --check tools/bot-campaign.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+ succeeded in 27506ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('tools/bot-engine-check.js');s=p.read_text();needle=\" console.log('PASS: authored waves, squad cap, geometric contacts, defender armor, nearest hit, Assist/reset/offers, same-seed replay, 30/60/120 Hz hashes.');\";addition='''
+ // Presentation must not move soldiers, advance combat clocks, or change the replay hash.
+ vm.runInContext("'`
+   TEX.soldier=TEX.grunt=TEX.fx=new THREE.Texture();
+   layers={sold:new SpriteLayer(TEX.soldier,4,2,700),enem:new SpriteLayer(TEX.grunt,4,2,900),brute:new SpriteLayer(TEX.grunt,4,2,100),boss:new SpriteLayer(TEX.grunt,3,2,4),fx:new SpriteLayer(TEX.fx,4,4,1400,{additive:true}),shadow:new ShadowLayer(1500)};
+   createSpecialistLayers();window.drawTest=render;
+ `,s);
+ const beforeRender=H.stateHash();s.drawTest(1/30);s.drawTest(1/120);assert.equal(H.stateHash(),beforeRender);
+ // A failed registered sheet uses the grunt atlas and a visible tint.
+ vm.runInContext(`THREE.TextureLoader.prototype.load=function(url,ok,p,fail){if(fail)fail();return new THREE.Texture();};registerEnemy('"'missing-sheet',{sheet:'missing.webp',tint:0xff8800});window.fallbackGrid=registeredLayers['missing-sheet'].mesh.material.uniforms.grid.value;"'`,s);
+ assert.equal(s.fallbackGrid.x,4);assert.equal(s.fallbackGrid.y,2);
+ // A stalled display executes at most five fixed steps; pause executes none.
+ const catchup=fixture(),ch=catchup.H;await ch.goMission('"'c1m1');ch.advanceClock(2);assert(ch.L.tick<=5);const tick=ch.L.tick;ch.setState('paused');ch.advanceClock(2);assert.equal(ch.L.tick,tick);
+ // Specialist piercing and legacy boss callbacks must not double the weak bonus.
+ await H.goMission('c2m6');H.setState('boss');H.L.enemies=[];H.L.gates=[];H.L.solids=[];const boss=H.L.boss;boss.x=0;boss.z=-2;boss.weakT=1;boss._campaignEnemy.weak=1;
+ H.L.bullets.length=0;H.L.bullets.push({x:0,z:0,vx:0,life:1,dmg:10,splash:0,pierce:0});const bossHP=boss.hp;H.updateBullets(.1);assert.equal(bossHP-boss.hp,25);
+ console.log('PASS: render-only state invariance, missing sheet fallback, five-step catch-up cap, pause freeze, weak damage applied once.');
+''';assert needle in s;s=s.replace(needle,needle+addition);p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-engine-check.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 1607ms:
+PASS: authored waves, squad cap, geometric contacts, defender armor, nearest hit, Assist/reset/offers, same-seed replay, 30/60/120 Hz hashes.
+PASS: render-only state invariance, missing sheet fallback, five-step catch-up cap, pause freeze, weak damage applied once.
+PASS: 36 mission generation/first-tick smoke.
+PASS: absent enemy module falls back to base units and boss.
+
+exec
+/bin/bash -lc "cat /tmp/e1-perf-final.log; rg -n 'function damage|function registerLayer|copy\\(spriteTint\\)|L.giantK|s.ph' index.html; rg -n 'frame|ctx.rng' js/scenery.js | tail -10" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"engine":"baseline","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[6.298012785,6.049913854999999,6.259638683333335,6.118975278333334],"median":6.259638683333335,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+{"engine":"updated","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[5.079558398333332,4.649543128333335,4.867315283333331,5.24008031],"median":5.079558398333332,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+415:function setSpriteTint(color) { spriteTint.set(color); for (const l of spriteLayers) if (!l.additive) l.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(l.baseTint || new THREE.Color(1,1,1)); }
+927:function damage() { return WEAPONS[L.weapon].dmg * (L.surgeT > 0 ? 2 : 1) * (!L.mission || onboarding() ? 1 : (L.mission.chapter===1 && L.mission.tag==="boss" ? CAMPAIGN_TUNING.firstBossDamage : CAMPAIGN_TUNING[L.mission.tag + "Damage"])); } // SURGE: double damage (and pierce), same bullet count
+987:function damageArea(x, z, radius, dmg, opts = {}) { // explosions from modules (barrels, airstrikes): enemies, solids and the boss
+1020:  L.giantK += ((L.giantT > 0 ? 1.7 : 1) - L.giantK) * Math.min(1, dt * 8);
+1198:function damageBoss(n, raw = false) {
+1322:    const f = Math.floor(s.ph + L.time * 11) % 4 + (firing ? 4 : 0);
+1323:    const age = s.born === undefined ? 1 : (L.time - s.born) / 0.25, k = (age >= 1 ? 1 : popScale(Math.max(0, age))) * L.giantK;
+1341:    const bt = layers.boss.mesh.material.uniforms.tint.value.copy(spriteTint); // an enraged boss pulses red
+1384:    tmpV.set(L.sx, (1.95 + R * 0.3) * L.giantK, L.sz).project(camera);
+1496:function registerLayer(key,def) {
+1500:  layer.baseTint=new THREE.Color(def.tint || 0xb6c6e8);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);
+1501:  if(def.sheet)loader.load(def.sheet,tex=>{tex.anisotropy=4;layer.mesh.material.uniforms.map.value=tex;layer.mesh.material.uniforms.grid.value.set(def.cols||4,def.rows||2);layer.baseTint.set(def.tint || 0xffffff);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);},undefined,()=>{layer.mesh.material.uniforms.map.value=TEX.grunt;layer.mesh.material.uniforms.grid.value.set(4,2);layer.baseTint=new THREE.Color(def.tint || 0xb6c6e8);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);});
+1505:function createSpecialistLayers(){for(const k in SPECIALISTS){const l=new SpriteLayer(TEX.soldier,4,2,300);l.baseTint=new THREE.Color(SPECIALISTS[k].color);l.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(l.baseTint);specialistLayers[k]=l;}}
+1513:function damageEnemiesInCircle(x,z,r,dmg){for(const e of L.enemies)if(e.hp>0 && Math.hypot(e.x-x,e.z-z)<r+e.r)hitEnemy(e,dmg);const b=L.boss;if(state==="boss"&&Math.hypot(b.x-x,b.z-z)<r+(b.r||2.6))damageBoss(dmg);}
+1597:    const p=phases[phase]||{attacks:["slam"],cadence:2.6};b.attackT+=dt;
+703:  // ------------------------------------------------------------------ per frame
+
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c1m1-c6m6 --runs 2 > /tmp/e1-campaign-final.log 2> /tmp/e1-campaign-final-errors.log' in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc "cat > tools/bot-engine-profile.js <<'JS'
+#"'!/usr/bin/env node
+"use strict";
+// Browser profiling (orchestrator only):
+// node tools/bot-engine-profile.js --before /path/to/baseline --after . --three /path/three.min.js
+// A baseline directory can contain just index.html, js/objects3d.js and js/powerups.js;
+// unchanged assets/modules fall back to --after. No browser is launched by the engine itself.
+const fs=require('"'fs'),path=require('path'),http=require('http');
+const args={};for(let i=2;i<process.argv.length;i+=2)args[process.argv[i].replace(/"'^--/,'"'')]=process.argv[i+1];
+const after=path.resolve(args.after||path.join(__dirname,'..')),before=args.before&&path.resolve(args.before);
+const roots={after,...(before?{before}:{})},local=args.three||process.env.THREE_LOCAL;
+const mime={'.html':'text/html','.js':'application/javascript','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.woff2':'font/woff2'};
+const server=http.createServer((req,res)=>{
+ let parts;try{parts=decodeURIComponent(new URL(req.url,'http://localhost').pathname).split('/').filter(Boolean);}catch{res.writeHead(400);return res.end();}
+ const root=roots[parts.shift()];if("'!root){res.writeHead(404);return res.end();}
+ const relative=parts.join('"'/')||'index.html';let file=path.resolve(root,relative);
+ if("'!file.startsWith(root+path.sep)){res.writeHead(403);return res.end();}
+ if(!fs.existsSync(file))file=path.resolve(after,relative);
+ if(!file.startsWith(after+path.sep)&&!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);return res.end();}
+ res.writeHead(200,{'"'content-type':mime[path.extname(file)]||'application/octet-stream'});fs.createReadStream(file).pipe(res);
+});
+let browser;
+(async()=>{
+ const {chromium}=require('playwright');await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
+ browser=await chromium.launch({args:['--use-gl=swiftshader','--enable-webgl','--ignore-gpu-blocklist'],...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
+ for(const version of before?['before','after']:['after']){
+  const context=await browser.newContext({viewport:{width:390,height:780},deviceScaleFactor:1});
+  try{
+   const page=await context.newPage();page.on('pageerror',e=>{console.error(e);process.exitCode=1;});
+   if(local)await page.route('**/three.min.js',r=>r.fulfill({path:path.resolve(local),contentType:'application/javascript'}));
+   await page.addInitScript(()=>localStorage.setItem('squad-surge-v1',JSON.stringify({sound:false,vibe:false,level:1})));
+   await page.goto("'`http://127.0.0.1:${server.address().port}/${version}/index.html?hq`);
+   await page.waitForFunction(()=>window.__game&&__game.state==='"'home',null,{timeout:60000});
+   const report=await page.evaluate(()=>{
+    const g=window.__game;g.setTestMode?.(true);g.startLevel(4,{seed:4001});g.setState('boss');const L=g.L;
+    L.soldiers.length=0;g.ctx.addSoldiers(300);L.boss.hp=0;L.rateMult=0;L.gates=[];L.solids=[];L.threats=[];L.threat=null;L.enemies=[];
+    for(let i=0;i<400;i++){const e=window.enemy('grunt',(i%20-9.5)*.5,-10-Math.floor(i/20)*1.5,4);e.hp=e.maxHp=1e9;e.sp=0;e.state='walk';L.enemies.push(e);}
+    let simMs=0,calls=0,triangles=0,frames=0,maxCalls=0;
+    for(let tick=0;tick<600;tick++){
+     if(tick%40===0){L.bullets.length=0;for(let j=0;j<480;j++)L.bullets.push({x:(j%40-19.5)*.25,z:0,vx:0,life:1,dmg:1,splash:0,pierce:0});}
+     const t=performance.now();window.step(1/60);simMs+=performance.now()-t;
+     if(tick%10===0){window.render(1/60);const r=g.ctx.renderer.info.render;calls+=r.calls;triangles+=r.triangles;frames++;maxCalls=Math.max(maxCalls,r.calls);}
+    }
+    return {steps:600,soldiers:300,enemies:400,bulletsPerVolley:480,simMs,meanSimMs:simMs/600,frames,meanCalls:calls/frames,maxCalls,meanTriangles:triangles/frames,memory:{...g.ctx.renderer.info.memory}};
+   });console.log(JSON.stringify({version,...report}));
+  }finally{await context.close();}
+ }
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();server.close();});
+JS
+node --check tools/bot-engine-profile.js
+mkdir -p /tmp/e1-baseline/js
+cp /tmp/e1-baseline.html /tmp/e1-baseline/index.html
+cp /tmp/e1-objects-baseline.js /tmp/e1-baseline/js/objects3d.js
+cp /tmp/e1-powerups-baseline.js /tmp/e1-baseline/js/powerups.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "tail -3 /tmp/e1-campaign-final.log; cat /tmp/e1-campaign-final-errors.log; rg -n 'def\\?\\.onDeath|const blocked' index.html" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"id":"c5m4","policy":"never","run":2,"engine":"simulation","result":"win","stars":[true,true,false],"keptPct":100,"skillOk":false,"cause":null,"rescued":0,"assisted":0,"chapter":5,"tag":"normal","hash":"ce4d4ff1","score":1131,"peak":63,"profile":{"steps":2471,"simMs":1615.259160999718,"maxSimMs":6.858640000005835,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":20566,"meanSimMs":0.6536864269525366,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c5m4","policy":"smart","run":2,"engine":"simulation","result":"win","stars":[true,true,false],"keptPct":100,"skillOk":false,"cause":null,"rescued":0,"assisted":0,"chapter":5,"tag":"normal","hash":"ce4d4ff1","score":1131,"peak":63,"profile":{"steps":2471,"simMs":1493.0261470001278,"maxSimMs":5.949880000000121,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":20566,"meanSimMs":0.6042194038851185,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c5m5","policy":"never","run":2,"engine":"simulation","result":"lose","stars":[false,false,false],"keptPct":0,"skillOk":true,"cause":"swarm","rescued":0,"assisted":0,"chapter":5,"tag":"hard","hash":"6e1ebbde","score":1325,"peak":49,"profile":{"steps":2233,"simMs":1001.5972530005529,"maxSimMs":5.698831999994582,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":49195,"meanSimMs":0.4485433287060246,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+1193:    e.state = "dying"; e.dieT = 0; checkMedicOrder(e); e.def?.onDeath?.(e); bus.emit("enemyDie", { e }); onKill(e);
+1206:  L.boss.def?.onDeath?.(L.boss);
+1658:        const blocked=o.def?.onBullet?.(o,b)===false && !b.shieldPierce && !b.splash;
+
+codex
+The repeated stress test improved from about 6.18 ms to 4.96 ms per simulation step with 300 soldiers, 400 enemies, and 480-bullet volleys. GPU draw counts remain unmeasured here; I’ve added a browser profiler that reads `renderer.info` for the orchestrator. A two-run campaign sweep is underway, including the corrected split-boss targeting.
+
+exec
+/bin/bash -lc "python - <<'PY'
+import json,collections
+rows=[]
+for l in open('/tmp/e1-campaign-final.log'):
+ try: rows.append(json.loads(l))
+ except: pass
+for tag in ['normal','hard','boss']:
+ for p in ['never','smart']:
+  r=[r for r in rows if r.get('tag')==tag and r['policy']==p]
+  print(tag,p,len(r),sum(x['result']=='win' for x in r))
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+normal never 46 30
+normal smart 46 38
+hard never 11 2
+hard smart 11 5
+boss never 11 0
+boss smart 10 4
+
+exec
+/bin/bash -lc "python - <<'PY'
+import json
+for l in open('/tmp/e1-campaign-final.log'):
+ try:r=json.loads(l)
+ except:continue
+ if r.get('tag') in ['boss','hard']:print(r['id'],r['policy'],r['run'],r['result'],r.get('cause'),r.get('peak'),r.get('keptPct'))
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+c1m5 never 1 lose threat:swarm 18 0
+c1m5 smart 1 win None 18 77
+c1m6 never 1 lose boss:slam 20 0
+c1m6 smart 1 win None 21 95
+c2m5 never 1 lose swarm 29 0
+c2m5 smart 1 lose swarm 29 0
+c2m6 never 1 lose swarm 31 0
+c2m6 smart 1 lose swarm 31 0
+c3m5 never 1 win None 36 25
+c3m5 smart 1 win None 36 30
+c3m6 never 1 lose boss:charge 45 0
+c3m6 smart 1 win None 45 37
+c4m5 never 1 lose swarm 42 0
+c4m5 smart 1 lose swarm 42 0
+c4m6 never 1 lose rifleman 45 0
+c4m6 smart 1 lose rifleman 45 0
+c5m5 never 1 lose swarm 49 0
+c5m5 smart 1 lose swarm 49 0
+c5m6 never 1 lose swarm 51 0
+c5m6 smart 1 lose swarm 51 0
+c6m5 never 1 lose swarm 53 0
+c6m5 smart 1 win None 57 82
+c6m6 never 1 lose boss:slam 55 0
+c6m6 smart 1 lose boss:charge 55 0
+c1m5 never 2 lose threat:swarm 18 0
+c1m5 smart 2 win None 18 72
+c1m6 never 2 lose boss:slam 20 0
+c1m6 smart 2 win None 21 95
+c2m5 never 2 lose swarm 29 0
+c2m5 smart 2 lose swarm 29 0
+c2m6 never 2 lose swarm 31 0
+c2m6 smart 2 lose swarm 31 0
+c3m5 never 2 win None 36 27
+c3m5 smart 2 win None 36 36
+c3m6 never 2 lose boss:charge 45 0
+c3m6 smart 2 win None 45 37
+c4m5 never 2 lose swarm 42 0
+c4m5 smart 2 lose swarm 42 0
+c4m6 never 2 lose boss:barrage 45 0
+c4m6 smart 2 lose boss:barrage 45 0
+c5m5 never 2 lose swarm 49 0
+c5m5 smart 2 lose swarm 49 0
+c5m6 never 2 lose swarm 51 0
+
+ exited 1 in 150417ms:
+exec
+/bin/bash -lc "sed -n '230,243p' index.html; tail -3 /tmp/e1-campaign-final.log; cat /tmp/e1-campaign-final-errors.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+};
+const SKINS = {                                                    // squad colours: recolour the blue uniform and helmet in the sprite shader
+  classic: { name: "CLASSIC BLUE" }, crimson: { name: "ROSE", hue: 0.93, sat: 0.8, val: 1.05 }, /* not red: red helmets are the grunt enemies */
+  jungle: { name: "JUNGLE", hue: 0.27, sat: 0.75, val: 0.85 }, arctic: { name: "ARCTIC", hue: 0.58, sat: 0.12, val: 1.25 },
+  desert: { name: "DESERT", hue: 0.09, sat: 0.5, val: 1.05 }, violet: { name: "VIOLET", hue: 0.77, sat: 0.9, val: 1.0 },
+  gold: { name: "GOLD", hue: 0.12, sat: 0.95, val: 1.2 }, shadow: { name: "SHADOW OPS", hue: 0.62, sat: 0.35, val: 0.45 },
+};
+const TRACERS = { gold: { name: "GOLD", rgb: [1, 1, 1] }, plasma: { name: "PLASMA", rgb: [0.45, 0.8, 1.7] }, toxic: { name: "TOXIC", rgb: [0.6, 1.5, 0.5] }, inferno: { name: "INFERNO", rgb: [1.6, 0.55, 0.35] }, rainbow: { name: "RAINBOW", rainbow: true } };
+const WEAPONS = [
+  { name: "PISTOL", img: "assets/w-pistol.png", dmg: 1, rate: 1, spread: 1 },
+  { name: "RIFLE", img: "assets/w-rifle.png", dmg: 1.4, rate: 1.35, spread: 1 },
+  { name: "SHOTGUN", img: "assets/w-shotgun.png", dmg: 1.2, rate: 1, spread: 3 },
+  { name: "MINIGUN", img: "assets/w-minigun.png", dmg: 1.3, rate: 2.4, spread: 1 },
+  { name: "BAZOOKA", img: "assets/w-bazooka.png", dmg: 7, rate: 0.4, spread: 1, splash: 2.6 },
+│ 17      │ 'chapter 6' │ 'smart' │ 8    │ 12       │ 0      │ '66.7%'  │ '1.58' │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
+Causes of loss {"never:threat:swarm":8,"never:boss:slam":4,"never:swarm":22,"smart:swarm":18,"never:boss:charge":2,"never:rifleman":1,"smart:rifleman":1,"smart:boss:charge":1,"never:boss:barrage":1,"smart:boss:barrage":1}
+{"id":"c5m6","chapter":5,"tag":"boss","policy":"smart","run":2,"result":"ERROR","error":"Mission exceeded 300 simulation seconds","errors":[]}
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('tools/bot-campaign.js');s=p.read_text();s=s.replace('return {done:"'!!result,tick:L.tick,result:'"', 'return {done:"'!!result,tick:L.tick,debug:L.tick>=18000?{state:g.state,squad:L.soldiers.length,x:L.sx,z:L.sz,boss:{hp:L.boss.hp,x:L.boss.x,z:L.boss.z,mode:L.boss._campaignEnemy?.mode},enemies:L.enemies.filter(e=>e.hp>0).map(e=>({type:e.type,hp:e.hp,x:e.x,z:e.z,mode:e._campaignEnemy?.mode}))}:null,result:'"');s=s.replace('throw Error(\"Mission exceeded 300 simulation seconds\")','throw Error(\"Mission exceeded 300 simulation seconds: \"+JSON.stringify(data.debug))');p.write_text(s)
+p=Path('index.html');s=p.read_text().replace('const blocked=o.def?.onBullet?.(o,b)===false && "'!b.shieldPierce && !b.splash;'"', 'const blocked=o.def?.onBullet?.(o,b)===false;');s=s.replace('      e.hp = 0; e.state = \"dying\"; e.dieT = 0.3;','      e.hp = 0; e.state = \"dying\"; e.dieT = 0.3; e.def?.onDeath?.(e); bus.emit(\"enemyDie\", { e });');s=s.replace('hardDamage: .3, bossDamage: .4, firstBossDamage: .7','hardDamage: .35, bossDamage: .43, firstBossDamage: 1.15');p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c5m6 --policies smart --runs 2 > /tmp/e1-boss-debug.log 2> /tmp/e1-boss-debug-errors.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 4080ms:
+exec
+/bin/bash -lc 'cat /tmp/e1-boss-debug-errors.log; head -2 /tmp/e1-boss-debug.log; tail -24 /tmp/e1-campaign-final.log' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"id":"c5m6","policy":"smart","run":1,"engine":"simulation","result":"lose","stars":[false,false,false],"keptPct":0,"skillOk":true,"cause":"swarm","rescued":0,"assisted":0,"chapter":5,"tag":"boss","hash":"6cb6dc6d","score":1310,"peak":51,"profile":{"steps":1746,"simMs":909.6448449999987,"maxSimMs":5.262810999999999,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":39569,"meanSimMs":0.520987883734249,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c5m6","policy":"smart","run":2,"engine":"simulation","result":"win","stars":[true,false,false],"keptPct":41,"skillOk":false,"cause":null,"rescued":0,"assisted":0,"chapter":5,"tag":"boss","hash":"3f0f16a7","score":16250,"peak":51,"profile":{"steps":7561,"simMs":2855.7534740000133,"maxSimMs":10.135744000000159,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":47122,"meanSimMs":0.37769520883481195,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+First-attempt results: fresh save, no Assist; errors excluded from win rates.
+┌─────────┬─────────────┬─────────┬──────┬──────────┬────────┬──────────┬────────┐
+│ (index) │ group       │ policy  │ wins │ attempts │ errors │ winRate  │ stars  │
+├─────────┼─────────────┼─────────┼──────┼──────────┼────────┼──────────┼────────┤
+│ 0       │ 'normal'    │ 'never' │ 32   │ 48       │ 0      │ '66.7%'  │ '1.52' │
+│ 1       │ 'normal'    │ 'smart' │ 40   │ 48       │ 0      │ '83.3%'  │ '1.94' │
+│ 2       │ 'hard'      │ 'never' │ 2    │ 12       │ 0      │ '16.7%'  │ '0.25' │
+│ 3       │ 'hard'      │ 'smart' │ 6    │ 12       │ 0      │ '50.0%'  │ '1.25' │
+│ 4       │ 'boss'      │ 'never' │ 0    │ 12       │ 0      │ '0.0%'   │ '0.00' │
+│ 5       │ 'boss'      │ 'smart' │ 4    │ 11       │ 1      │ '36.4%'  │ '0.91' │
+│ 6       │ 'chapter 1' │ 'never' │ 8    │ 12       │ 0      │ '66.7%'  │ '1.83' │
+│ 7       │ 'chapter 1' │ 'smart' │ 12   │ 12       │ 0      │ '100.0%' │ '2.83' │
+│ 8       │ 'chapter 2' │ 'never' │ 4    │ 12       │ 0      │ '33.3%'  │ '0.58' │
+│ 9       │ 'chapter 2' │ 'smart' │ 6    │ 12       │ 0      │ '50.0%'  │ '0.92' │
+│ 10      │ 'chapter 3' │ 'never' │ 8    │ 12       │ 0      │ '66.7%'  │ '1.25' │
+│ 11      │ 'chapter 3' │ 'smart' │ 12   │ 12       │ 0      │ '100.0%' │ '2.00' │
+│ 12      │ 'chapter 4' │ 'never' │ 6    │ 12       │ 0      │ '50.0%'  │ '1.33' │
+│ 13      │ 'chapter 4' │ 'smart' │ 8    │ 12       │ 0      │ '66.7%'  │ '1.67' │
+│ 14      │ 'chapter 5' │ 'never' │ 4    │ 12       │ 0      │ '33.3%'  │ '0.83' │
+│ 15      │ 'chapter 5' │ 'smart' │ 4    │ 11       │ 1      │ '36.4%'  │ '0.91' │
+│ 16      │ 'chapter 6' │ 'never' │ 4    │ 12       │ 0      │ '33.3%'  │ '0.50' │
+│ 17      │ 'chapter 6' │ 'smart' │ 8    │ 12       │ 0      │ '66.7%'  │ '1.58' │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
+Causes of loss {"never:threat:swarm":8,"never:boss:slam":4,"never:swarm":22,"smart:swarm":18,"never:boss:charge":2,"never:rifleman":1,"smart:rifleman":1,"smart:boss:charge":1,"never:boss:barrage":1,"smart:boss:barrage":1}
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();old='  L.boss.hp -= n * (raw ? 1 : bossWeakMultiplier(L.boss)); L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();';new='''  const b = L.boss, split = b._campaignEnemy;
+  const amount = n * (raw ? 1 : bossWeakMultiplier(b));
+  if (split?.split) {
+    const halves = [split.half1, split.half2].filter(e => e && e.hp > 0);
+    const total = halves.reduce((sum,e) => sum + e.hp, 0);
+    for (const e of halves) hitEnemy(e, total ? amount * e.hp / total : 0);
+    b.hp = Math.max(0,split.half1?.hp || 0) + Math.max(0,split.half2?.hp || 0);
+  } else b.hp -= amount;
+  b.flash = 0.08; if (b.hp <= 0) bossDown();''';assert old in s;s=s.replace(old,new);p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c1m5,c1m6,c2m5,c2m6,c3m5,c3m6,c4m5,c4m6,c5m5,c5m6,c6m5,c6m6 --runs 2 > /tmp/e1-hard-boss-final.log 2> /tmp/e1-hard-boss-final-errors.log" in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('  L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);','  if (L.mission || L.boss.state === \"wait\") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);');p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-tactics.js --engine simulation --levels 1-8 --policies never,smart --runs 1 > /tmp/e1-arcade.log 2> /tmp/e1-arcade-errors.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 60779ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();s=s.replace('rng: rng((opts.seed ?? level) * 4241 + 7)', 'rng: rng(L.seed * 4241 + 7)');s=s.replace('replay = { version: 1, seed:', 'replay = { version: 1, rules: {...CAMPAIGN_TUNING}, seed:');s=s.replace('if(record.version"'!==1)throw new Error("Unsupported replay version");testMode=true;'"', 'if(record.version"'!==1)throw new Error("Unsupported replay version");'"\\n  if(record.rules && JSON.stringify(record.rules)"'!==JSON.stringify(CAMPAIGN_TUNING))throw new Error("Replay tuning differs from this engine");'"\\n  testMode=true;');p.write_text(s)
+p=Path('tools/bot-engine-check.js');s=p.read_text();needle=\" console.log('PASS: absent enemy module falls back to base units and boss.');\";addition='''
+ // ARCADE and daily share the replay seed, including generated drops/barrels.
+ for(const options of [{},{mode:'daily',seed:711,modifier:'horde'}]){
+   H.startLevel(4,options);H.setState('play');for(let i=0;i<180;i++)H.fixedStep();const recording=JSON.parse(JSON.stringify(H.replay)),expected=H.stateHash();await H.playReplay(recording);for(let i=0;i<180;i++)H.fixedStep();assert.equal(H.stateHash(),expected);
+ }
+ console.log('PASS: ARCADE and daily replay seeds include procedural supplies.');
+''';assert needle in s;s=s.replace(needle,needle+addition);p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-engine-check.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 43727ms:
+ succeeded in 1659ms:
+PASS: authored waves, squad cap, geometric contacts, defender armor, nearest hit, Assist/reset/offers, same-seed replay, 30/60/120 Hz hashes.
+PASS: render-only state invariance, missing sheet fallback, five-step catch-up cap, pause freeze, weak damage applied once.
+PASS: 36 mission generation/first-tick smoke.
+PASS: absent enemy module falls back to base units and boss.
+PASS: ARCADE and daily replay seeds include procedural supplies.
+
+exec
+/bin/bash -lc 'tail -4 /tmp/e1-hard-boss-final.log; cat /tmp/e1-hard-boss-final-errors.log; tail -5 /tmp/e1-arcade.log; cat /tmp/e1-arcade-errors.log' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+│ 16      │ 'chapter 6' │ 'never' │ 0    │ 4        │ 0      │ '0.0%'   │ '0.00' │
+│ 17      │ 'chapter 6' │ 'smart' │ 2    │ 4        │ 0      │ '50.0%'  │ '1.50' │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
+Causes of loss {"never:threat:swarm":1,"never:boss:slam":6,"never:swarm":11,"smart:swarm":8,"never:boss:charge":2,"never:boss:barrage":2,"smart:boss:charge":1}
+│ (index) │ policy  │ wins  │ averageStars │ averageKeptPct │
+├─────────┼─────────┼───────┼──────────────┼────────────────┤
+│ 0       │ 'never' │ '8/8' │ '3.0'        │ '80.4'         │
+│ 1       │ 'smart' │ '8/8' │ '3.0'        │ '97.1'         │
+└─────────┴─────────┴───────┴──────────────┴────────────────┘
+
+exec
+/bin/bash -lc 'tail -24 /tmp/e1-hard-boss-final.log; cat /tmp/e1-hard-boss-final-errors.log' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+First-attempt results: fresh save, no Assist; errors excluded from win rates.
+┌─────────┬─────────────┬─────────┬──────┬──────────┬────────┬──────────┬────────┐
+│ (index) │ group       │ policy  │ wins │ attempts │ errors │ winRate  │ stars  │
+├─────────┼─────────────┼─────────┼──────┼──────────┼────────┼──────────┼────────┤
+│ 0       │ 'normal'    │ 'never' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 1       │ 'normal'    │ 'smart' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 2       │ 'hard'      │ 'never' │ 2    │ 12       │ 0      │ '16.7%'  │ '0.17' │
+│ 3       │ 'hard'      │ 'smart' │ 8    │ 12       │ 0      │ '66.7%'  │ '1.33' │
+│ 4       │ 'boss'      │ 'never' │ 0    │ 12       │ 0      │ '0.0%'   │ '0.00' │
+│ 5       │ 'boss'      │ 'smart' │ 7    │ 12       │ 0      │ '58.3%'  │ '1.08' │
+│ 6       │ 'chapter 1' │ 'never' │ 0    │ 4        │ 0      │ '0.0%'   │ '0.00' │
+│ 7       │ 'chapter 1' │ 'smart' │ 4    │ 4        │ 0      │ '100.0%' │ '2.50' │
+│ 8       │ 'chapter 2' │ 'never' │ 0    │ 4        │ 0      │ '0.0%'   │ '0.00' │
+│ 9       │ 'chapter 2' │ 'smart' │ 1    │ 4        │ 0      │ '25.0%'  │ '0.50' │
+│ 10      │ 'chapter 3' │ 'never' │ 2    │ 4        │ 0      │ '50.0%'  │ '0.50' │
+│ 11      │ 'chapter 3' │ 'smart' │ 4    │ 4        │ 0      │ '100.0%' │ '1.50' │
+│ 12      │ 'chapter 4' │ 'never' │ 0    │ 4        │ 0      │ '0.0%'   │ '0.00' │
+│ 13      │ 'chapter 4' │ 'smart' │ 2    │ 4        │ 0      │ '50.0%'  │ '0.50' │
+│ 14      │ 'chapter 5' │ 'never' │ 0    │ 4        │ 0      │ '0.0%'   │ '0.00' │
+│ 15      │ 'chapter 5' │ 'smart' │ 2    │ 4        │ 0      │ '50.0%'  │ '0.75' │
+│ 16      │ 'chapter 6' │ 'never' │ 0    │ 4        │ 0      │ '0.0%'   │ '0.00' │
+│ 17      │ 'chapter 6' │ 'smart' │ 2    │ 4        │ 0      │ '50.0%'  │ '1.50' │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
+Causes of loss {"never:threat:swarm":1,"never:boss:slam":6,"never:swarm":11,"smart:swarm":8,"never:boss:charge":2,"never:boss:barrage":2,"smart:boss:charge":1}
+
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node /tmp/e1-perf.js > /tmp/e1-perf-verified.log' in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc 'node --check js/enemies.js; node --check js/campaign.js; node --check js/story.js; node --check js/meta.js; node --check js/juice.js' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+ succeeded in 25140ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();old='  const t = L.threat; if ("'!t || t.kind === "slam") return;'"';new='''  const t = L.threat;
+  if (t?.bossAttack) {
+    t.age += dt;
+    const attack = L.boss._campaignEnemy?.attack || L.boss.pending?.name || L.boss.pending?.type;
+    if (state "'!== "boss" || (t.age > FIXED_DT && !attack)) endThreat(t);
+    return;
+  }
+  if (!t || t.kind === "slam") return;'"''';assert old in s;s=s.replace(old,new);s=s.replace('  L.lastCause = cause;', '  if (L.threat?.bossAttack && cause.startsWith(\"boss:\")) L.threat.lost += n;\\n  L.lastCause = cause;');anchor='const squadView = Object.freeze';ix=s.index(anchor);s=s[:ix]+'''// Registered boss telegraphs participate in the existing PERFECT/belt lifecycle.
+bus.on(\"enemyTelegraph\", ev => {
+  if ("'!L || state !== "boss" || ev.type !== L.boss.type) return;
+  if (L.threat) endThreat(L.threat);
+  const t = { id:`boss-${L.tick}-${ev.kind}`, kind:ev.kind, counter:ev.kind==="summon"?"airstrike":ev.kind==="split"?"giant":"shield", z:L.boss.z, actors:[], age:0, lost:0, countered:false, bossAttack:true, announced:true };
+  bus.emit("threat", {id:t.id,kind:t.kind,counter:t.counter,z:t.z}); liveThreat(t);
+});
+'"'''+s[ix:];p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "cat /tmp/e1-perf-verified.log; python - <<'PY'
+from pathlib import Path
+p=Path('tools/bot-engine-check.js');s=p.read_text();needle=\" console.log('PASS: ARCADE and daily replay seeds include procedural supplies.');\";extra='''
+ await H.goMission('c1m6');H.setState('boss');H.L.boss.state='walk';H.collectPowerup('shield');H.bus.emit('enemyTelegraph',{type:'ogre',kind:'slam',x:0,z:H.L.sz});assert.equal(H.ctx.threat.counter,'shield');H.usePowerup(0);assert.equal(H.L.tactics.perfect,1);
+ console.log('PASS: registered boss telegraphs preserve PERFECT counters.');
+''';s=s.replace(needle,needle+extra);p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-engine-check.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 1677ms:
+{"engine":"baseline","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[5.621653333333334,5.407762553333334,5.490073866666668,6.025536466666669],"median":5.621653333333334,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+{"engine":"updated","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[4.841815478333334,4.076751088333337,4.612818005000002,4.571914621666668],"median":4.612818005000002,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+PASS: authored waves, squad cap, geometric contacts, defender armor, nearest hit, Assist/reset/offers, same-seed replay, 30/60/120 Hz hashes.
+PASS: render-only state invariance, missing sheet fallback, five-step catch-up cap, pause freeze, weak damage applied once.
+PASS: 36 mission generation/first-tick smoke.
+PASS: absent enemy module falls back to base units and boss.
+PASS: ARCADE and daily replay seeds include procedural supplies.
+PASS: registered boss telegraphs preserve PERFECT counters.
+
+codex
+ARCADE’s level 1–8 smoke runs pass for both policies. I also fixed replay seeding for procedural supply drops and connected registered boss warnings to the existing PERFECT-counter system. The latest samples meet the smart-policy targets; the never-policy samples still sit slightly above the normal target and below the boss target.
+
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c1m6,c2m6,c3m6,c4m6,c5m6,c6m6 --runs 2 > /tmp/e1-boss-verified.log 2> /tmp/e1-boss-verified-errors.log' in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-tactics.js --engine simulation --levels 1-8 --policies never,smart --runs 1 > /tmp/e1-arcade-verified.log 2> /tmp/e1-arcade-verified-errors.log' in /home/user/my-first-repo/squad-surge
+ succeeded in 38987ms:
+ succeeded in 43729ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();s=s.replace('try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }', 'try { const data = JSON.parse(localStorage.getItem(SAVE_KEY)); return data && typeof data === \"object\" && "'!Array.isArray(data) ? data : {}; }'"');s=s.replace('save.campaign && typeof save.campaign === \"object\" ? save.campaign : {}', 'save.campaign && typeof save.campaign === \"object\" && "'!Array.isArray(save.campaign) ? save.campaign : {}'"');p.write_text(s)
+PY
+cat > design/campaign-engine-notes.md <<'MD'
+# Campaign engine notes (E1)
+
+The engine loads "'`enemies.js`, `campaign.js`, then `story.js` after the existing modules. Missing optional modules do not prevent ARCADE from booting. Missing registered sheets use tinted grunt atlases. E1 did not edit sibling-owned modules or run git.
+
+## APIs and events
+
+- `ctx.goMission(id, {assist: 0|1|2, elite: boolean})` uses `Campaign.missions[id]`; events use `event` as the discriminator, with wave `type` naming the enemy. `ctx.goArcade(level)` and daily `ctx.goMode(...)` retain procedural generation. `ctx.restartSame()` reuses the layout seed and clears Assist for the next attempt.
+- `registerEnemy`, `registerBoss`, `spawnEnemy`, `squad`, `killSoldiersInRect`, `killSoldiersInCircle`, `damageEnemiesInCircle`, `rng(stream)`, `telegraphGroup`, `mission`, and `missionState` implement section 9. Registry `update` callbacks own movement/contact when supplied; data-only boss definitions use the engine phase scheduler. `onBullet === false` blocks. Weak damage is applied once, including compatibility with the enemy module'"'s bullet callbacks. Split-boss area damage reaches its halves.
+- Campaign events: "'`missionStart`, `missionEnd`, `radio`, `recruit`, `rescue`, `bossPhase`, `bossWeak`, `enemyTelegraph`, `hazard`, `assistOffer`. Existing Tactics events remain; registered boss warnings also activate PERFECT counters. `missionEnd.stars` is a three-boolean array, `keptPct` is 0–100, and `assisted` is 0/1/2. Failures report the last casualty cause; `missionState.causes` retains totals.
+- The main save stores `save.campaign[id] = {bestStars, attempts, consecutiveFails, assistedWin, lastCause}` plus a `campaign.stars` lookup for Story. Storage reads/writes are guarded. Assist offers occur at exactly 2 and 4 consecutive failures and never change an active attempt.
+
+## Simulation and tuning
+
+Fixed steps are 1/60 second, with at most five catch-up steps. Excess wall time is counted in `profile().droppedSeconds`. `__game.clocks` separates real elapsed time, unscaled fixed wall time, scaled time, and executed simulation time. Pausing freezes simulation. Cosmetic callbacks do not advance combat.
+
+`__game.setTestMode(true)`, `input("steer", x)`, `input("powerup", slot)`, `input("surge")`, and `advance(n)` support controlled tests. `__game.replay` records tick inputs and run configuration; `await playReplay(record)` restores the run, then `advance(n)` executes it. `stateHash()` hashes authoritative state, RNG streams and pending power-up effects. Replays reject mismatched tuning. `ctx.rng("stream-name")` returns a seeded number; numeric arguments retain the legacy generator factory.
+
+`CAMPAIGN_TUNING` / `__game.tuning` controls ordinary bullet damage: normal **0.35**, hard **0.35**, boss missions **0.43**, first boss mission **1.15**. C1M1–3 retain full damage. Campaign gate charge is **0.015 damage**, growth limited to **+6**, and shooting does not increase multipliers. ARCADE keeps its existing gate growth. These bounds prevent authored small rewards inflating to +99.
+
+Other knobs: campaign cap **300**, ARCADE cap **600**; Assist enemy factors **0.8 / 0.65** plus a shield drop; elite count factor **1.3**, no authored drops, one extra swarm. The 60% threat retention floor applies only to ARCADE/daily and C1M1–3. All eight skill IDs are evaluated. Specialists are run-only, tinted, and counted with icons; each defender absorbs one ranged contact. Bullet cells are **2 m**; crowd cells **0.65 m**. Formation compresses into free intervals and springs back. Gates share an instanced post batch; bullets, FX, hash buckets and slots are reused.
+
+## Verification and measurements
+
+CPU checks cover replay equality, 30/60/120 Hz equivalence, the catch-up limit, pause, rendering invariance, nearest-hit order, geometric casualties, defender armor, Assist/offers, weak damage, missing sheets/modules, procedural/daily seeds, and all 36 mission starts:
+
+```sh
+THREE_LOCAL=/path/to/three.min.js node tools/bot-engine-check.js
+node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 2
+```
+
+The campaign bot also accepts `--engine simulation` for the existing DOM/graphics fixture. It reports first-attempt rates by tag/chapter, stars, causes, hashes and profiling counters; timeouts are errors.
+
+CPU stress fixture: **300 soldiers, 400 enemies, 480 bullets per volley, four runs of 600 ticks**. Mean time per tick: baseline **5.64 ms**, updated **4.53 ms**, approximately **20% lower**. This is CPU fixture timing, not phone FPS or GPU timing.
+
+`__game.profile()` reports simulation timings and `renderer.info` draw calls, triangles and memory. Actual before/after renderer numbers are **unmeasured**: Chromium cannot run in this sandbox. The orchestrator can measure them with:
+
+```sh
+node tools/bot-engine-profile.js --before /tmp/e1-baseline --after . --three /path/to/three.min.js
+```
+
+The baseline snapshot contains the original three engine files; unchanged resources fall back to the current repo. The profiler leaves rendering enabled.
+
+Balance results will be appended after the final sweep. These CPU policy samples require browser confirmation before accepting the difficulty targets.
+MD' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();s=s.replace('size: 1.1, vx: (s.x - L.sx)', 'size: 1.1, soldier: true, specialist: s.specialist, vx: (s.x - L.sx)');s=s.replace('  for (const f of L.fx) {\\n    if (f.t < 0) continue;', '  let corpses = 0;\\n  for (const f of L.fx) {\\n    if (f.t < 0) continue;\\n    if (f.soldier) { if (corpses++ < 128) (specialistLayers[f.specialist] || sold).push(f.x, f.y - .6, f.z, SOLDIER_H * .512, SOLDIER_H, 0, 1 - f.t / f.dur); continue; }');p.write_text(s)
+PY
+cat /tmp/e1-boss-verified-errors.log; tail -24 /tmp/e1-boss-verified.log; tail -6 /tmp/e1-arcade-verified.log; cat /tmp/e1-arcade-verified-errors.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+First-attempt results: fresh save, no Assist; errors excluded from win rates.
+┌─────────┬─────────────┬─────────┬──────┬──────────┬────────┬──────────┬────────┐
+│ (index) │ group       │ policy  │ wins │ attempts │ errors │ winRate  │ stars  │
+├─────────┼─────────────┼─────────┼──────┼──────────┼────────┼──────────┼────────┤
+│ 0       │ 'normal'    │ 'never' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 1       │ 'normal'    │ 'smart' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 2       │ 'hard'      │ 'never' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 3       │ 'hard'      │ 'smart' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 4       │ 'boss'      │ 'never' │ 0    │ 12       │ 0      │ '0.0%'   │ '0.00' │
+│ 5       │ 'boss'      │ 'smart' │ 7    │ 12       │ 0      │ '58.3%'  │ '1.08' │
+│ 6       │ 'chapter 1' │ 'never' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+│ 7       │ 'chapter 1' │ 'smart' │ 2    │ 2        │ 0      │ '100.0%' │ '3.00' │
+│ 8       │ 'chapter 2' │ 'never' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+│ 9       │ 'chapter 2' │ 'smart' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+│ 10      │ 'chapter 3' │ 'never' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+│ 11      │ 'chapter 3' │ 'smart' │ 2    │ 2        │ 0      │ '100.0%' │ '2.00' │
+│ 12      │ 'chapter 4' │ 'never' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+│ 13      │ 'chapter 4' │ 'smart' │ 2    │ 2        │ 0      │ '100.0%' │ '1.00' │
+│ 14      │ 'chapter 5' │ 'never' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+│ 15      │ 'chapter 5' │ 'smart' │ 1    │ 2        │ 0      │ '50.0%'  │ '0.50' │
+│ 16      │ 'chapter 6' │ 'never' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+│ 17      │ 'chapter 6' │ 'smart' │ 0    │ 2        │ 0      │ '0.0%'   │ '0.00' │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
+Causes of loss {"never:boss:slam":6,"smart:swarm":4,"never:boss:charge":2,"never:boss:barrage":2,"never:swarm":2,"smart:boss:charge":1}
+┌─────────┬─────────┬───────┬──────────────┬────────────────┐
+│ (index) │ policy  │ wins  │ averageStars │ averageKeptPct │
+├─────────┼─────────┼───────┼──────────────┼────────────────┤
+│ 0       │ 'never' │ '8/8' │ '3.0'        │ '80.4'         │
+│ 1       │ 'smart' │ '8/8' │ '3.0'        │ '94.4'         │
+└─────────┴─────────┴───────┴──────────────┴────────────────┘
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('normalDamage: .35','normalDamage: .34').replace('firstBossDamage: 1.15','firstBossDamage: 2.5');p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c1m6 --runs 2 > /tmp/e1-first-boss-final.log 2> /tmp/e1-first-boss-final-errors.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 2713ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('e.dieT = 0.3; e.def?.onDeath?.(e);','e.dieT = 0.3; checkMedicOrder(e); e.def?.onDeath?.(e);');p.write_text(s)
+p=Path('js/objects3d.js');s=p.read_text().replace('\"DISTRICT CLEAR\"','\"MISSION CLEAR\"');p.write_text(s)
+PY
+cat /tmp/e1-first-boss-final-errors.log; head -4 /tmp/e1-first-boss-final.log" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"id":"c1m6","policy":"never","run":1,"engine":"simulation","result":"win","stars":[true,false,true],"keptPct":62,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":1,"tag":"boss","hash":"04e9775f","score":1655,"peak":27,"profile":{"steps":2253,"simMs":549.5740250000002,"maxSimMs":11.399691999999959,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":3825,"meanSimMs":0.24392988237905025,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c1m6","policy":"smart","run":1,"engine":"simulation","result":"win","stars":[true,true,true],"keptPct":100,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":1,"tag":"boss","hash":"f4d99b56","score":4005,"peak":21,"profile":{"steps":2230,"simMs":590.5509629999952,"maxSimMs":2.1334130000000187,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":3437,"meanSimMs":0.26482105964125346,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c1m6","policy":"never","run":2,"engine":"simulation","result":"win","stars":[true,false,true],"keptPct":62,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":1,"tag":"boss","hash":"ec3e1ee1","score":1655,"peak":27,"profile":{"steps":2253,"simMs":541.9611929999942,"maxSimMs":4.091302999999925,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":3632,"meanSimMs":0.24055090679094282,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c1m6","policy":"smart","run":2,"engine":"simulation","result":"win","stars":[true,true,true],"keptPct":100,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":1,"tag":"boss","hash":"68034140","score":4005,"peak":21,"profile":{"steps":2234,"simMs":579.4717809999925,"maxSimMs":2.588546999999835,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":3532,"meanSimMs":0.25938754744851944,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c1m1,c1m2,c1m3,c1m4,c2m1,c2m2,c2m3,c2m4,c3m1,c3m2,c3m3,c3m4,c4m1,c4m2,c4m3,c4m4,c5m1,c5m2,c5m3,c5m4,c6m1,c6m2,c6m3,c6m4 --runs 2 > /tmp/e1-normal-verified.log 2> /tmp/e1-normal-verified-errors.log' in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text().replace('JSON.stringify(record.rules)"'!==JSON.stringify(CAMPAIGN_TUNING)'"', 'Object.keys(CAMPAIGN_TUNING).some(k => record.rules[k] "'!== CAMPAIGN_TUNING[k])'"');p.write_text(s)
+p=Path('design/campaign-engine-notes.md');s=p.read_text().replace('normal **0.35**','normal **0.34**').replace('first boss mission **1.15**','first boss mission **2.5**');s=s.replace('C1M1–3 retain full damage.', 'C1M1–3 retain full damage; the first boss gets a separate damage allowance so its lesson remains approachable without restoring a squad-loss floor.');p.write_text(s)
+PY
+python - <<'PY'
+import re,subprocess
+from pathlib import Path
+files=list(Path('js').glob('*.js'))+list(Path('tools').glob('bot-*.js'))
+for i,m in enumerate(re.finditer(r'<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)</script>',Path('index.html').read_text())):
+ if m[1].strip():
+  p=Path(f'/tmp/e1-final-inline-{i}.js');p.write_text(m[1]);files.append(p)
+for f in files:
+ subprocess.run(['node','--check',str(f)],check=True)
+print('PASS node --check:',len(files),'JavaScript files, including all extracted inline scripts')
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 277ms:
+PASS node --check: 14 JavaScript files, including all extracted inline scripts
+
+codex
+The final hard and boss samples are within the requested ranges for both policies: smart wins 66.7% and 58.3%; never wins 16.7% and 16.7%. All 14 JavaScript syntax checks pass, including the extracted inline script. I’m finishing the normal-mission sample and notes, which will include the APIs, tuning values, and CPU-versus-GPU measurement limits.
+
+exec
+/bin/bash -lc 'tail -3 /tmp/e1-normal-verified.log; cat /tmp/e1-normal-verified-errors.log; wc -l index.html js/objects3d.js js/powerups.js tools/bot-campaign.js tools/bot-engine-check.js tools/bot-engine-profile.js design/campaign-engine-notes.md' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"id":"c4m1","policy":"never","run":2,"engine":"simulation","result":"lose","stars":[false,false,false],"keptPct":0,"skillOk":true,"cause":"swarm","rescued":0,"assisted":0,"chapter":4,"tag":"normal","hash":"e194add9","score":495,"peak":37,"profile":{"steps":1350,"simMs":742.7113100000643,"maxSimMs":3.900826999997662,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":36306,"meanSimMs":0.5501565259259735,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c4m1","policy":"smart","run":2,"engine":"simulation","result":"win","stars":[true,false,true],"keptPct":43,"skillOk":true,"cause":null,"rescued":0,"assisted":0,"chapter":4,"tag":"normal","hash":"61509882","score":630,"peak":37,"profile":{"steps":2330,"simMs":706.7939010000264,"maxSimMs":3.7859780000071623,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":28398,"meanSimMs":0.3033450218884233,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+{"id":"c4m2","policy":"never","run":2,"engine":"simulation","result":"win","stars":[true,true,false],"keptPct":68,"skillOk":false,"cause":null,"rescued":0,"assisted":0,"chapter":4,"tag":"normal","hash":"4aac1801","score":1424,"peak":48,"profile":{"steps":2400,"simMs":1144.235728999607,"maxSimMs":3.6301219999950263,"frames":0,"calls":0,"triangles":0,"maxCalls":0,"droppedSeconds":0,"candidates":21950,"meanSimMs":0.4767648870831696,"meanCalls":null,"meanTriangles":null,"memory":null},"errors":[]}
+  1756 index.html
+   610 js/objects3d.js
+   338 js/powerups.js
+   125 tools/bot-campaign.js
+    58 tools/bot-engine-check.js
+    47 tools/bot-engine-profile.js
+    43 design/campaign-engine-notes.md
+  2977 total
+
+ succeeded in 85477ms:
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('index.html');s=p.read_text();old='''        const blocked=o.def?.onBullet?.(o,b)===false;
+        if("'!blocked){if(o.hp<=0){o.hp=.001;hitEnemy(o,.001);}else hitEnemy(o,b.dmg);}if(b.splash)explode(o.x,o.z,b.dmg,b.splash,o);'"''';new='''        const hp=o.hp, parent=o._campaignEnemy?.parent;
+        const blocked=o.def?.onBullet?.(o,b)===false;
+        const amount=parent?.boss ? Math.max(0,b.dmg*(L.giantT>0?2:1)*(parent.weak>0?parent.config.weak.mult:1)-(hp-o.hp)) : b.dmg;
+        if("'!blocked){if(o.hp<=0){o.hp=.001;hitEnemy(o,.001);}else hitEnemy(o,amount);}if(b.splash)explode(o.x,o.z,b.dmg,b.splash,o);'"''';assert old in s;s=s.replace(old,new);p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+exec
+/bin/bash -lc 'tail -24 /tmp/e1-normal-verified.log; cat /tmp/e1-normal-verified-errors.log' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+First-attempt results: fresh save, no Assist; errors excluded from win rates.
+┌─────────┬─────────────┬─────────┬──────┬──────────┬────────┬──────────┬────────┐
+│ (index) │ group       │ policy  │ wins │ attempts │ errors │ winRate  │ stars  │
+├─────────┼─────────────┼─────────┼──────┼──────────┼────────┼──────────┼────────┤
+│ 0       │ 'normal'    │ 'never' │ 32   │ 48       │ 0      │ '66.7%'  │ '1.44' │
+│ 1       │ 'normal'    │ 'smart' │ 40   │ 48       │ 0      │ '83.3%'  │ '1.83' │
+│ 2       │ 'hard'      │ 'never' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 3       │ 'hard'      │ 'smart' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 4       │ 'boss'      │ 'never' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 5       │ 'boss'      │ 'smart' │ 0    │ 0        │ 0      │ '—'      │ '—'    │
+│ 6       │ 'chapter 1' │ 'never' │ 8    │ 8        │ 0      │ '100.0%' │ '2.75' │
+│ 7       │ 'chapter 1' │ 'smart' │ 8    │ 8        │ 0      │ '100.0%' │ '2.75' │
+│ 8       │ 'chapter 2' │ 'never' │ 4    │ 8        │ 0      │ '50.0%'  │ '0.88' │
+│ 9       │ 'chapter 2' │ 'smart' │ 6    │ 8        │ 0      │ '75.0%'  │ '1.38' │
+│ 10      │ 'chapter 3' │ 'never' │ 6    │ 8        │ 0      │ '75.0%'  │ '1.50' │
+│ 11      │ 'chapter 3' │ 'smart' │ 8    │ 8        │ 0      │ '100.0%' │ '2.13' │
+│ 12      │ 'chapter 4' │ 'never' │ 6    │ 8        │ 0      │ '75.0%'  │ '1.75' │
+│ 13      │ 'chapter 4' │ 'smart' │ 8    │ 8        │ 0      │ '100.0%' │ '2.50' │
+│ 14      │ 'chapter 5' │ 'never' │ 4    │ 8        │ 0      │ '50.0%'  │ '1.25' │
+│ 15      │ 'chapter 5' │ 'smart' │ 4    │ 8        │ 0      │ '50.0%'  │ '1.25' │
+│ 16      │ 'chapter 6' │ 'never' │ 4    │ 8        │ 0      │ '50.0%'  │ '0.50' │
+│ 17      │ 'chapter 6' │ 'smart' │ 6    │ 8        │ 0      │ '75.0%'  │ '1.00' │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
+Causes of loss {"never:swarm":10,"smart:swarm":8,"never:threat:swarm":6}
+
+exec
+/bin/bash -lc "python - <<'PY'
+from pathlib import Path
+p=Path('tools/bot-engine-check.js');s=p.read_text();needle=\" console.log('PASS: registered boss telegraphs preserve PERFECT counters.');\";extra='''
+ await H.goMission('c5m6');H.setState('boss');H.L.enemies=[];H.L.gates=[];H.L.solids=[];H.L.bullets.length=0;
+ const parent=H.L.boss._campaignEnemy;parent.split=true;parent.weak=1;H.L.boss.weakT=1;H.L.boss.x=1000;H.L.giantT=6;
+ parent.half1=H.spawnEnemy('colossus_half',0,-2,{hp:1000});parent.half2=H.spawnEnemy('colossus_half',4,-2,{hp:1000});parent.half1._campaignEnemy.parent=parent;parent.half2._campaignEnemy.parent=parent;
+ H.L.bullets.push({x:0,z:0,vx:0,life:1,dmg:10,splash:0,pierce:0});H.updateBullets(.1);assert.equal(parent.half1.hp,950);
+ const halvesHP=parent.half1.hp+parent.half2.hp;H.damageBoss(100);assert(Math.abs(halvesHP-parent.half1.hp-parent.half2.hp-250)<1e-6);
+ console.log('PASS: split boss halves retain GIANT/weak multipliers and receive boss area damage.');
+''';s=s.replace(needle,needle+extra);p.write_text(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-engine-check.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 1711ms:
+PASS: authored waves, squad cap, geometric contacts, defender armor, nearest hit, Assist/reset/offers, same-seed replay, 30/60/120 Hz hashes.
+PASS: render-only state invariance, missing sheet fallback, five-step catch-up cap, pause freeze, weak damage applied once.
+PASS: 36 mission generation/first-tick smoke.
+PASS: absent enemy module falls back to base units and boss.
+PASS: ARCADE and daily replay seeds include procedural supplies.
+PASS: registered boss telegraphs preserve PERFECT counters.
+PASS: split boss halves retain GIANT/weak multipliers and receive boss area damage.
+
+exec
+/bin/bash -lc "python - <<'PY'
+import json
+from pathlib import Path
+rows={}
+for filename in ['e1-normal-verified.log','e1-hard-boss-final.log','e1-boss-verified.log','e1-first-boss-final.log']:
+ for line in Path('/tmp/'+filename).read_text().splitlines():
+  try:r=json.loads(line)
+  except ValueError:continue
+  if 'id' in r:rows[(r['id'],r['policy'],r['run'])]=r
+p=Path('design/campaign-engine-notes.md');s=p.read_text();s=s.replace('Campaign gate charge is **0.015 damage**','Campaign gate gain is **0.015 per damage point**')
+text='Final CPU sample: two fresh-save runs per mission/policy, **144 completed attempts, zero errors**.\\n\\n| Tag | Never | Smart |\\n|---|---:|---:|\\n'
+for tag in ['normal','hard','boss']:
+ vals=[]
+ for policy in ['never','smart']:
+  rr=[r for r in rows.values() if r['tag']==tag and r['policy']==policy]
+  wins=sum(r['result']=='win' for r in rr);vals.append(f'{wins}/{len(rr)} ({wins/len(rr)*100:.1f}%)')
+ text+='| '+tag+' | '+' | '.join(vals)+' |\\n'
+text+='\\nNormal includes the six onboarding attempts per policy, all wins. Excluding C1M1–3, normal rates are **61.9% never / 81.0% smart**. The full normal-tag never rate is 1.7 percentage points above the target; all other tag/policy samples fit the specified ranges. ARCADE levels 1–8 pass for both policies (**16/16 wins**). These are small CPU policy samples, not browser acceptance or human win-rate estimates.\\n'
+s=s.replace('Balance results will be appended after the final sweep. These CPU policy samples require browser confirmation before accepting the difficulty targets.',text)
+p.write_text(s)
+print('Merged sample:',len(rows),'attempts;',sum(r['result']=='ERROR' for r in rows.values()),'errors')
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+Merged sample: 144 attempts; 0 errors
+
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node /tmp/e1-perf.js > /tmp/e1-perf-release.log' in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc "python - <<'PY'
+import re,subprocess
+from pathlib import Path
+files=list(Path('js').glob('*.js'))+list(Path('tools').glob('bot-*.js'))
+for i,m in enumerate(re.finditer(r'<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)</script>',Path('index.html').read_text())):
+ if m[1].strip():
+  p=Path(f'/tmp/e1-final-inline-{i}.js');p.write_text(m[1]);files.append(p)
+for f in files:subprocess.run(['node','--check',str(f)],check=True)
+print('PASS node --check:',len(files),'files (all js modules, bot tools, and extracted inline scripts)')
+PY
+rg -n 'Math.random|soldiers.splice|bullets.splice|fx.splice' index.html js/powerups.js js/objects3d.js" in /home/user/my-first-repo/squad-surge
+ exited 1 in 238ms:
+PASS node --check: 14 files (all js modules, bot tools, and extracted inline scripts)
+
+exec
+/bin/bash -lc "rg --files -g '*.js'" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+js/powerups.js
+js/objects3d.js
+js/story.js
+js/meta.js
+js/campaign.js
+js/juice.js
+js/scenery.js
+js/finale.js
+js/enemies.js
+tools/shot.js
+tools/check-tactics.js
+tools/bot-engine-check.js
+tools/bot-campaign.js
+tools/bot-tactics.js
+tools/bot-engine-profile.js
+art-src/units2/shot.js
+
+exec
+/bin/bash -lc "python - <<'PY'
+import subprocess
+from pathlib import Path
+files=subprocess.check_output(['rg','--files','-g','*.js'],text=True).splitlines()+[str(p) for p in Path('/tmp').glob('e1-final-inline-*.js')]
+for f in files:subprocess.run(['node','--check',f],check=True)
+print('PASS node --check on all',len(files),'repository JavaScript and extracted inline files')
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 328ms:
+PASS node --check on all 17 repository JavaScript and extracted inline files
+
+ succeeded in 26893ms:
+exec
+/bin/bash -lc 'THREE_LOCAL=/tmp/claude-0/-home-user-my-first-repo/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/npm/package/build/three.min.js node tools/bot-campaign.js --engine simulation --missions c5m6 --runs 2 > /tmp/e1-split-verified.log 2> /tmp/e1-split-verified-errors.log' in /home/user/my-first-repo/squad-surge
+exec
+/bin/bash -lc 'cat /tmp/e1-perf-release.log' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+{"engine":"baseline","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[6.035964575,5.654870951666666,6.081787616666667,6.149629635000001],"median":6.081787616666667,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+{"engine":"updated","soldiers":300,"enemies":400,"bulletsPerVolley":480,"steps":600,"msPerStep":[4.958313171666669,5.003927526666667,4.774372068333329,4.819868194999999],"median":4.958313171666669,"rendererInfo":null,"reason":"CPU fixture stubs renderer; browser required for draw counts"}
+
+ succeeded in 5741ms:
+exec
+/bin/bash -lc "tail -3 /tmp/e1-split-verified.log; cat /tmp/e1-split-verified-errors.log; python - <<'PY'
+from pathlib import Path
+p=Path('design/campaign-engine-notes.md');s=p.read_text().replace('baseline **5.64 ms**, updated **4.53 ms**, approximately **20% lower**','baseline **5.98 ms**, updated **4.89 ms**, approximately **18% lower**');s=s.replace('Final CPU sample: two fresh-save runs per mission/policy,', 'Final CPU sample, assembled from the latest normal/hard/boss verification passes: two fresh-save runs per mission/policy,');s=s.replace('CPU checks cover replay equality,','All **17** repository JavaScript and extracted inline files pass "'`node --check`. CPU checks cover replay equality,'"');p.write_text(s)
+PY" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+│ 17      │ 'chapter 6' │ 'smart' │ 0    │ 0        │ 0      │ '—'     │ '—'    │
+└─────────┴─────────────┴─────────┴──────┴──────────┴────────┴─────────┴────────┘
+Causes of loss {"never:swarm":2,"smart:swarm":1}
+
+codex
+The latest normal sample is 83.3% smart and 66.7% never. Excluding C1M1–3, which all pass, it’s 81.0% and 61.9%. The assembled verification sample has 144 completed attempts with no errors. Contract tests and ARCADE checks pass; I’m printing the completed notes now.
+
+exec
+/bin/bash -lc "python - <<'PY'
+import re,subprocess
+from pathlib import Path
+files=subprocess.check_output(['rg','--files','-g','*.js'],text=True).splitlines()
+for i,m in enumerate(re.finditer(r'<script(?:\\s["'^>]*)?>(['"\\s\\S]*?)</script>',Path('index.html').read_text())):
+ if m[1].strip():
+  p=Path(f'/tmp/e1-final-inline-{i}.js');p.write_text(m[1]);files.append(str(p))
+for f in files:subprocess.run(['node','--check',f],check=True)
+print('PASS: node --check on all',len(files),'JavaScript files, including extracted inline scripts.')
+PY
+cat design/campaign-engine-notes.md" in /home/user/my-first-repo/squad-surge
+ succeeded in 335ms:
+PASS: node --check on all 17 JavaScript files, including extracted inline scripts.
+# Campaign engine notes (E1)
+
+The engine loads `enemies.js`, `campaign.js`, then `story.js` after the existing modules. Missing optional modules do not prevent ARCADE from booting. Missing registered sheets use tinted grunt atlases. E1 did not edit sibling-owned modules or run git.
+
+## APIs and events
+
+- `ctx.goMission(id, {assist: 0|1|2, elite: boolean})` uses `Campaign.missions[id]`; events use `event` as the discriminator, with wave `type` naming the enemy. `ctx.goArcade(level)` and daily `ctx.goMode(...)` retain procedural generation. `ctx.restartSame()` reuses the layout seed and clears Assist for the next attempt.
+- `registerEnemy`, `registerBoss`, `spawnEnemy`, `squad`, `killSoldiersInRect`, `killSoldiersInCircle`, `damageEnemiesInCircle`, `rng(stream)`, `telegraphGroup`, `mission`, and `missionState` implement section 9. Registry `update` callbacks own movement/contact when supplied; data-only boss definitions use the engine phase scheduler. `onBullet === false` blocks. Weak damage is applied once, including compatibility with the enemy module's bullet callbacks. Split-boss area damage reaches its halves.
+- Campaign events: `missionStart`, `missionEnd`, `radio`, `recruit`, `rescue`, `bossPhase`, `bossWeak`, `enemyTelegraph`, `hazard`, `assistOffer`. Existing Tactics events remain; registered boss warnings also activate PERFECT counters. `missionEnd.stars` is a three-boolean array, `keptPct` is 0–100, and `assisted` is 0/1/2. Failures report the last casualty cause; `missionState.causes` retains totals.
+- The main save stores `save.campaign[id] = {bestStars, attempts, consecutiveFails, assistedWin, lastCause}` plus a `campaign.stars` lookup for Story. Storage reads/writes are guarded. Assist offers occur at exactly 2 and 4 consecutive failures and never change an active attempt.
+
+## Simulation and tuning
+
+Fixed steps are 1/60 second, with at most five catch-up steps. Excess wall time is counted in `profile().droppedSeconds`. `__game.clocks` separates real elapsed time, unscaled fixed wall time, scaled time, and executed simulation time. Pausing freezes simulation. Cosmetic callbacks do not advance combat.
+
+`__game.setTestMode(true)`, `input("steer", x)`, `input("powerup", slot)`, `input("surge")`, and `advance(n)` support controlled tests. `__game.replay` records tick inputs and run configuration; `await playReplay(record)` restores the run, then `advance(n)` executes it. `stateHash()` hashes authoritative state, RNG streams and pending power-up effects. Replays reject mismatched tuning. `ctx.rng("stream-name")` returns a seeded number; numeric arguments retain the legacy generator factory.
+
+`CAMPAIGN_TUNING` / `__game.tuning` controls ordinary bullet damage: normal **0.34**, hard **0.35**, boss missions **0.43**, first boss mission **2.5**. C1M1–3 retain full damage; the first boss gets a separate damage allowance so its lesson remains approachable without restoring a squad-loss floor. Campaign gate gain is **0.015 per damage point**, growth limited to **+6**, and shooting does not increase multipliers. ARCADE keeps its existing gate growth. These bounds prevent authored small rewards inflating to +99.
+
+Other knobs: campaign cap **300**, ARCADE cap **600**; Assist enemy factors **0.8 / 0.65** plus a shield drop; elite count factor **1.3**, no authored drops, one extra swarm. The 60% threat retention floor applies only to ARCADE/daily and C1M1–3. All eight skill IDs are evaluated. Specialists are run-only, tinted, and counted with icons; each defender absorbs one ranged contact. Bullet cells are **2 m**; crowd cells **0.65 m**. Formation compresses into free intervals and springs back. Gates share an instanced post batch; bullets, FX, hash buckets and slots are reused.
+
+## Verification and measurements
+
+All **17** repository JavaScript and extracted inline files pass `node --check`. CPU checks cover replay equality, 30/60/120 Hz equivalence, the catch-up limit, pause, rendering invariance, nearest-hit order, geometric casualties, defender armor, Assist/offers, weak damage, missing sheets/modules, procedural/daily seeds, and all 36 mission starts:
+
+```sh
+THREE_LOCAL=/path/to/three.min.js node tools/bot-engine-check.js
+node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 2
+```
+
+The campaign bot also accepts `--engine simulation` for the existing DOM/graphics fixture. It reports first-attempt rates by tag/chapter, stars, causes, hashes and profiling counters; timeouts are errors.
+
+CPU stress fixture: **300 soldiers, 400 enemies, 480 bullets per volley, four runs of 600 ticks**. Mean time per tick: baseline **5.98 ms**, updated **4.89 ms**, approximately **18% lower**. This is CPU fixture timing, not phone FPS or GPU timing.
+
+`__game.profile()` reports simulation timings and `renderer.info` draw calls, triangles and memory. Actual before/after renderer numbers are **unmeasured**: Chromium cannot run in this sandbox. The orchestrator can measure them with:
+
+```sh
+node tools/bot-engine-profile.js --before /tmp/e1-baseline --after . --three /path/to/three.min.js
+```
+
+The baseline snapshot contains the original three engine files; unchanged resources fall back to the current repo. The profiler leaves rendering enabled.
+
+Final CPU sample, assembled from the latest normal/hard/boss verification passes: two fresh-save runs per mission/policy, **144 completed attempts, zero errors**.
+
+| Tag | Never | Smart |
+|---|---:|---:|
+| normal | 32/48 (66.7%) | 40/48 (83.3%) |
+| hard | 2/12 (16.7%) | 8/12 (66.7%) |
+| boss | 2/12 (16.7%) | 7/12 (58.3%) |
+
+Normal includes the six onboarding attempts per policy, all wins. Excluding C1M1–3, normal rates are **61.9% never / 81.0% smart**. The full normal-tag never rate is 1.7 percentage points above the target; all other tag/policy samples fit the specified ranges. ARCADE levels 1–8 pass for both policies (**16/16 wins**). These are small CPU policy samples, not browser acceptance or human win-rate estimates.
+
+
+codex
+Implemented the engine, campaign systems, specialists, Assist, replay, and bots.
+
+- All 17 syntax checks and CPU contract tests pass.
+- 144 campaign attempts completed without errors; ARCADE passed 16/16.
+- CPU stress timing: **5.98 → 4.89 ms/tick**, about **18% lower**.
+- Browser `renderer.info` measurements remain for the orchestrator.
+
+[Engine notes](/home/user/my-first-repo/squad-surge/design/campaign-engine-notes.md) were written and printed, including APIs, tuning, win rates, and the slight normal-policy target miss.
+tokens used
+219,699
+Implemented the engine, campaign systems, specialists, Assist, replay, and bots.
+
+- All 17 syntax checks and CPU contract tests pass.
+- 144 campaign attempts completed without errors; ARCADE passed 16/16.
+- CPU stress timing: **5.98 → 4.89 ms/tick**, about **18% lower**.
+- Browser `renderer.info` measurements remain for the orchestrator.
+
+[Engine notes](/home/user/my-first-repo/squad-surge/design/campaign-engine-notes.md) were written and printed, including APIs, tuning, win rates, and the slight normal-policy target miss.
+codex exit 0

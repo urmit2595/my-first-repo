@@ -5704,3 +5704,1150 @@ exec
 codex
 The gate changes now keep the worst-case inflated bound below 180 after the first onboarding mission. The smoke test passed for onboarding, and the finale distinguished the two policies: smart won; never lost to a charge. I’m running both policies across all 36 missions to check for broader balance problems.
 
+exec
+/bin/bash -lc "sed -n '565,594p' js/enemies.js; rg -n 'function (charge|rifle|bomber)|s.mode.*rush' js/enemies.js | head -15" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+      manualMovement: true, noContact: true,
+      init: guarded(function (e) { return boss ? bossInit(e, type) : makeState(e, type, false); }, null),
+      update: guarded(boss ? bossUpdate : enemyUpdate, true),
+      onBullet: guarded(boss ? bossBullet : type === "colossus_half" ? halfBullet : enemyBullet, true),
+      onDeath: guarded(boss ? bossDeath : enemyDeath, undefined)
+    };
+    if (boss) {
+      const data = BOSS_DATA[type];
+      def.name = data.name; def.phases = data.phases; def.weak = data.weak; def.attacks = {};
+      const names = ["slam", "summon", "charge", "barrage", "shieldWall", "split"];
+      for (let i = 0; i < names.length; i++) {
+        const name = names[i];
+        def.attacks[name] = guarded(function (e) {
+          const s = e && e._campaignEnemy, q = squad();
+          return !!s && !!q && beginAttack(s, name, q, phaseFor(s));
+        }, false);
+      }
+    }
+    record.def = def; definitions.push(record);
+  }
+  function defineAll() {
+    if (definitions.length) return;
+    const enemies = Object.keys(ENEMY_DATA);
+    for (let i = 0; i < enemies.length; i++) {
+      const type = enemies[i], d = ENEMY_DATA[type];
+      addDefinition(type, d[0], d[1], d[2], d[3], d[4], d[5], false);
+    }
+    const keys = Object.keys(BOSS_DATA);
+    for (let i = 0; i < keys.length; i++) {
+      const type = keys[i], d = BOSS_DATA[type];
+271:        if (s.timer <= 0) { s.mode = "rush"; e.h = s.baseH; e.crouch = false; }
+272:      } else if (s.mode === "rush") {
+454:      s.mode = "rush"; s.timer = 0; s.e.x = s.targetX; s.e.z = s.z0;
+518:    } else if (s.mode === "rush") {
+
+exec
+/bin/bash -lc "sed -n '535,562p' index.html; rg -n 'ENEMY_DATA' js/enemies.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+function threatLossLeft(t) { if (t.countered) return 0; if (!onboarding()) return L.soldiers.length; return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }
+function announceThreat(t) {
+  t.announced = true; Obj3D.threatSign(t);
+  bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
+}
+function liveThreat(t) {
+  t.live = true; L.threat = t;
+  t.startSquad = L.soldiers.length;
+  t.lossCap = !onboarding() ? Infinity : Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));
+  if (t.kind === "swarm") {
+    const factor = L.missionState?.assisted === 2 ? .65 : L.missionState?.assisted ? .8 : 1;
+    const count = Math.round(Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3))) * factor);
+    for (let i = 0; i < count; i++) {
+      const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
+      e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6) * factor;
+      e.dmg = Math.max(e.dmg, Math.ceil(t.startSquad * 0.015));
+      e.sp *= 1.5;
+      e.threat = t; L.enemies.push(e); t.actors.push(e);
+    }
+  } else if (t.kind === "barricade") {
+    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, Math.max(70 + L.level * 8, t.startSquad * 25), { threat: t }));
+  } else if (t.kind === "mortars") {
+    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z - 32, Math.max(22 + L.level * 4, t.startSquad * 8), { threat: t }));
+  }
+  bus.emit("threatLive", { id: t.id, kind: t.kind }); coachCounter(); updateBeltHUD();
+}
+function endThreat(t) {
+  if (!t || t.done) return;
+22:  const ENEMY_DATA = {
+587:    const enemies = Object.keys(ENEMY_DATA);
+589:      const type = enemies[i], d = ENEMY_DATA[type];
+
+ exited 1 in 87126ms:
+c1m1 never win peak=18 kept=100 cause=null
+c1m1 smart win peak=18 kept=100 cause=null
+c1m2 never win peak=16 kept=100 cause=null
+c1m2 smart win peak=16 kept=100 cause=null
+c1m3 never win peak=20 kept=80 cause=null
+c1m3 smart win peak=20 kept=100 cause=null
+c1m4 never win peak=18 kept=83 cause=null
+c1m4 smart win peak=18 kept=83 cause=null
+c1m5 never lose peak=18 kept=0 cause=threat:swarm
+c1m5 smart win peak=18 kept=94 cause=null
+c1m6 never lose peak=27 kept=0 cause=boss:slam
+c1m6 smart win peak=21 kept=100 cause=null
+c2m1 never win peak=22 kept=72 cause=null
+c2m1 smart win peak=22 kept=90 cause=null
+c2m2 never win peak=32 kept=62 cause=null
+c2m2 smart win peak=32 kept=84 cause=null
+c2m3 never win peak=24 kept=20 cause=null
+c2m3 smart win peak=24 kept=87 cause=null
+c2m4 never win peak=26 kept=76 cause=null
+c2m4 smart win peak=26 kept=76 cause=null
+c2m5 never win peak=29 kept=68 cause=null
+c2m5 smart win peak=29 kept=100 cause=null
+c2m6 never lose peak=31 kept=0 cause=boss:shieldWall
+c2m6 smart win peak=31 kept=90 cause=null
+c3m1 never win peak=41 kept=97 cause=null
+c3m1 smart win peak=41 kept=97 cause=null
+c3m2 never win peak=33 kept=100 cause=null
+c3m2 smart win peak=33 kept=100 cause=null
+c3m3 never lose peak=31 kept=0 cause=threat:swarm
+c3m3 smart win peak=31 kept=100 cause=null
+c3m4 never win peak=48 kept=100 cause=null
+c3m4 smart win peak=48 kept=100 cause=null
+c3m5 never win peak=36 kept=83 cause=null
+c3m5 smart win peak=36 kept=100 cause=null
+c3m6 never win peak=48 kept=75 cause=null
+c3m6 smart win peak=48 kept=100 cause=null
+c4m1 never win peak=37 kept=32 cause=null
+c4m1 smart win peak=37 kept=67 cause=null
+c4m2 never win peak=50 kept=82 cause=null
+c4m2 smart win peak=50 kept=90 cause=null
+c4m3 never win peak=46 kept=100 cause=null
+c4m3 smart win peak=46 kept=100 cause=null
+c4m4 never win peak=55 kept=100 cause=null
+c4m4 smart win peak=55 kept=100 cause=null
+c4m5 never lose peak=42 kept=0 cause=swarm
+c4m5 smart lose peak=42 kept=0 cause=swarm
+c4m6 never lose peak=45 kept=0 cause=boss:barrage
+c4m6 smart win peak=45 kept=40 cause=null
+c5m1 never win peak=44 kept=72 cause=null
+c5m1 smart win peak=44 kept=97 cause=null
+c5m2 never lose peak=46 kept=0 cause=threat:swarm
+c5m2 smart win peak=46 kept=95 cause=null
+c5m3 never win peak=58 kept=55 cause=null
+c5m3 smart win peak=58 kept=68 cause=null
+c5m4 never win peak=67 kept=100 cause=null
+c5m4 smart win peak=67 kept=100 cause=null
+c5m5 never lose peak=49 kept=0 cause=swarm
+c5m5 smart win peak=49 kept=14 cause=null
+c5m6 never lose peak=51 kept=0 cause=swarm
+{"id":"c5m6","policy":"smart","run":1,"result":"ERROR","error":"Mission exceeded 300 simulation seconds","errors":[]}
+c6m1 never lose peak=50 kept=0 cause=threat:swarm
+c6m1 smart win peak=50 kept=44 cause=null
+c6m2 never win peak=51 kept=39 cause=null
+c6m2 smart win peak=51 kept=76 cause=null
+c6m3 never win peak=53 kept=24 cause=null
+c6m3 smart win peak=53 kept=33 cause=null
+c6m4 never win peak=70 kept=90 cause=null
+c6m4 smart win peak=70 kept=90 cause=null
+c6m5 never win peak=59 kept=20 cause=null
+c6m5 smart win peak=63 kept=79 cause=null
+c6m6 never lose peak=55 kept=0 cause=boss:slam
+c6m6 smart lose peak=69 kept=0 cause=rifleman
+normal never 21/24
+normal smart 24/24
+hard never 3/6
+hard smart 5/6
+boss never 1/6
+boss smart 4/5
+
+codex
+The full pass found a problem in c5m6: the smart bot timed out against Scrap Colossus. I’m checking whether the loadout or boss behavior caused it. The normal missions also look easier than the target so far, so I’ll report the measured results separately from the static budget checks.
+
+exec
+/bin/bash -lc "sed -n '1,46p' js/enemies.js; rg -n 'halfBullet|splitBoss|colossus_half|shieldWall|shieldT' js/enemies.js | head -25; sed -n '390,445p' js/enemies.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+"use strict";
+// Campaign enemies. Registry callbacks own movement and attack clocks; no frame listener
+// changes gameplay. setup() is safe before the optional registry/THREE seams exist.
+window.Enemies = (() => {
+  // Tuning: distances are metres, timers are simulation seconds, damage is HP.
+  const TUNE = Object.freeze({
+    lane: 3.4, laneHalf: 1.35, activeRange: 48, contactRadius: 0.65,
+    shieldSide: 2.2, shieldAngle: 25 * Math.PI / 180,
+    chargeWarn: 0.9, chargeTrigger: 18, chargeSpeed: 3, chargeCap: 8,
+    fuse: 2.2, fuseRange: 9, blastRadius: 2.4, blastDamage: 30,
+    rifleRange: 20, rifleWarn: 1, rifleCooldown: 2.6, rifleFraction: 0.03,
+    healRate: 0.06, healRange: 24, healSearch: 0.25,
+    bossWarn: 1.1, bossGap: 17, bossChargeSpeed: 24,
+    bossChargeCap: 12, bossSlamCap: 10, bossBarrageFraction: 0.08,
+    bossShieldDuration: 4.5, bossShieldCap: 6, bossOpeningDelay: 1.2,
+    bossRadius: 2.1, bossHeight: 8,
+    weakDuration: 1.4, weakMultiplier: 2.5, splitAt: 0.5,
+    // Fixed mesh budget. If exhausted, new damaging telegraphs wait for a slot.
+    telegraphs: 256, bossReserve: 12
+  });
+  // Per-archetype tuning: [HP, contact radius, sprite height, speed, contact loss, fallback tint].
+  const ENEMY_DATA = {
+    shieldbearer: [18, 0.65, 2.05, 2.1, 3, 0x8ecbff],
+    charger: [10, 0.48, 1.8, 3.5, 2, 0xff7163],
+    bomber: [7, 0.46, 1.65, 2.8, 0, 0xffb251],
+    rifleman: [8, 0.44, 1.7, 2.5, 1, 0xc8a0ff],
+    medic: [9, 0.44, 1.7, 2.6, 1, 0x75ffb1],
+    splitter: [16, 0.65, 2.15, 2.5, 3, 0xd1a0ff],
+    splitter_mini: [3, 0.26, 0.9, 5.2, 1, 0xe3baff],
+    colossus_half: [700, 1.1, 4.5, 0, 0, 0xc4b5d3]
+  };
+  // Declarative phase tables: thresholds are descending remaining-HP fractions.
+  const BOSS_DATA = {
+    ogre: { name: "Ogre Warlord", hp: 900, tint: 0xe8ac78,
+      phases: [{ at: 1, attacks: ["slam"], cadence: 2.6 },
+        { at: 0.5, attacks: ["slam", "summon"], cadence: 1.9, summonType: "grunt", summons: 4 }],
+      weak: { after: "slam", dur: TUNE.weakDuration, mult: TUNE.weakMultiplier } },
+    bulwark: { name: "Iron Bulwark", hp: 1400, tint: 0x8ac9e4,
+      phases: [{ at: 1, attacks: ["shieldWall", "slam"], cadence: 2.6 },
+        { at: 0.5, attacks: ["shieldWall", "slam", "summon"], cadence: 2.0, summonType: "shieldbearer", summons: 2 }],
+      weak: { after: "slam", dur: 1.4, mult: 2.5 } },
+    ravager: { name: "Dune Ravager", hp: 1800, tint: 0xffb268,
+      phases: [{ at: 1, attacks: ["charge"], cadence: 2.6, lanes: 1 },
+        { at: 0.5, attacks: ["charge", "charge", "slam"], cadence: 1.9, lanes: 2 }],
+      weak: { after: "charge", dur: 1.4, mult: 2.5 } },
+    gunner: { name: "Harbor Gunner", hp: 2200, tint: 0x9cabed,
+30:    colossus_half: [700, 1.1, 4.5, 0, 0, 0xc4b5d3]
+39:      phases: [{ at: 1, attacks: ["shieldWall", "slam"], cadence: 2.6 },
+40:        { at: 0.5, attacks: ["shieldWall", "slam", "summon"], cadence: 2.0, summonType: "shieldbearer", summons: 2 }],
+51:      phases: [{ at: 1, attacks: ["slam", "shieldWall"], cadence: 2.6 },
+55:      phases: [{ at: 1, attacks: ["slam", "shieldWall", "summon"], cadence: 2.6, summonType: "shieldbearer", summons: 2 },
+57:        { at: 0.33, attacks: ["shieldWall", "slam", "charge", "barrage", "summon"], cadence: 1.9, lanes: 2, summonType: "splitter", summons: 2 }],
+236:      if (!alive(e) || (e.type !== "brute" && e.type !== "colossus_half")) continue;
+331:    } else if (s.type === "colossus_half") {
+423:  function splitBoss(s) {
+430:    s.half1 = spawn("colossus_half", -TUNE.lane, s.e.z, s.halfOptions1);
+431:    s.half2 = spawn("colossus_half", TUNE.lane, s.e.z, s.halfOptions2);
+441:      const hs = liveState(half, "colossus_half", false);
+466:    } else if (name === "shieldWall") {
+468:      hitBossLanes(s, TUNE.bossShieldCap, "boss:shieldWall", s.z0, s.z1);
+469:    } else if (name === "split") splitBoss(s);
+535:  function halfBullet(e, b) {
+561:    const fallback = boss || type === "shieldbearer" || type === "splitter" || type === "colossus_half" ? "assets/brute.webp" : "assets/grunt.webp";
+568:      onBullet: guarded(boss ? bossBullet : type === "colossus_half" ? halfBullet : enemyBullet, true),
+574:      const names = ["slam", "summon", "charge", "barrage", "shieldWall", "split"];
+    // Warning coordinates are immutable through the complete attack.
+    drawBossAttack(s); signal(s, name);
+    return true;
+  }
+  function drawBossAttack(s) {
+    const progress = 1 - Math.max(0, s.timer) / TUNE.bossWarn;
+    if (s.attack === "summon" || s.attack === "split") {
+      ground(s.a, s.targetX, s.z0, 3.1, 3.1, progress);
+    } else {
+      laneVisual(s.a, s.targetX, s.z0, s.z1, s.attack === "charge", progress);
+      if (s.b) laneVisual(s.b, s.lane2 * TUNE.lane, s.z0, s.z1, s.attack === "charge", progress);
+    }
+  }
+  function weakWindow(s, attack) {
+    if (s.config.weak.after !== attack || !alive(s.e)) return;
+    release(s.shield); s.shield = null; s.wall = 0;
+    s.weak = s.config.weak.dur; s.e.weakT = s.weak;
+    s.marker = take(s, 5, GOLD, true);
+    s.weakEvent.on = true; emit("bossWeak", s.weakEvent);
+  }
+  function finishAttack(s, phase) {
+    const attack = s.attack;
+    releaseAttack(s); s.attack = ""; s.mode = "walk";
+    s.e.h = s.split ? 0 : s.baseH;
+    s.e.crouch = false; s.cooldown = Math.max(phase.cadence, s.config.weak.dur);
+    weakWindow(s, attack);
+  }
+  function hitBossLanes(s, cap, cause, z0, z1) {
+    let killed = rect(s.targetX - TUNE.laneHalf, s.targetX + TUNE.laneHalf, z0, z1, cap, cause);
+    if (s.lane2 !== 9 && killed < cap) killed += rect(s.lane2 * TUNE.lane - TUNE.laneHalf,
+      s.lane2 * TUNE.lane + TUNE.laneHalf, z0, z1, cap - killed, cause);
+    return killed;
+  }
+  function splitBoss(s) {
+    if (s.split) return true;
+    s.splitAttempted = true;
+    const hp = Math.max(1, s.e.hp * 0.5);
+    s.halfOptions1.hp = s.halfOptions1.maxHp = hp;
+    s.halfOptions2.hp = s.halfOptions2.maxHp = hp;
+    // Separate spawn options are retained by some hosts; never reuse between halves.
+    s.half1 = spawn("colossus_half", -TUNE.lane, s.e.z, s.halfOptions1);
+    s.half2 = spawn("colossus_half", TUNE.lane, s.e.z, s.halfOptions2);
+    if (!s.half1 || !s.half2) {
+      if (s.half1) { s.half1.hp = 0; s.half1.state = "dead"; }
+      if (s.half2) { s.half2.hp = 0; s.half2.state = "dead"; }
+      s.half1 = s.half2 = null; return false;
+    }
+    s.split = true;
+    for (let i = 0; i < 2; i++) {
+      const half = i === 0 ? s.half1 : s.half2;
+      half.hp = half.maxHp = hp;
+      const hs = liveState(half, "colossus_half", false);
+      if (hs) hs.parent = s;
+    }
+    s.e.hidden = true; s.e.h = 0; s.e.scale = 0; s.e.renderScale = 0; s.e.r = 0;
+    // h/scale are honoured by new registries. Moving the aggregate health carrier
+
+exec
+/bin/bash -lc "THREE_LOCAL=/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js node <<'NODE'
+const fs=require('node:fs');
+const src=fs.readFileSync('tools/bot-campaign.js','utf8');
+const {makeSimulation,installBot}=new Function('require','__dirname',src.slice(src.indexOf('\"use strict\";'),src.indexOf('let browser;'))+'\\nreturn {makeSimulation,installBot};')(require,process.cwd()+'/tools');
+(async()=>{const s=makeSimulation();await require('node:vm').runInContext("'`(${installBot.toString()})(${JSON.stringify({id:'"'c5m6',policy:'smart',seed:12318})})"'`,s);let r;do{r=s.__campaignBatch(120);}while(!r.done&&r.tick<18000);const L=s.__game.L,b=L.boss;console.log(JSON.stringify({result:r.result,tick:r.tick,state:s.__game.state,squad:L.soldiers.length,squadX:L.sx,weapon:L.weapon,boss:{hp:b.hp,x:b.x,z:b.z,split:b._campaignEnemy?.split},halves:L.enemies.filter(e=>e.type==='"'colossus_half').map(e=>({hp:e.hp,x:e.x,z:e.z,state:e.state}))}));})();
+NODE" in /home/user/my-first-repo/squad-surge
+ succeeded in 4780ms:
+{"result":null,"tick":18000,"state":"boss","squad":17,"squadX":0.019759887990473794,"weapon":0,"boss":{"hp":164.22500000000196,"x":1000,"z":-410.88553390593273,"split":true},"halves":[{"hp":164.22500000000196,"x":-3.4,"z":-410.88553390593273,"state":"idle"}]}
+
+exec
+/bin/bash -lc "THREE_LOCAL=/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js node <<'NODE'
+const fs=require('node:fs'),vm=require('node:vm');
+const src=fs.readFileSync('tools/bot-campaign.js','utf8');
+const {makeSimulation,installBot}=new Function('require','__dirname',src.slice(src.indexOf('\"use strict\";'),src.indexOf('let browser;'))+'\\nreturn {makeSimulation,installBot};')(require,process.cwd()+'/tools');
+(async()=>{const s=makeSimulation();await vm.runInContext("'`(${installBot.toString()})(${JSON.stringify({id:'"'c5m6',policy:'smart',seed:12318})})"'`,s);let r;do{r=s.__campaignBatch(120);}while(!r.done&&r.tick<18000);const g=s.__game;const half=g.L.enemies.find(e=>e.type==='"'colossus_half'&&e.hp>0);console.log('Before targeted steering:',g.state,'boss HP',g.L.boss.hp,'squad',g.L.soldiers.length,'half lane',half?.x);if(half){for(let i=0;i<1200&&g.state==='boss';i++){g.input('steer',half.x);g.advance(1);}console.log('After targeted steering:',g.state,'boss HP',g.L.boss.hp,'squad',g.L.soldiers.length);}})();
+NODE" in /home/user/my-first-repo/squad-surge
+ succeeded in 4912ms:
+Before targeted steering: boss boss HP 164.22500000000196 squad 17 half lane -3.4
+After targeted steering: win boss HP -2.499 squad 4
+
+codex
+The Colossus timeout comes from the bot’s targeting: it stayed in the centre while one half survived on the left. Steering toward that half completed the mission. I’m recording that finding and the balance results; the content checks pass, but this first bot sample misses several win-rate targets.
+
+apply patch
+patch: completed
+/home/user/my-first-repo/squad-surge/design/campaign-script.md
+diff --git a/squad-surge/design/campaign-script.md b/squad-surge/design/campaign-script.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..d2318d7e4c4611872e558675bc3a983b661bc7d7
+--- /dev/null
++++ b/squad-surge/design/campaign-script.md
+@@ -0,0 +1,398 @@
++# Operation Homeward — campaign script
++
++`js/campaign.js` contains the complete playable script: 36 missions, 72 briefing lines,
++36 win lines, and up to two in-run radio lines per mission. All spoken lines are at most
++90 characters. This file is the story outline, encounter rationale, and validation recipe.
++No shop, currency, permanent stat rewards, or borrowed characters are involved.
++
++## Characters and through-line
++
++**Captain Rook** leads the Surge squad. Practical, kind, occasionally dry. Rook measures
++success in people brought back, not enemies defeated. The journey starts at the barracks
++and ends within sight of Rook's old roof. Rook never scolds a player for choosing the
++safe route. A rescue costs an escort now; it does not imply the rescued settlers become
++soldiers or that escorts have died.
++
++**Mira** is the radio scout. Her directions are short and concrete: which lane, which
++warning, which tool. She notices the things worth saving: biscuits, a passenger's cat,
++water bottles, ferry families. Her growing network of answering radios makes the valley's
++recovery audible. The final kettle joke pays off the first tower's supper bell.
++
++**The Warlord** divided the valley into six isolated districts and took their signal
++towers. He taunts over the radio at distance zero in every boss mission, before any
++combat. Early taunts boast about his guards; his last betrays his fear of people reuniting.
++The Ogre Warlord is his first lieutenant, not the same encounter as The Warlord, Reborn.
++
++**The neighbours** are the collective supporting cast: shelter families, the baker,
++bridge workers, bus passengers, pump crew, dockhands, builders, and prisoners. Each rescue
++leads to a visible recovery beat. Nobody needs a new named character or a long cutscene.
++
++The squad reconnects the districts by relighting their towers. Each new signal enables
++the next leg: town streets → bridge crossing → water convoy → ferry landing → rebuilt
++neighbourhood → the arena's holding yard. The final mission returns the signal to every
++district at once. The ending is homecoming, not conquest.
++
++## Chapter arcs and all 36 beats
++
++Mission order always means **teach → practice → twist → recovery/rescue → HARD → BOSS**.
++The chapter-one twist is still onboarding; real combinations begin at c1m5. Each row's
++skill is an optional third-star objective, not a condition for basic completion.
++
++### 1. Old Town — a street becomes a community again
++
++| Mission | Story and playable lesson | Skill |
++|---|---|---|
++| c1m1 Out of the Barracks | Rook leaves the barracks; modest +/- choices and a rifle case teach steering. | noAssist |
++| c1m2 One Big Problem | One isolated brute blocks the route; GIANT and open flanks make it readable. | noWaste |
++| c1m3 Hold That Button | Reclaim the square; a guaranteed AIRSTRIKE teaches waiting for the swarm. | noWaste |
++| c1m4 Chalk Arrows | Follow shelter chalk marks and escort two groups; the baker kept biscuits. | rescueAll |
++| c1m5 Market Squeeze | Reopen the market; learned brute pressure joins the learned swarm. | noWaste |
++| c1m6 The First Light | Defeat the Ogre: dodge slams, then clear summons. The supper tower lights. | bossClean |
++
++Recovery vignette: shutters open, market stalls return, and the tower's warm beacon
++reaches the bridge. Rook's “Five more” makes the whole journey legible.
++
++### 2. Red Bridge — both banks belong together
++
++| Mission | Story and playable lesson | Skill |
++|---|---|---|
++| c2m1 Side Door | Release the bridge crew; one shieldbearer teaches flanking or a piercer. | noWaste |
++| c2m2 Rain Check | Escort workers under the first mortars; supplied SHIELD or open-road dodges. | noWaste |
++| c2m3 Missing Planks | Mortars finish before the left lane collapses; read the new floor warning. | noWaste |
++| c2m4 Last Bus | Two safe-deck rescues unload the bus, including a passenger's cat. | rescueAll |
++| c2m5 Steel and Rain | Shieldbearers and mortars combine; the later collapse leaves the right lane. | noWaste |
++| c2m6 A Crack in Iron | Iron Bulwark examines shield positioning and the post-slam core window. | bossClean |
++
++Recovery vignette: bridge workers lay fresh decking, the bus crosses, and the second
++beacon shows the water convoy its route. The boss approach has no collapsed lanes.
++
++### 3. Dust Road — patience carries the water
++
++| Mission | Story and playable lesson | Skill |
++|---|---|---|
++| c3m1 Read the Dust | One charger introduces the crouch and arrow; sidestep before repetition. | noCharge |
++| c3m2 Short Fuse | One bomber introduces the fuse ring; later a fuel truck rewards early fire. | noWaste |
++| c3m3 Keep One Back | Chargers and bombers share a lane; save the early tool for a later swarm. | noCharge |
++| c3m4 Water for Everyone | Return for the pump crews at two shelters; refill bottles and confidence. | rescueAll |
++| c3m5 Fuse Run | Charger rushes and bomber fuses combine twice, with empty lanes beside them. | noCharge |
++| c3m6 The Long Sidestep | Dune Ravager tests the rush cue, then consecutive lane decisions. | noCharge |
++
++Recovery vignette: the pump restarts, water trucks roll, and the third signal clears
++the route to the pier. From this chapter onward a fresh counter is no longer assured
++just before each danger. Movement remains a valid answer.
++
++### 4. The Pier — break their support, protect ours
++
++| Mission | Story and playable lesson | Skill |
++|---|---|---|
++| c4m1 Red Lines | One rifleman paints the landing; defenders are offered before later shooters. | noWaste |
++| c4m2 Cut the Thread | Identify a lone medic first; then target medics before tethered brutes. | medicsFirst |
++| c4m3 Double or Duck | Left x2 lies under rifle fire; safe right +20 competes with the risky gain. | noWaste |
++| c4m4 Ferry Tickets | Escort two gangways of dockhands and families; no ticket required. | rescueAll |
++| c4m5 Covering Fire | Riflemen cover medics and patients; target priority competes with dodging. | medicsFirst |
++| c4m6 Harbor Lights | Harbor Gunner tests marked barrage lanes and rifleman add priority. | bossClean |
++
++Recovery vignette: the fourth tower becomes a harbour light again. Every boat in the
++bay answers; the ferry unloads onto a safe shore. A solitary debut medic has no patient;
++the objective's real test comes in the later tethered encounter.
++
++### 5. Broken Blocks — leave space for a neighbour
++
++| Mission | Story and playable lesson | Skill |
++|---|---|---|
++| c5m1 Room to Breathe | One splitter teaches the three minis; splash and empty lanes handle them. | noWaste |
++| c5m2 Through the Rubble | Counter a swarm, then learn a separately supplied barricade and its gap. | perfect2 |
++| c5m3 A Better Way | Shoot a shortcut wall before the first crusher; later dodge the first saw. | fast |
++| c5m4 Names on the Wall | Two shelter rescues turn missing-person names into returning neighbours. | rescueAll |
++| c5m5 Moving Parts | Splitters plus machinery test space management; save splash for the minis. | noWaste |
++| c5m6 Two Halves, One Plan | Scrap Colossus splits at half HP; carry the spacing lesson into the boss. | bossClean |
++
++Recovery vignette: builders open the new passage, neighbours cross names off the wall,
++and the fifth beacon reveals Rook's old roof. In c5m3, `fast` asks the player to choose
++the direct gate instead of the optional rescue; it is a route medal, not a moral verdict.
++
++### 6. The Arena — every lesson brings someone home
++
++| Mission | Story and playable lesson | Skill |
++|---|---|---|
++| c6m1 Bring What We Know | Rehearse two supplied counters, with shields and chargers between them. | perfect2 |
++| c6m2 Pick Your Ground | Practice shortcut, crusher, splitter, rush, fuse, and rifle cues in stages. | noCharge |
++| c6m3 The Price of Plenty | Revisit the crossfire gamble; medics and a fuel-truck cluster test planning. | medicsFirst |
++| c6m4 Leave Nobody | A quieter three-stop holding-yard rescue resolves the missing-neighbour arc. | rescueAll |
++| c6m5 All the Way Through | Rifle/medic support and machinery/lane pressure form the final HARD exam. | medicsFirst |
++| c6m6 Operation Homeward | The Warlord's three phases combine slams, shields, rushes, and barrages. | bossClean |
++
++Recovery vignette: the arena gates stay open, all six map districts recover, and the
++towers answer one another. Rook asks Mira to put the kettle on. End on people walking
++home; no new threat or monetisation hook interrupts the payoff.
++
++## Interpreter contract and encounter safety
++
++Every event uses **`event` as its discriminator**, for example
++`{at: 82, event: "wave", type: "shieldbearer", count: 1, lane: 0, ...}`.
++This avoids colliding with the spec's wave `type` or threat/solid/hazard `kind`.
++`at` is an authored world distance, not a delay between events. Equal-distance events
++retain array order. Missions export ordinary data; helpers neither randomise nor sort it.
++Seeds are unique (`730000 + chapter * 100 + n`); there is no carry-over squad or free
++procedural opening boost. Only mission 6 has a `boss` object. Boss identifiers are
++`ogre`, `bulwark`, `ravager`, `gunner`, `colossus`, and `warlord`.
++
++The engine owns telegraphs, enemy AI, gate interactions, compression, and boss phases.
++These scripts require at least 0.8 s threat/hazard warnings and 0.9 s boss warnings from
++that engine. At the current 8.5 m/s, 40 m supply/shortcut approaches allow about 4.7 s
++of travel; threats are spaced at least 76 m apart, beyond a six-second threat lifetime
++plus room to recover. There is no mission containing both barricades and mortars.
++There is no hazard within 70 m of a scripted Tactics threat.
++
++Waves have explicit lanes and narrow 0.8 m spreads. A single introduced archetype gets
++one enemy and at least 40 m separation from other waves. Combined waves leave a lane
++empty. Crusher/splitter groups occupy left/centre or right/centre, leaving the other
++edge open. Rifle/medic groups leave the centre open. These are squad-centre routes;
++formation compression must keep soldiers within the available corridor.
++
++Bridge collapses only occupy the left lane, once per applicable mission, near the end.
++Subsequent enemies occupy the centre, reserving the right lane even if collapse persists.
++No rescue or tool gate forces a return to the fallen lane. Other machinery is separated
++by at least 70 m and always has a bypass; the shortcut is a bonus bypass, never the only
++survival route. Fuel trucks sit with upcoming enemy packs, with other lanes clear.
++
++For c4m3 and c6m3, riflemen are 6 m before the x2/+20 fork and in the x2 lane. Their
++standoff lock is intended to overlap the gate approach. The safe +20 half is always right.
++Boss approaches leave at least 34 m after the final wave and do not carry road hazards
++into boss space. Runtime testing must verify threat actors clear, rifle locks overlap the
++fork as intended, side lanes remain reachable under movement AI, and no boss phase
++covers every exit. Static lane checks cannot establish those timing facts.
++
++## Difficulty and squad budgets
++
++Starts rise from 8 to 50 soldiers. Authored arithmetic gains are small, recruits cost
++an alternative half, rescues spend 2–7 escorts, and the only x2 gates are the two exposed
++crossfire gambles. There are no jackpots, neutral x1 halves, or successive multipliers.
++All missions after c1m1 have at most one gate with numeric halves; other choices use
++bounded recruits, tools, or rescues. A player taking every rescue can afford it from
++the starting squad alone.
++Weapon cases range from 24 to 92 HP, with early rifles and later specialist weapons;
++reward blocks grant only 2–3 soldiers. This uses the existing generator's scale without
++its +40 jackpots, long reward strips, or free opening boost.
++
++The validator calculates a deliberately generous **authored no-loss squad bound**:
++take the numerically best half, collect every reward, and let every tool overflow a full
++belt for +8 (including both fork drops). It remains below 150, well under the engine's
++300 cap. A second bound includes the interpreter's Arcade-style gate inflation: every
++additive or subtractive half shot up to +99, every multiplier up to x3. Even this extreme
++stays at or below 176 after c1m1 (206 for the deliberately easy first mission's two gates).
++No arithmetic gain can feed the later crossfire multiplier. These are conservative
++bounds, not simulations of collectible gains. Enemy encounters are budgeted around the
++8–50 starting squads and modest authored gains, not around a full 300 squad.
++
++Budget units are a **static pressure proxy**, not measured DPS or literal enemy totals:
++grunt/zombie 1, brute 11 (22 base HP versus 2), shieldbearer 4, charger/bomber 3,
++rifleman 4, medic 5, splitter 8 (including allowance for three spawned minis).
++Swarm/mortar/barricade encounters reserve 40/24/16 units; bosses add HP/10.
++Threat populations and boss summons are runtime-dependent, so their exact spawned
++counts cannot be recovered from the mission data alone. The proxy includes allowances
++for those threats, and boss pressure is represented by its HP rather than inventing a
++fixed number of summons. The validator also reports literal authored wave counts.
++
++| Chapter | Mission budgets, in order | Starting squads, in order |
++|---|---|---|
++| Old Town | 10, 25, 58, **11**, 107, 150 | 8, 10, 14, 18, 18, 20 |
++| Red Bridge | 48, 78, 88, **36**, 130, 275 | 20, 22, 24, 26, 26, 28 |
++| Dust Road | 77, 84, 133, **51**, 158, 355 | 28, 30, 30, 34, 32, 34 |
++| The Pier | 109, 157, 180, **70**, 292, 526 | 34, 36, 36, 40, 38, 40 |
++| Broken Blocks | 168, 210, 215, **100**, 356, 727 | 40, 42, 42, 46, 44, 46 |
++| The Arena | 210, 278, 392, **142**, 454, 920 | 46, 46, 48, 50, 48, 50 |
++
++The bold recovery troughs are intentional. Validate rising teach/practice/twist budgets,
++a distinct recovery reduction, HARD above all normals, and BOSS above HARD. Each slot
++also rises from the previous chapter, as does the chapter mean. Requiring all 36 budgets
++to increase strictly would contradict the requested recovery missions and sawtooth.
++HARD combines two learned pressures; BOSS examines the chapter's lesson, rather than
++simply appending an unrelated enemy pile.
++
++Targets remain: chapter 1 missions 1–3 onboarding for both policies; later normal smart
++80–90% / never 45–65%, HARD 55–70% / 15–35%, BOSS 45–60% / 5–25%.
++These are tuning targets, **not claimed results**. Content validation cannot establish
++first-attempt win rates, safe-lane timing, Assist scaling, or third-star tracking. The first
++integration sample below does not yet meet the targets; rerun the engine owner's campaign
++bot against these seeds after its targeting fix and the engine tuning settle.
++Adjust wave counts, starting squads, and boss HP together if the measured curve misses;
++do not fill the recovery troughs or introduce simultaneous whole-road hazards.
++
++## Runnable validation
++
++Run from the repository root. This uses only Node built-ins, reads the delivered module,
++and does not boot the game or write files. It checks required fields, IDs and seeds,
++enums, text lengths, event ordering, arithmetic bounds, basic lane reservations,
++first introductions, objective witnesses, and the rising sawtooth budget curve.
++
++```sh
++node <<'NODE'
++const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert/strict');
++const box = { window: {} };
++vm.runInNewContext(fs.readFileSync('js/campaign.js', 'utf8'), box);
++const C = box.window.Campaign;
++const has = (o, fields) => fields.split(' ').forEach(k => assert(Object.hasOwn(o, k), `Missing ${k}`));
++const one = (v, values) => assert(values.split(' ').includes(v), `Invalid value: ${v}`);
++const int = (v, lo = 1, hi = Infinity) => assert(Number.isInteger(v) && v >= lo && v <= hi, `Bad integer ${v}`);
++const text = s => assert(typeof s === 'string' && s.length > 0 && s.length <= 90, `Bad text: ${s}`);
++const line = p => { assert(Array.isArray(p) && p.length === 2); one(p[0], 'rook mira warlord'); text(p[1]); };
++const lane = v => int(v, -1, 1);
++const powers = 'shield airstrike giant', bosses = ['ogre', 'bulwark', 'ravager', 'gunner', 'colossus', 'warlord'];
++const themes = ['town', 'bridge', 'desert', 'pier', 'ruins', 'arena'];
++const weights = { zombie: 1, grunt: 1, brute: 11, shieldbearer: 4, charger: 3, bomber: 3, rifleman: 4, medic: 5, splitter: 8 };
++const threatUnits = { swarm: 40, mortars: 24, barricade: 16 };
++const shape = { gate: 'left right', wave: 'type count', solid: 'kind hp', threat: 'kind', drop: '', hazard: 'kind lane', scenery: 'kind lane', radio: 'who text' };
++function half(h, squad, inflated = false) {
++  if (Array.isArray(h)) {
++    assert(h.length === 2); one(h[0], '+ - x'); int(h[1], 1, h[0] === 'x' ? 2 : 20);
++    if (inflated) return h[0] === 'x' ? squad * 3 : squad + 99;
++    return h[0] === '+' ? squad + h[1] : h[0] === '-' ? squad - h[1] : squad * h[1];
++  }
++  assert(h && typeof h === 'object');
++  assert(['powerup', 'recruit', 'rescue'].filter(k => Object.hasOwn(h, k)).length === 1);
++  if (h.powerup) { one(h.powerup, powers); return squad + 8; }
++  if (h.recruit) { has(h, 'n'); one(h.recruit, 'piercer grenadier defender'); int(h.n); return squad + h.n; }
++  has(h, 'rescue cost'); int(h.rescue); int(h.cost); return squad - h.cost;
++}
++has(C, 'version chapters missions'); assert.equal(C.version, 1); assert.equal(C.chapters.length, 6);
++assert.equal(Object.keys(C.missions).length, 36);
++const ids = new Set(), seeds = new Set(), first = new Set(); let previous, previousMean = 0, totalEvents = 0;
++for (const [ci, ch] of C.chapters.entries()) {
++  has(ch, 'id name theme blurb boss missions'); assert.equal(ch.id, ci + 1); text(ch.name); text(ch.blurb);
++  assert.equal(ch.theme, themes[ci]); assert.equal(ch.boss, bosses[ci]); assert.equal(ch.missions.length, 6);
++  const budgets = [], counts = [], caps = [], inflatedCaps = [];
++  for (const [mi, id] of ch.missions.entries()) {
++    const m = C.missions[id]; assert(m, `Missing mission ${id}`); assert(!ids.has(id)); ids.add(id);
++    has(m, 'id chapter n tag theme title seed length start brief win skill events');
++    assert.equal(id, `c${ci + 1}m${mi + 1}`); assert.equal(m.id, id); assert.equal(m.chapter, ch.id);
++    assert.equal(m.n, mi + 1); assert.equal(m.theme, ch.theme); text(m.title);
++    assert.equal(m.tag, mi === 5 ? 'boss' : mi === 4 ? 'hard' : 'normal');
++    int(m.seed); assert(!seeds.has(m.seed)); seeds.add(m.seed); int(m.length, 220, 420); int(m.start, 1, 300);
++    assert.equal(m.brief.length, 2); m.brief.forEach(line); assert.equal(m.brief[0][0], 'rook'); assert.equal(m.brief[1][0], 'mira'); line(m.win);
++    has(m.skill, 'id text'); text(m.skill.text); one(m.skill.id, 'noWaste rescueAll perfect2 medicsFirst noCharge bossClean fast noAssist');
++    assert(Array.isArray(m.events) && m.events.length > 0);
++    let at = -1, budget = 0, count = 0, bound = m.start, inflated = m.start, radios = 0, rescues = 0, rescueCost = 0;
++    const waves = m.events.filter(e => e.event === 'wave'), threats = m.events.filter(e => e.event === 'threat');
++    const hazards = m.events.filter(e => e.event === 'hazard');
++    for (const e of m.events) {
++      has(e, 'at event'); assert(Object.hasOwn(shape, e.event)); if (shape[e.event]) has(e, shape[e.event]);
++      assert(Number.isFinite(e.at) && e.at >= at && e.at >= 0 && e.at < m.length, `${id}: unsorted/outside road`); at = e.at;
++      if (e.event === 'gate') {
++        const halves = [e.left, e.right]; bound = Math.max(...halves.map(h => half(h, bound)));
++        inflated = Math.max(...halves.map(h => half(h, inflated, true)));
++        if ('moving' in e) assert.equal(typeof e.moving, 'boolean');
++        for (const h of halves) if (h.rescue) { rescues++; rescueCost += h.cost; }
++      }
++      if (e.event === 'drop') {
++        assert(Boolean(e.powerup) !== Boolean(e.pair));
++        if (e.pair) { assert.equal(e.pair.length, 2); e.pair.forEach(p => one(p, powers)); bound += 16; }
++        else { one(e.powerup, powers); bound += 8; }
++        inflated += e.pair ? 16 : 8;
++      }
++      if (e.event === 'wave') {
++        assert(Object.hasOwn(weights, e.type)); int(e.count); lane(e.lane);
++        assert(e.spread > 0 && e.spread <= 0.8); int(e.depth, 1); one(e.formation, 'block line wedge');
++        count += e.count; budget += e.count * weights[e.type];
++        if (!first.has(e.type)) {
++          assert.equal(e.count, e.type === 'grunt' ? 4 : 1, `${id}: isolated introduction`);
++          assert(!waves.some(w => w !== e && Math.abs(w.at - e.at) < 40)); first.add(e.type);
++        }
++      }
++      if (e.event === 'solid') {
++        one(e.kind, 'blockBlue blockYellow crate tyres weaponCase ammo barrel'); int(e.hp);
++        if ('x' in e) assert(Number.isFinite(e.x) && Math.abs(e.x) <= 5);
++        if ('n' in e) int(e.n); if ('reward' in e) { int(e.reward); bound += e.reward * (e.n || 1); inflated += e.reward * (e.n || 1); }
++        if (e.kind === 'weaponCase') int(e.weapon, 1, 4);
++      }
++      if (e.event === 'threat') { assert(Object.hasOwn(threatUnits, e.kind)); budget += threatUnits[e.kind]; }
++      if (e.event === 'hazard') { one(e.kind, 'crusher saw collapse'); lane(e.lane); assert(e.period >= 0.8); }
++      if (e.event === 'scenery') { one(e.kind, 'fuelTruck shortcut'); lane(e.lane); }
++      if (e.event === 'radio') { line([e.who, e.text]); radios++; }
++      assert(bound > 0 && bound < 150, `${id}: authored squad snowball`);
++      assert(inflated <= (id === 'c1m1' ? 210 : 180) && inflated < 300, `${id}: inflated squad snowball`);
++    }
++    assert(radios <= 2); assert(rescueCost < m.start);
++    if (m.skill.id === 'rescueAll') assert(rescues >= 2);
++    if (m.skill.id === 'fast') assert(rescues > 0);
++    if (m.skill.id === 'perfect2') assert(threats.length >= 2);
++    if (m.skill.id === 'medicsFirst') assert(waves.some(e => e.type === 'medic') && waves.some(e => e.type === 'brute'));
++    if (m.skill.id === 'noCharge') assert(waves.some(e => e.type === 'charger'));
++    if (m.skill.id === 'bossClean') assert(m.boss);
++    for (let i = 1; i < threats.length; i++) assert(threats[i].at - threats[i - 1].at >= 76);
++    assert(!(threats.some(e => e.kind === 'barricade') && threats.some(e => e.kind === 'mortars')));
++    for (let i = 1; i < hazards.length; i++) assert(hazards[i].at - hazards[i - 1].at >= 70);
++    for (const h of hazards) assert(threats.every(t => Math.abs(h.at - t.at) >= 70));
++    for (const e of [...waves, ...hazards]) {
++      const occupied = new Set(waves.filter(w => Math.abs(w.at - e.at) <= 24).map(w => w.lane));
++      hazards.filter(h => Math.abs(h.at - e.at) <= 24 || h.kind === 'collapse' && h.at <= e.at).forEach(h => occupied.add(h.lane));
++      assert(occupied.size < 3, `${id}@${e.at}: no reserved lane`);
++    }
++    for (const s of m.events.filter(e => e.event === 'scenery' && e.kind === 'shortcut')) {
++      const next = hazards.find(h => h.at > s.at); assert(next && next.at - s.at >= 32 && next.lane === s.lane);
++    }
++    assert.equal(Boolean(m.boss), mi === 5);
++    if (m.boss) {
++      has(m.boss, 'type hp'); assert.equal(m.boss.type, ch.boss); int(m.boss.hp); budget += m.boss.hp / 10;
++      assert(m.events.some(e => e.event === 'radio' && e.who === 'warlord' && e.at === 0));
++      assert(waves.every(w => m.length - w.at >= 34));
++    }
++    budgets.push(budget); counts.push(count); caps.push(bound); inflatedCaps.push(inflated); totalEvents += m.events.length;
++  }
++  const [teach, practice, twist, recovery, hard, boss] = budgets;
++  assert(teach < practice && practice < twist && recovery < practice && hard > twist && boss > hard);
++  if (previous) budgets.forEach((v, i) => assert(v > previous[i], `${ch.name}: slot ${i + 1} did not rise`));
++  const mean = budgets.reduce((a, b) => a + b, 0) / 6; assert(mean > previousMean);
++  console.log(`${ch.name}: budget [${budgets}]; waves [${counts}]; squad bounds [${caps}]; inflated [${inflatedCaps}]`);
++  previous = budgets; previousMean = mean;
++}
++assert.equal(ids.size, 36); assert.equal(seeds.size, 36);
++assert.equal(first.size, 8); // grunt + brute + the six new archetypes; zombie is valid but unused.
++console.log(`PASS: 36 missions, 6 chapters, ${totalEvents} events; rising sawtooth and authored bounds verified.`);
++NODE
++```
++
++## Validation and integration results
++
++Executed the exact snippet above: **PASS — 36 missions, 6 chapters, 324 events**.
++`node --check js/campaign.js` also passed. All six boss IDs were checked against
++`window.Enemies.bosses`, and the interpreter accepts the `event` discriminator with a
++wave's enemy in `type`. The highest authored squad bound is 120; allowing maximum gate
++inflation gives 176 after onboarding and 206 in c1m1. No mission needs the 300 cap to
++truncate its declared rewards.
++
++A CPU simulation pass used the engine owner's `tools/bot-campaign.js`, one fresh,
++unassisted run per mission per policy (72 attempts). This was an integration smoke and
++balance baseline, not a browser or statistically calibrated first-attempt study.
++Engine/enemy files were still changing during the pass; rerun against a settled build.
++
++```sh
++node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 1 \
++  --engine simulation --three /path/to/existing/three-r128.min.js
++```
++
++The default invocation initially lacked the `three` package. The completed pass used
++an existing local Three.js build via `--three`; no dependency or other repository file
++was installed or changed by this content run.
++
++| Tag | Never | Smart |
++|---|---|---|
++| Normal, including onboarding | 21/24 wins (87.5%) | 24/24 wins (100%) |
++| HARD | 3/6 wins (50%) | 5/6 wins (83.3%) |
++| BOSS | 1/6 wins (16.7%) | 4/5 completed runs won (80%); one timeout |
++
++Both policies won c1m1–c1m3. Outside onboarding, normal results were 18/21 for never
++and 21/21 for smart. **Normal and HARD are still too forgiving relative to the targets;
++the completed smart BOSS sample is also above target.** These results are not a balance
++sign-off. Keep the authored safe exits; use repeated runs after integration to tune
++enemy pressure, attack timing, starts, and boss HP. The static budget curve is validated
++independently of those runtime success rates.
++
++The timeout is reproducible in **c5m6, smart, policy seed 12318**. At tick 18000, the
++squad had 17 soldiers at x≈0.02; one `colossus_half` remained at x=−3.4 with 164.225 HP.
++The aggregate boss was hidden at x=1000, as intended after splitting. The bot's current
++target selection handles medics and shieldbearers but does not aim at a surviving
++Colossus half. Continuing the same state with steering toward that half produced a
++**win**, with four soldiers remaining, within 1200 additional ticks. This is a bot
++targeting follow-up for E1, not an absent mission event or an unwinnable boss HP value.
++No changes to the bot or boss module were made by this run.
+diff --git a/squad-surge/js/campaign.js b/squad-surge/js/campaign.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..edf88d3e3492bc693b45ce4748597d058d0fec0d
+--- /dev/null
++++ b/squad-surge/js/campaign.js
+@@ -0,0 +1,393 @@
++/* Operation Homeward. Authored distances, no procedural encounters or opening boost.
++ * Event discriminator: `event`; a wave's `type` is its enemy archetype.
++ * See design/campaign-script.md for lanes, budgets and the executable validator.
++ */
++(function () {
++  "use strict";
++  const chapters = [
++    { id: 1, name: "Old Town", theme: "town", boss: "ogre", blurb: "Find our people. Light the first way home." },
++    { id: 2, name: "Red Bridge", theme: "bridge", boss: "bulwark", blurb: "Keep a lane open. Bring both banks together." },
++    { id: 3, name: "Dust Road", theme: "desert", boss: "ravager", blurb: "Read the dust. Carry the signal through." },
++    { id: 4, name: "The Pier", theme: "pier", boss: "gunner", blurb: "Break the crossfire. Get the ferry families ashore." },
++    { id: 5, name: "Broken Blocks", theme: "ruins", boss: "colossus", blurb: "Make room for each other. Rebuild the route." },
++    { id: 6, name: "The Arena", theme: "arena", boss: "warlord", blurb: "Six districts. One last light. Everybody home." }
++  ];
++  const skills = {
++    noWaste: "Win without wasting a power-up",
++    rescueAll: "Take every rescue gate",
++    perfect2: "Land two PERFECT counters",
++    medicsFirst: "Defeat every medic before its patient",
++    noCharge: "Lose no soldiers to chargers",
++    bossClean: "Lose fewer than 20 soldiers during the boss",
++    fast: "Finish without a rescue slowdown",
++    noAssist: "Win without Assist"
++  };
++  const e = (at, event, data) => ({ at, event, ...data });
++  const gate = (at, left, right, moving = false) => e(at, "gate", { left, right, ...(moving ? { moving: true } : {}) });
++  const wave = (at, type, count, lane = 0, formation = "block", depth = 6) =>
++    e(at, "wave", { type, count, lane, spread: 0.8, depth, formation });
++  const solid = (at, kind, x, hp, extra = {}) => e(at, "solid", { kind, x, hp, ...extra });
++  const drop = (at, powerup) => e(at, "drop", { powerup });
++  const pair = (at, a, b) => e(at, "drop", { pair: [a, b] });
++  const threat = (at, kind) => e(at, "threat", { kind });
++  const hazard = (at, kind, lane, period = 3.2) => e(at, "hazard", { kind, lane, period });
++  const scenery = (at, kind, lane) => e(at, "scenery", { kind, lane });
++  const radio = (at, who, text) => e(at, "radio", { who, text });
++  const tool = powerup => ({ powerup });
++  const recruit = (kind, n) => ({ recruit: kind, n });
++  const rescue = (n, cost) => ({ rescue: n, cost });
++  const missions = {};
++  function mission(chapter, n, title, length, start, skill, rook, mira, win, events, hp) {
++    const c = chapters[chapter - 1], id = `c${chapter}m${n}`;
++    missions[id] = {
++      id, chapter, n, tag: n === 6 ? "boss" : n === 5 ? "hard" : "normal",
++      theme: c.theme, title, seed: 730000 + chapter * 100 + n, length, start,
++      brief: [["rook", rook], ["mira", mira]], win: ["rook", win],
++      skill: { id: skill, text: skills[skill] }, events,
++      ...(hp ? { boss: { type: c.boss, hp } } : {})
++    };
++    (c.missions || (c.missions = [])).push(id);
++  }
++
++  // OLD TOWN: small, separated onboarding encounters; the first brute stands alone.
++  mission(1, 1, "Out of the Barracks", 220, 8, "noAssist",
++    "Boots on. We start with the next street.", "Green numbers bring friends. Red ones cost them.",
++    "First street clear. That's a start.", [
++      gate(24, ["+", 4], ["-", 2]), wave(62, "grunt", 4, -1),
++      solid(94, "weaponCase", 3.4, 24, { weapon: 1 }),
++      radio(100, "mira", "That case holds a rifle. Give it a few shots."),
++      gate(132, ["-", 2], ["+", 3]), wave(172, "grunt", 6, 0)
++    ]);
++  mission(1, 2, "One Big Problem", 230, 10, "noWaste",
++    "Big boots don't own this town.", "One brute ahead. Keep a clear lane beside it.",
++    "Big problem. Small dent in our day.", [
++      solid(22, "weaponCase", -3.4, 28, { weapon: 1 }), drop(42, "giant"),
++      radio(66, "mira", "Wait until he's close, then try GIANT."),
++      wave(86, "brute", 1, 0), gate(126, ["+", 4], ["-", 2]),
++      wave(164, "grunt", 8, -1), wave(202, "grunt", 6, 1)
++    ]);
++  mission(1, 3, "Hold That Button", 240, 14, "noWaste",
++    "A tool in the belt is a plan in your pocket.", "AIRSTRIKE for the swarm. Wait for the warning.",
++    "Good timing. The square belongs to everyone again.", [
++      gate(24, ["+", 5], ["-", 3]), wave(58, "grunt", 10, 1),
++      drop(88, "airstrike"), radio(108, "mira", "Let the swarm arrive. Then call it in."),
++      threat(128, "swarm"),
++      radio(174, "mira", "Shelter left: send two escorts. Or take SHIELD on the right."),
++      gate(196, rescue(4, 2), tool("shield")), wave(218, "grunt", 8, -1)
++    ]);
++  mission(1, 4, "Chalk Arrows", 240, 18, "rescueAll",
++    "Someone chalked arrows to the shelter. Follow them.", "Rescues cost an escort. We have room to help.",
++    "Everyone out. Leave the arrows for the next squad.", [
++      wave(40, "grunt", 5, 0), gate(78, rescue(6, 3), ["+", 3]),
++      solid(116, "blockBlue", 3.4, 8, { reward: 2 }),
++      radio(136, "mira", "The baker saved a whole tin of biscuits. Priorities."),
++      gate(164, tool("shield"), rescue(8, 3)), wave(204, "grunt", 6, -1)
++    ]);
++  mission(1, 5, "Market Squeeze", 260, 18, "noWaste",
++    "The market's tight. Save a tool for the crowd.", "Brutes hold the middle. The swarm follows them.",
++    "Market open. Mind the broken apples.", [
++      gate(22, tool("airstrike"), ["+", 6]), solid(48, "weaponCase", 3.4, 38, { weapon: 2 }),
++      wave(78, "grunt", 18, -1), drop(108, "airstrike"),
++      radio(136, "mira", "Swarm ahead, brute behind it. Leave yourself an exit."),
++      threat(150, "swarm"), wave(150, "brute", 3, 0),
++      gate(218, tool("giant"), recruit("grenadier", 2)), wave(240, "grunt", 16, 1)
++    ]);
++  mission(1, 6, "The First Light", 280, 20, "bossClean",
++    "That tower used to call us in for supper.", "The Ogre guards it. Dodge the slam; clear his helpers.",
++    "One light on. Five more, and we can all find home.", [
++      radio(0, "warlord", "You want a light? My Ogre will show you stars."),
++      gate(24, ["+", 8], tool("giant")), solid(50, "weaponCase", -3.4, 40, { weapon: 1 }),
++      wave(86, "grunt", 20, -1), wave(128, "brute", 2, 0),
++      gate(164, recruit("grenadier", 2), tool("shield")), wave(192, "grunt", 18, 1),
++      pair(226, "shield", "airstrike"), radio(250, "mira", "His raised arm is your cue. Move, then hit back.")
++    ], 900);
++
++  // RED BRIDGE: shield flanks, then mortars, then a single falling lane.
++  mission(2, 1, "Side Door", 270, 20, "noWaste",
++    "Bridge crew's pinned down. Let's make an opening.", "A shieldbearer. Step wide or use a piercer.",
++    "Front door shut. Side door worked.", [
++      gate(24, recruit("piercer", 2), ["+", 5]), drop(42, "giant"),
++      wave(82, "shieldbearer", 1, 0), radio(90, "mira", "Get beside that shield. The front just eats bullets."),
++      wave(138, "grunt", 22, -1), gate(176, tool("airstrike"), recruit("piercer", 2)),
++      wave(218, "shieldbearer", 2, 0), wave(218, "grunt", 14, 0)
++    ]);
++  mission(2, 2, "Rain Check", 280, 22, "noWaste",
++    "Keep those bridge workers moving.", "Red circles mean mortars. SHIELD buys us breathing room.",
++    "Workers across. Nobody left in the rain.", [
++      wave(38, "grunt", 24, -1), gate(72, recruit("piercer", 2), ["+", 6]),
++      drop(104, "shield"), radio(128, "mira", "Don't stand in a red circle. The rest of the road is yours."),
++      threat(144, "mortars"), gate(216, tool("giant"), rescue(8, 3)),
++      wave(248, "shieldbearer", 3, 0), wave(248, "grunt", 18, 0)
++    ]);
++  mission(2, 3, "Missing Planks", 290, 24, "noWaste",
++    "Bridge is shedding planks. Eyes up.", "The left lane will fall. Cross to the right before it does.",
++    "Still a bridge. Just a little less of one.", [
++      gate(22, tool("giant"), ["+", 7]), wave(62, "shieldbearer", 4, 0),
++      wave(62, "grunt", 24, 0), drop(96, "shield"), threat(136, "mortars"),
++      radio(204, "mira", "Cracks on the left. Right lane stays solid."),
++      hazard(226, "collapse", -1), wave(258, "grunt", 24, 0)
++    ]);
++  mission(2, 4, "Last Bus", 280, 26, "rescueAll",
++    "A bus full of families. We're their walking escort.", "Both rescue stops are on sound decking.",
++    "Last passenger counted. Even the cat.", [
++      wave(38, "grunt", 16, 0), gate(82, rescue(12, 4), ["+", 6]),
++      gate(128, recruit("piercer", 2), tool("giant")), wave(168, "shieldbearer", 2, 0),
++      gate(210, tool("shield"), rescue(10, 4)), wave(248, "grunt", 12, -1)
++    ]);
++  mission(2, 5, "Steel and Rain", 300, 26, "noWaste",
++    "Shields below, shells above. We've seen both.", "Take a piercer and keep the mortar counter ready.",
++    "They held a wall. We kept a way through.", [
++      gate(22, recruit("piercer", 3), ["+", 8]), wave(58, "grunt", 30, 1),
++      drop(90, "shield"), threat(130, "mortars"), wave(130, "shieldbearer", 6, -1),
++      radio(174, "mira", "Right side is open. Don't let their shields pin you."),
++      gate(208, tool("giant"), recruit("piercer", 2)), hazard(236, "collapse", -1),
++      wave(268, "grunt", 30, 0), wave(268, "brute", 2, 0)
++    ]);
++  mission(2, 6, "A Crack in Iron", 310, 28, "bossClean",
++    "The bridge tower is just past that walking wall.", "Bulwark opens its core after a slam. That's our moment.",
++    "Two banks, one signal. Bring the bus over.", [
++      radio(0, "warlord", "Iron Bulwark doesn't open for strays."),
++      gate(24, recruit("piercer", 3), ["+", 8]), solid(52, "weaponCase", 3.4, 52, { weapon: 3 }),
++      wave(90, "shieldbearer", 5, 0), wave(90, "grunt", 26, 0),
++      gate(146, recruit("piercer", 2), tool("airstrike")), wave(184, "brute", 3, -1),
++      wave(220, "grunt", 26, 1), pair(256, "shield", "giant"),
++      radio(280, "mira", "Let the slam pass. Shoot the glow.")
++    ], 1700);
++
++  // DUST ROAD: charger and bomber debuts are separate, isolated encounters.
++  mission(3, 1, "Read the Dust", 300, 28, "noCharge",
++    "Fresh tracks. Fast feet. We can read both.", "That charger crouches before it runs. Leave its lane.",
++    "It ran out of road. We didn't.", [
++      wave(50, "charger", 1, 0), radio(54, "mira", "Red arrow: move sideways. No tool needed."),
++      gate(100, ["+", 8], ["-", 5]), wave(136, "grunt", 32, -1),
++      solid(174, "weaponCase", 3.4, 56, { weapon: 1 }),
++      wave(212, "charger", 4, -1, "line", 12), wave(258, "grunt", 30, 0)
++    ]);
++  mission(3, 2, "Short Fuse", 310, 30, "noWaste",
++    "Keep a little daylight between us and trouble.", "One bomber ahead. Shoot early or step outside its ring.",
++    "Fuse out. Water convoy rolling.", [
++      drop(24, "airstrike"), wave(64, "bomber", 1, 0),
++      radio(68, "mira", "The ring marks the blast. Both side lanes are clear."),
++      gate(110, recruit("grenadier", 3), ["+", 8]), wave(150, "grunt", 34, 1),
++      scenery(192, "fuelTruck", -1), wave(202, "bomber", 4, -1, "line", 12),
++      wave(202, "grunt", 20, -1), wave(266, "charger", 5, 0, "line", 12)
++    ]);
++  mission(3, 3, "Keep One Back", 320, 30, "noCharge",
++    "Tools are scarce out here. Save one for a crowd.", "Bombers and chargers share a lane. Don't share it with them.",
++    "A little patience got a lot of people through.", [
++      gate(24, tool("airstrike"), ["+", 9]), wave(64, "grunt", 36, 1),
++      wave(112, "charger", 5, -1, "wedge", 12), wave(112, "bomber", 4, -1),
++      gate(166, rescue(8, 3), recruit("grenadier", 2)),
++      radio(192, "mira", "No fresh drop before this swarm. Use what you saved."),
++      threat(224, "swarm"), wave(292, "grunt", 30, 0)
++    ]);
++  mission(3, 4, "Water for Everyone", 300, 34, "rescueAll",
++    "The pump crew stayed behind. We go back for them.", "Two shelters. Enough water for both.",
++    "Fill every bottle. Then fill the road with footsteps.", [
++      wave(42, "grunt", 22, -1), gate(84, rescue(14, 5), ["+", 8]),
++      solid(124, "weaponCase", 3.4, 46, { weapon: 2 }),
++      wave(166, "charger", 3, 0, "line", 12), gate(212, tool("shield"), rescue(12, 5)),
++      wave(256, "grunt", 20, 1)
++    ]);
++  mission(3, 5, "Fuse Run", 330, 32, "noCharge",
++    "Fast feet and short fuses. Make them chase empty road.", "The centre is clear when the left pack rushes.",
++    "Convoy safe. Those tracks lead all the way to the tower.", [
++      gate(24, recruit("grenadier", 4), ["+", 10]), wave(66, "grunt", 40, 1),
++      scenery(106, "fuelTruck", -1), wave(118, "charger", 7, -1, "wedge", 14),
++      wave(118, "bomber", 6, -1, "line", 12), gate(174, tool("airstrike"), recruit("grenadier", 3)),
++      wave(218, "charger", 6, 1, "line", 12), wave(218, "bomber", 5, 1),
++      wave(278, "grunt", 34, 0), wave(278, "shieldbearer", 3, 0)
++    ]);
++  mission(3, 6, "The Long Sidestep", 340, 34, "noCharge",
++    "The tower's buried in dust. We'll shake it clean.", "Ravager charges twice when hurt. Keep reading the arrows.",
++    "Third light. The water trucks can see us now.", [
++      radio(0, "warlord", "My Ravager will grind your little road to sand."),
++      gate(24, ["+", 10], recruit("grenadier", 3)), solid(52, "weaponCase", -3.4, 64, { weapon: 3 }),
++      wave(94, "grunt", 38, 1), wave(142, "charger", 7, 0, "line", 14),
++      gate(190, tool("giant"), recruit("piercer", 3)), wave(228, "bomber", 6, -1, "line", 12),
++      wave(228, "grunt", 28, -1), drop(282, "shield"),
++      radio(310, "mira", "One arrow, then another. Move twice; don't drift back.")
++    ], 2500);
++
++  // THE PIER: rifleman alone, medic alone, then patients and crossfire decisions.
++  mission(4, 1, "Red Lines", 330, 34, "noWaste",
++    "The ferry's waiting. Clear its landing.", "A rifleman paints its shot first. Step off the red line.",
++    "Landing clear. Tell the ferry to come in slow.", [
++      gate(22, recruit("defender", 3), ["+", 8]), wave(62, "rifleman", 1, -1),
++      radio(66, "mira", "Laser on the left. Centre and right are clear."),
++      wave(120, "grunt", 42, 0), drop(160, "shield"),
++      wave(200, "rifleman", 6, 1, "line", 12), wave(200, "grunt", 24, 1),
++      gate(252, recruit("grenadier", 3), tool("giant")), wave(292, "charger", 5, -1, "line", 12)
++    ]);
++  mission(4, 2, "Cut the Thread", 340, 36, "medicsFirst",
++    "That glow is keeping their heavies on their feet.", "First, spot the medic. Then follow its tether to the patient.",
++    "Their line broke. Ours is still moving.", [
++      wave(46, "medic", 1, -1), radio(50, "mira", "That's the healer. Learn its coat before the crowd arrives."),
++      gate(94, recruit("piercer", 3), ["+", 10]),
++      wave(140, "medic", 2, -1), wave(140, "brute", 4, 0),
++      wave(188, "grunt", 40, 1), solid(228, "weaponCase", -3.4, 68, { weapon: 1 }),
++      wave(276, "rifleman", 6, 1), wave(276, "grunt", 34, 1)
++    ]);
++  mission(4, 3, "Double or Duck", 350, 36, "noWaste",
++    "Big numbers can come with a red line attached.", "Left doubles us under fire. Right adds twenty in the clear.",
++    "A good choice is one your squad can walk away from.", [
++      gate(24, recruit("defender", 4), tool("shield")), wave(68, "grunt", 42, 0),
++      radio(100, "mira", "Rifles cover the left gate. Right is the safe gain."),
++      wave(126, "rifleman", 8, -1, "line", 12), gate(132, ["x", 2], ["+", 20]),
++      wave(188, "medic", 3, -1), wave(188, "brute", 4, 0),
++      gate(238, tool("airstrike"), rescue(8, 4)),
++      wave(282, "bomber", 5, 1), wave(282, "grunt", 32, 1)
++    ]);
++  mission(4, 4, "Ferry Tickets", 330, 40, "rescueAll",
++    "No tickets today. Everybody gets a place.", "The dockhands need escorts at both gangways.",
++    "Ferry empty. Safe shore full. That's how we like it.", [
++      wave(40, "grunt", 28, 0), gate(86, rescue(18, 6), ["+", 9]),
++      gate(130, recruit("defender", 3), tool("shield")), wave(176, "rifleman", 4, -1),
++      gate(224, tool("giant"), rescue(16, 6)), wave(274, "grunt", 26, 1)
++    ]);
++  mission(4, 5, "Covering Fire", 360, 38, "medicsFirst",
++    "Their shooters cover the healers. Break that arrangement.", "Medics left, rifles right. Keep the centre as your exit.",
++    "No more tethers. No more families pinned on the docks.", [
++      gate(24, recruit("defender", 4), ["+", 12]), wave(66, "grunt", 44, 0),
++      wave(114, "medic", 3, -1), wave(114, "brute", 5, -1),
++      wave(114, "rifleman", 8, 1, "line", 12),
++      gate(174, tool("shield"), recruit("piercer", 4)),
++      wave(222, "medic", 3, -1), wave(222, "brute", 5, -1),
++      wave(222, "rifleman", 8, 1, "line", 12),
++      gate(276, recruit("grenadier", 4), tool("airstrike")), wave(316, "grunt", 44, 0)
++    ]);
++  mission(4, 6, "Harbor Lights", 370, 40, "bossClean",
++    "That tower should guide boats, not aim guns.", "Gunner marks its barrage lanes. Find the unmarked waterline.",
++    "Four lights. Every boat in the bay just answered.", [
++      radio(0, "warlord", "My Harbor Gunner will turn your ferry into driftwood."),
++      gate(24, recruit("defender", 5), ["+", 12]), solid(54, "weaponCase", 3.4, 76, { weapon: 3 }),
++      wave(100, "rifleman", 8, -1), wave(100, "grunt", 42, -1),
++      wave(158, "medic", 3, -1), wave(158, "brute", 5, 0),
++      gate(212, tool("airstrike"), recruit("grenadier", 4)), wave(252, "grunt", 42, 1),
++      pair(306, "shield", "airstrike"), radio(338, "mira", "Step out of the barrage. Clear the rifles when they land.")
++    ], 3400);
++
++  // BROKEN BLOCKS: splitter alone; machinery is always confined to one lane.
++  mission(5, 1, "Room to Breathe", 350, 40, "noWaste",
++    "Our street's under the rubble. We'll find it.", "That splitter breaks into three. Leave space for the little ones.",
++    "One clear street. Plenty of room to share it.", [
++      gate(22, recruit("grenadier", 4), ["+", 10]), drop(40, "airstrike"),
++      wave(80, "splitter", 1, 0), radio(84, "mira", "Three minis after the split. Keep firing, keep room."),
++      wave(138, "grunt", 46, -1), gate(184, tool("airstrike"), recruit("piercer", 3)),
++      wave(228, "splitter", 8, 1, "line", 12), wave(228, "grunt", 30, 1),
++      wave(302, "shieldbearer", 5, 0)
++    ]);
++  mission(5, 2, "Through the Rubble", 360, 42, "perfect2",
++    "One crowd, one wall. Bring the right answers.", "AIRSTRIKE for the swarm. GIANT for the barricade.",
++    "Road open. The builders can bring their carts.", [
++      gate(22, recruit("grenadier", 4), ["+", 10]), wave(58, "grunt", 48, -1),
++      drop(88, "airstrike"), threat(128, "swarm"),
++      wave(192, "splitter", 9, 0, "line", 12), drop(228, "giant"),
++      radio(250, "mira", "Wall ahead. GIANT breaks it; the side gap still works."),
++      threat(268, "barricade"), wave(336, "grunt", 34, 1)
++    ]);
++  mission(5, 3, "A Better Way", 370, 42, "fast",
++    "We can go around. Or make a door.", "Shoot the shortcut wall to skip the crusher. Right lane is clear too.",
++    "New door. Neighbours will appreciate that.", [
++      wave(40, "grunt", 48, -1), gate(82, recruit("grenadier", 4), ["+", 12]),
++      scenery(122, "shortcut", -1), hazard(162, "crusher", -1, 3.6),
++      wave(206, "splitter", 12, 0, "line", 14),
++      gate(244, rescue(10, 5), tool("giant")),
++      radio(268, "mira", "Saw on the right. Left and centre stay open."),
++      hazard(292, "saw", 1, 3.4), wave(330, "grunt", 38, 0), wave(330, "brute", 3, 0)
++    ]);
++  mission(5, 4, "Names on the Wall", 350, 46, "rescueAll",
++    "They wrote every missing name here. Let's cross some off.", "Two shelters answered. Both need an escort out.",
++    "Those aren't missing names anymore. They're our neighbours.", [
++      gate(26, recruit("grenadier", 3), tool("airstrike")), wave(68, "grunt", 30, -1),
++      gate(112, rescue(20, 7), ["+", 10]), wave(164, "splitter", 5, 0),
++      gate(218, tool("giant"), rescue(18, 7)), wave(272, "grunt", 30, 1),
++      solid(312, "blockBlue", -3.4, 16, { reward: 3 })
++    ]);
++  mission(5, 5, "Moving Parts", 380, 44, "noWaste",
++    "Keep the minis away from the machinery.", "The crusher takes the left. Fight the splitters from the right.",
++    "Machinery stopped. People moving. Good trade.", [
++      gate(22, recruit("grenadier", 5), ["+", 12]), wave(62, "grunt", 54, 0),
++      scenery(104, "shortcut", -1), hazard(144, "crusher", -1, 3),
++      wave(144, "splitter", 12, 0, "line", 14),
++      gate(202, tool("airstrike"), recruit("piercer", 4)), hazard(250, "saw", 1, 3.2),
++      wave(250, "splitter", 12, 0, "line", 14), wave(250, "bomber", 6, 0),
++      wave(326, "grunt", 48, -1), wave(326, "brute", 4, -1)
++    ]);
++  mission(5, 6, "Two Halves, One Plan", 390, 46, "bossClean",
++    "Colossus is standing in our front garden.", "It splits at half strength. Save some splash for both halves.",
++    "Five towers lit. I can see our old roof from here.", [
++      radio(0, "warlord", "Break my Colossus and you'll only have twice the trouble."),
++      gate(24, recruit("grenadier", 5), ["+", 12]), solid(54, "weaponCase", 3.4, 84, { weapon: 4 }),
++      wave(100, "splitter", 12, 0, "line", 14), wave(100, "grunt", 48, 0),
++      wave(164, "shieldbearer", 6, -1), gate(210, tool("airstrike"), recruit("defender", 4)),
++      wave(254, "brute", 5, 1), wave(254, "grunt", 44, 1),
++      pair(324, "airstrike", "giant"), radio(356, "mira", "Two halves, same rule: leave yourself space.")
++    ], 4600);
++
++  // THE ARENA: recall each lesson, then use it with a second learned pressure.
++  mission(6, 1, "Bring What We Know", 380, 46, "perfect2",
++    "Every district taught us something. Bring it all.", "Two threats. Two tools. You know when to use them.",
++    "They built an arena. We found a road through it.", [
++      gate(22, recruit("piercer", 4), ["+", 12]), wave(60, "shieldbearer", 8, -1),
++      wave(60, "grunt", 48, -1), drop(98, "shield"), threat(138, "mortars"),
++      wave(208, "charger", 8, 0, "line", 14), drop(244, "airstrike"),
++      threat(284, "swarm"), wave(352, "grunt", 42, 1)
++    ]);
++  mission(6, 2, "Pick Your Ground", 390, 46, "noCharge",
++    "Same tricks. New floor. Keep your feet thinking.", "Stay clear of the crusher, then read the rush lanes.",
++    "Good feet beat a bad floor.", [
++      gate(22, recruit("grenadier", 5), ["+", 12]), wave(62, "grunt", 54, -1),
++      scenery(102, "shortcut", 1), hazard(142, "crusher", 1, 3.2),
++      wave(142, "splitter", 12, 0, "line", 14),
++      gate(200, tool("shield"), recruit("defender", 4)),
++      wave(246, "charger", 9, -1, "line", 14), wave(246, "bomber", 7, -1),
++      wave(322, "rifleman", 8, 1), wave(322, "grunt", 48, 1)
++    ]);
++  mission(6, 3, "The Price of Plenty", 400, 48, "medicsFirst",
++    "He's offering easy numbers. Read the fine print.", "Left doubles us under rifles. Right gives twenty safely.",
++    "We kept our people. He can keep his promises.", [
++      gate(24, tool("shield"), recruit("defender", 5)), wave(68, "grunt", 58, 0),
++      wave(118, "rifleman", 10, -1, "line", 14), gate(124, ["x", 2], ["+", 20]),
++      wave(184, "medic", 4, -1), wave(184, "brute", 6, 0),
++      scenery(234, "fuelTruck", 1), wave(246, "splitter", 14, 1, "line", 14),
++      wave(246, "bomber", 8, 1), gate(304, tool("airstrike"), rescue(10, 5)),
++      wave(350, "shieldbearer", 6, 0), wave(350, "grunt", 48, 0)
++    ]);
++  mission(6, 4, "Leave Nobody", 380, 50, "rescueAll",
++    "Last holding yard. Nobody spends another night here.", "Three groups waiting. The gate crews can escort them.",
++    "Every name answered. Now we finish this.", [
++      gate(24, recruit("grenadier", 4), tool("airstrike")), wave(66, "grunt", 34, 0),
++      gate(108, rescue(22, 6), ["+", 10]), wave(156, "splitter", 7, -1),
++      gate(200, tool("shield"), rescue(18, 6)), wave(248, "rifleman", 5, 1),
++      gate(292, rescue(16, 6), recruit("defender", 3)), wave(336, "grunt", 32, 0)
++    ]);
++  mission(6, 5, "All the Way Through", 410, 48, "medicsFirst",
++    "They've saved their hardest road for last.", "Pick off healers. Keep one lane clear when the floor bites.",
++    "Road clear. Six districts are right behind us.", [
++      gate(22, recruit("defender", 5), recruit("grenadier", 5)),
++      wave(66, "medic", 4, -1), wave(66, "brute", 6, -1),
++      wave(66, "rifleman", 12, 1, "line", 14),
++      gate(126, tool("airstrike"), ["+", 14]),
++      scenery(166, "shortcut", -1), hazard(206, "crusher", -1, 3),
++      wave(206, "splitter", 18, 0, "line", 14), wave(206, "bomber", 8, 0),
++      gate(266, recruit("piercer", 5), tool("giant")), hazard(310, "saw", 1, 3),
++      wave(310, "charger", 10, 0, "line", 14), wave(310, "shieldbearer", 8, 0),
++      wave(370, "grunt", 90, -1)
++    ]);
++  mission(6, 6, "Operation Homeward", 420, 50, "bossClean",
++    "There's our last light. Let's bring it home.", "Slams, rushes, barrages. Read each warning. Keep an exit.",
++    "All six lights. Kettle on, Mira. We're home.", [
++      radio(0, "warlord", "I built these walls to keep you apart. You will stay apart!"),
++      gate(24, recruit("piercer", 5), recruit("grenadier", 5)),
++      solid(54, "weaponCase", -3.4, 92, { weapon: 3 }),
++      wave(100, "shieldbearer", 8, 0), wave(100, "grunt", 54, 0),
++      wave(156, "medic", 4, -1), wave(156, "brute", 6, 0),
++      gate(212, recruit("defender", 5), ["+", 14]),
++      wave(256, "charger", 8, 1, "line", 14), wave(256, "bomber", 8, 1),
++      wave(306, "splitter", 10, -1, "line", 12), pair(352, "shield", "airstrike"),
++      radio(386, "mira", "All five towers answering. Nobody's alone anymore.")
++    ], 6200);
++
++  window.Campaign = { version: 1, chapters, missions };
++})();
+
+exec
+/bin/bash -lc "node --check js/campaign.js; node <<'CHECK'
+const fs = require('node:fs');
+const doc = fs.readFileSync('design/campaign-script.md', 'utf8');
+const match = doc.match(/node <<'NODE'\\n([\\s\\S]*?)\\nNODE\\n"'```/);
+if (!match) throw Error('"'Missing validation snippet');
+new Function('require', match[1])(require);
+CHECK" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+Old Town: budget [10,25,58,11,107,150]; waves [10,15,18,11,37,40]; squad bounds [15,22,35,31,42,52]; inflated [206,117,129,127,133,143]
+Red Bridge: budget [48,78,88,36,130,275]; waves [39,45,52,30,68,60]; squad bounds [41,44,40,48,50,60]; inflated [135,137,131,141,141,151]
+Dust Road: budget [77,84,133,51,158,355]; waves [67,64,75,45,101,79]; squad bounds [36,46,41,50,50,60]; inflated [127,137,131,141,139,149]
+The Pier: budget [109,157,180,70,292,526]; waves [78,87,94,58,120,100]; squad bounds [58,46,96,65,66,76]; inflated [149,135,151,155,153,163]
+Broken Blocks: budget [168,210,215,100,356,727]; waves [90,91,101,65,136,115]; squad bounds [66,68,62,75,64,82]; inflated [155,157,149,164,151,169]
+The Arena: budget [210,278,392,142,454,920]; waves [106,138,154,78,156,98]; squad bounds [74,66,120,79,75,85]; inflated [161,153,176,168,160,170]
+PASS: 36 missions, 6 chapters, 324 events; rising sawtooth and authored bounds verified.
+
+codex
+Authored all 36 missions in [campaign.js](/home/user/my-first-repo/squad-surge/js/campaign.js), plus the full story outline and runnable validator in [campaign-script.md](/home/user/my-first-repo/squad-surge/design/campaign-script.md).
+
+Syntax and validation pass: 324 events, unique seeds, valid schemas, rising sawtooth budgets, and bounded squad growth.
+
+The initial bot pass misses several difficulty targets and exposes a Colossus targeting issue. Results and follow-ups are documented.
+
+Only the two requested files were edited. No git commands were run.
+tokens used
+97,237
+Authored all 36 missions in [campaign.js](/home/user/my-first-repo/squad-surge/js/campaign.js), plus the full story outline and runnable validator in [campaign-script.md](/home/user/my-first-repo/squad-surge/design/campaign-script.md).
+
+Syntax and validation pass: 324 events, unique seeds, valid schemas, rising sawtooth budgets, and bounded squad growth.
+
+The initial bot pass misses several difficulty targets and exposes a Colossus targeting issue. Results and follow-ups are documented.
+
+Only the two requested files were edited. No git commands were run.
+codex exit 0

@@ -538,7 +538,7 @@ window.Obj3D = (() => {
     ensure();
     const geo=merge([{g:roundedBox(.5,5,.7,.15),x:-5.5,y:2.5},{g:roundedBox(.5,5,.7,.15),x:5.5,y:2.5},{g:roundedBox(11.5,.6,.7,.15),y:5}]);LEVELGEO.push(geo);
     const root=new THREE.Group();root.position.z=z;C.track.add(root);root.add(new THREE.Mesh(geo,M.gold));
-    const label=newLabel(512,128,6,5);label.mesh.position.set(0,4.95,.4);C.drawLabel(label.lab,"DISTRICT CLEAR","#fff3b8",.7);root.add(label.mesh);
+    const label=newLabel(512,128,6,5);label.mesh.position.set(0,4.95,.4);C.drawLabel(label.lab,"MISSION CLEAR","#fff3b8",.7);root.add(label.mesh);
   }
   function hazard(h) {
     ensure();const root=new THREE.Group();root.position.set(h.x,0,h.z);C.track.add(root);h.vis=root;

@@ -212,9 +212,10 @@ simply appending an unrelated enemy pile.
 
 Targets remain: chapter 1 missions 1–3 onboarding for both policies; later normal smart
 80–90% / never 45–65%, HARD 55–70% / 15–35%, BOSS 45–60% / 5–25%.
-These are tuning targets, **not measured results**. Content validation cannot establish
-first-attempt win rates, safe-lane timing, Assist scaling, or third-star tracking. Run the
-engine owner's campaign bot against these seeds when the interpreter is available.
+These are tuning targets, **not claimed results**. Content validation cannot establish
+first-attempt win rates, safe-lane timing, Assist scaling, or third-star tracking. The first
+integration sample below does not yet meet the targets; rerun the engine owner's campaign
+bot against these seeds after its targeting fix and the engine tuning settle.
 Adjust wave counts, starting squads, and boss HP together if the measured curve misses;
 do not fill the recovery troughs or introduce simultaneous whole-road hazards.
 
@@ -350,3 +351,48 @@ assert.equal(first.size, 8); // grunt + brute + the six new archetypes; zombie i
 console.log(`PASS: 36 missions, 6 chapters, ${totalEvents} events; rising sawtooth and authored bounds verified.`);
 NODE
 ```
+
+## Validation and integration results
+
+Executed the exact snippet above: **PASS — 36 missions, 6 chapters, 324 events**.
+`node --check js/campaign.js` also passed. All six boss IDs were checked against
+`window.Enemies.bosses`, and the interpreter accepts the `event` discriminator with a
+wave's enemy in `type`. The highest authored squad bound is 120; allowing maximum gate
+inflation gives 176 after onboarding and 206 in c1m1. No mission needs the 300 cap to
+truncate its declared rewards.
+
+A CPU simulation pass used the engine owner's `tools/bot-campaign.js`, one fresh,
+unassisted run per mission per policy (72 attempts). This was an integration smoke and
+balance baseline, not a browser or statistically calibrated first-attempt study.
+Engine/enemy files were still changing during the pass; rerun against a settled build.
+
+```sh
+node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 1 \
+  --engine simulation --three /path/to/existing/three-r128.min.js
+```
+
+The default invocation initially lacked the `three` package. The completed pass used
+an existing local Three.js build via `--three`; no dependency or other repository file
+was installed or changed by this content run.
+
+| Tag | Never | Smart |
+|---|---|---|
+| Normal, including onboarding | 21/24 wins (87.5%) | 24/24 wins (100%) |
+| HARD | 3/6 wins (50%) | 5/6 wins (83.3%) |
+| BOSS | 1/6 wins (16.7%) | 4/5 completed runs won (80%); one timeout |
+
+Both policies won c1m1–c1m3. Outside onboarding, normal results were 18/21 for never
+and 21/21 for smart. **Normal and HARD are still too forgiving relative to the targets;
+the completed smart BOSS sample is also above target.** These results are not a balance
+sign-off. Keep the authored safe exits; use repeated runs after integration to tune
+enemy pressure, attack timing, starts, and boss HP. The static budget curve is validated
+independently of those runtime success rates.
+
+The timeout is reproducible in **c5m6, smart, policy seed 12318**. At tick 18000, the
+squad had 17 soldiers at x≈0.02; one `colossus_half` remained at x=−3.4 with 164.225 HP.
+The aggregate boss was hidden at x=1000, as intended after splitting. The bot's current
+target selection handles medics and shieldbearers but does not aim at a surviving
+Colossus half. Continuing the same state with steering toward that half produced a
+**win**, with four soldiers remaining, within 1200 additional ticks. This is a bot
+targeting follow-up for E1, not an absent mission event or an unwinnable boss HP value.
+No changes to the bot or boss module were made by this run.

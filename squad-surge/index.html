@@ -200,11 +200,11 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 "use strict";
 // ---------- persistence ----------
 const SAVE_KEY = "squad-surge-v1";
-const save = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
+const save = (() => { try { const data = JSON.parse(localStorage.getItem(SAVE_KEY)); return data && typeof data === "object" && !Array.isArray(data) ? data : {}; } catch (e) { console.warn("save unreadable", e); return {}; } })();
 Object.assign(save, { level: 1, unlocked: 1, best: {}, stars: {}, bestSquad: {}, bestScore: {}, skin: "classic", tracer: "gold", sound: true, vibe: true, ...save });
 save.tacticsPerfect = Math.max(0, Number(save.tacticsPerfect) || 0);
 save.tacticsCounters = save.tacticsCounters && typeof save.tacticsCounters === "object" ? save.tacticsCounters : {};
-save.campaign = save.campaign && typeof save.campaign === "object" ? save.campaign : {};
+save.campaign = save.campaign && typeof save.campaign === "object" && !Array.isArray(save.campaign) ? save.campaign : {};
 save.unlocked = Math.max(save.unlocked, save.level);
 for (const k of ["coins", "gems", "up"]) delete save[k]; // drop old shop data from earlier builds
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { console.warn("save failed", e); } }
@@ -412,7 +412,7 @@ const bus = {
   emit(name, data) { const hs = this.h[name]; if (hs) for (const fn of hs) { try { fn(data); } catch (e) { console.error(`bus ${name}`, e); } } },
 };
 const spriteTint = new THREE.Color(1, 1, 1);
-function setSpriteTint(color) { spriteTint.set(color); for (const l of spriteLayers) if (!l.additive) l.mesh.material.uniforms.tint.value.copy(spriteTint); }
+function setSpriteTint(color) { spriteTint.set(color); for (const l of spriteLayers) if (!l.additive) l.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(l.baseTint || new THREE.Color(1,1,1)); }
 const ctx = {
   THREE, renderer, scene, camera, world, track, ROAD, TEX, bus, save, $, gameEl, makeLabel, drawLabel, setSpriteTint, rng: gameplayRng,
   get WEAPONS() { return WEAPONS; }, get L() { return L; }, get state() { return state; }, get layers() { return layers; },
@@ -427,7 +427,7 @@ const ctx = {
   setShield: s => setShield(s), setGiant: s => setGiant(s), finishLevel: m => finishLevel(m), goMode: o => goMode(o),
   setSkin: (a, b) => setSkin(a, b), squadRadius: n => squadRadius(n), persist: () => persist(), MODIFIERS, SKINS, TRACERS, SPEED, COMBO_TIERS,
 };
-const SLAM_R = 3.0, SLAM_WARN = 1.6, SLAM_AT = 2.6; // boss slam: red ring warns, then hits soldiers inside it
+const SLAM_R = 3.0, SLAM_WARN = 1.6, SLAM_AT = 2.9; // boss slam: red ring warns, then hits soldiers inside it
 const slamRing = new THREE.Mesh(new THREE.RingBufferGeometry(SLAM_R - 0.5, SLAM_R, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, depthWrite: false }));
 slamRing.rotation.x = -Math.PI / 2; slamRing.renderOrder = 2; slamRing.visible = false; scene.add(slamRing);
 const slamFill = new THREE.Mesh(new THREE.CircleBufferGeometry(SLAM_R - 0.5, 48), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.18, depthWrite: false }));
@@ -542,10 +542,11 @@ function liveThreat(t) {
   t.startSquad = L.soldiers.length;
   t.lossCap = !onboarding() ? Infinity : Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));
   if (t.kind === "swarm") {
-    const count = Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3)));
+    const factor = L.missionState?.assisted === 2 ? .65 : L.missionState?.assisted ? .8 : 1;
+    const count = Math.round(Math.min(90, Math.max(12 + 3 * L.level, Math.round(t.startSquad * 0.3))) * factor);
     for (let i = 0; i < count; i++) {
       const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
-      e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6);
+      e.hp = e.maxHp = Math.max(e.hp, 60 + L.level * 3, t.startSquad * 0.6) * factor;
       e.dmg = Math.max(e.dmg, Math.ceil(t.startSquad * 0.015));
       e.sp *= 1.5;
       e.threat = t; L.enemies.push(e); t.actors.push(e);
@@ -579,7 +580,14 @@ function updateTactics(dt) {
     if (!t.announced && d <= 24 + 2.5 * SPEED * L.speedMul) announceThreat(t);
     if (!t.live && d <= 24 && !L.threat) liveThreat(t);
   }
-  const t = L.threat; if (!t || t.kind === "slam") return;
+  const t = L.threat;
+  if (t?.bossAttack) {
+    t.age += dt;
+    const attack = L.boss._campaignEnemy?.attack || L.boss.pending?.name || L.boss.pending?.type;
+    if (state !== "boss" || (t.age > FIXED_DT && !attack)) endThreat(t);
+    return;
+  }
+  if (!t || t.kind === "slam") return;
   t.age += dt;
   if (t.kind === "barricade" && L.giantT > 0 && L.sz - t.z < 12) for (const o of t.actors) if (o.alive) breakSolid(o, true);
   if (t.kind === "mortars") {
@@ -638,7 +646,7 @@ function labelSolid(o) {
 function enemy(type, x, z, level, opts = {}) {
   const def = enemyDefs[type] || BASE_ENEMIES[type] || BASE_ENEMIES.grunt;
   const hp = (opts.hp ?? def.hp ?? 2) * (opts.authored ? 1 : 1 + (level - 1) * 0.1);
-  return { id: nextEntityId++, type, x, z, hp, maxHp: hp, r: def.r || 0.42, h: def.h || 1.45, sp: (def.sp || 3) * (0.85 + gameplayRng("enemies") * 0.3), dmg: def.dmg || 1, state: "idle", t: 0, flash: 0, dieT: 0, def: enemyDefs[type] || null, ...opts };
+  return { id: nextEntityId++, type, x, z, hp, maxHp: hp, r: def.r || 0.42, h: def.h || 1.45, sp: (def.sp ?? 3) * (0.85 + gameplayRng("enemies") * 0.3), dmg: def.dmg ?? 1, state: "idle", t: 0, flash: 0, dieT: 0, def: enemyDefs[type] || null, ...opts };
 }
 function generateLevel(level, opts = {}) {
   const theme = themeFor(level), seeded = opts.seed !== undefined;
@@ -745,18 +753,19 @@ function addSoldiers(n, specialist = null) {
     const [ox, oz] = slot(L.soldiers.length);
     L.soldiers.push({ id: nextEntityId++, x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, vx: 0, vz: 0, ph: gameplayRng("animation") * 4, born: L.time, specialist, armor: specialist === "defender" ? 1 : 0 });
   }
-  L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
+  if (L.mission || L.boss.state === "wait") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
   if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
   return added;
 }
 function removeSoldier(i) {
   const s = L.soldiers[i];
-  spawnFx({ x: s.x, y: 0.6, z: s.z, f: 4, t: 0, dur: 0.55, size: 1.1, vx: (s.x - L.sx) * 1.2, vz: 3, vy: 3 });
+  spawnFx({ x: s.x, y: 0.6, z: s.z, f: 4, t: 0, dur: 0.55, size: 1.1, soldier: true, specialist: s.specialist, vx: (s.x - L.sx) * 1.2, vz: 3, vy: 3 });
   L.soldiers[i] = L.soldiers[L.soldiers.length - 1]; L.soldiers.pop();
 }
 function lostSoldiers(n, cause = "attrition") {
   if (!n) return 0;
   if (!["rifleman","charger","bomber","gate","swarm","attrition"].includes(cause) && !cause.startsWith("threat:") && !cause.startsWith("boss:")) cause = "swarm";
+  if (L.threat?.bossAttack && cause.startsWith("boss:")) L.threat.lost += n;
   L.lastCause = cause;
   if (L.missionState) { L.missionState.causes[cause] = (L.missionState.causes[cause] || 0) + n; if (state === "boss") L.missionState.bossLosses += n; }
   bus.emit("soldiersLost", { n, total: L.soldiers.length, cause }); return n;
@@ -818,12 +827,12 @@ function startLevel(level, opts = {}) {
   if (L.boss.def?.init) L.boss.def.init(L.boss);
   addSoldiers(L.mission ? L.mission.start : mod === "lone" ? 1 : START_SQUAD);
   hud.beltKey = null; hudCache.clear();
-  replay = { version: 1, seed: L.seed, level, mission: L.mission?.id || null, assist: L.missionState?.assisted || 0, elite: !!L.elite, inputs: [], mode:L.mode, modifier:L.modifier, initial: { jackDry: save.jackDry || 0 } };
+  replay = { version: 1, rules: {...CAMPAIGN_TUNING}, seed: L.seed, level, mission: L.mission?.id || null, assist: L.missionState?.assisted || 0, elite: !!L.elite, inputs: [], mode:L.mode, modifier:L.modifier, initial: { jackDry: save.jackDry || 0 } };
   beltChanged();
   $("levelName").textContent = mod ? MODIFIERS[mod].name : levelName(level); $("levelNo").textContent = L.mode === "daily" ? "Daily Challenge" : `Level ${level}`;
   setWeapon(mod === "arsenal" ? 4 : 0);
   hud.score = 0; hud.best = L.mode === "normal" ? save.bestScore[level] || 0 : 0;
-  bus.emit("generate", { L, level, rng: rng((opts.seed ?? level) * 4241 + 7), length: L.length, theme: L.theme, mode: L.mode, modifier: mod });
+  bus.emit("generate", { L, level, rng: rng(L.seed * 4241 + 7), length: L.length, theme: L.theme, mode: L.mode, modifier: mod });
   bus.emit("levelStart", { level, name: L.mission?.title || levelName(level), theme: L.theme, mode: L.mode, modifier: mod });
   if (L.mission) {
     const progress = missionProgress(L.mission.id); progress.attempts++; persist();
@@ -923,7 +932,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && (st
 // ---------- simulation ----------
 const ENEMY_ASPECT = { zombie: 0.861, grunt: 0.787, brute: 0.946 };
 function fireRate() { return (1 / 0.3) * WEAPONS[L.weapon].rate * L.rateMult * (L.surgeT > 0 ? 2 : 1); }
-function damage() { return WEAPONS[L.weapon].dmg * (L.surgeT > 0 ? 2 : 1); } // SURGE: double damage (and pierce), same bullet count
+function damage() { return WEAPONS[L.weapon].dmg * (L.surgeT > 0 ? 2 : 1) * (!L.mission || onboarding() ? 1 : (L.mission.chapter===1 && L.mission.tag==="boss" ? CAMPAIGN_TUNING.firstBossDamage : CAMPAIGN_TUNING[L.mission.tag + "Damage"])); } // SURGE: double damage (and pierce), same bullet count
 
 // ---------- time feel: hit-stop and slow motion (sim only; UI and camera shake keep real time) ----------
 const time = { scale: 1, target: 1, slowT: 0, stopT: 0, lastSlow: -99, lastStop: -99 };
@@ -1116,13 +1125,13 @@ function step(dt) {
     e.z += e.sp * dt;
     const dx = L.sx - e.x; e.x += Math.sign(dx) * Math.min(Math.abs(dx), dt * e.sp * 0.35);
     // separation
-    if (L.soldiers.length && L.soldiers.some(s => Math.hypot(e.x-s.x, e.z-s.z) < e.r+0.35)) {
+    if (L.soldiers.length && crowdGrid.query(e.x-e.r-.5,e.x+e.r+.5,e.z-e.r-.5,e.z+e.r+.5).some(s => (e.x-s.x)**2+(e.z-s.z)**2 < (e.r+.35)**2)) {
       const guarded = L.shieldT > 0 || L.giantT > 0;
       if (!guarded) {
         const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
         const lost = killSoldiersInCircle(e.x, e.z, e.r + 0.65, loss, e.threat ? `threat:${e.threat.kind}` : "swarm"); if (e.threat) e.threat.lost += lost;
       }
-      e.hp = 0; e.state = "dying"; e.dieT = 0.3;
+      e.hp = 0; e.state = "dying"; e.dieT = 0.3; checkMedicOrder(e); e.def?.onDeath?.(e); bus.emit("enemyDie", { e });
       if (guarded) onKill(e); // trampled by a GIANT squad or bounced off the SHIELD
       L.fx.push({ x: e.x, y: 0.8, z: e.z, f: 5, t: 0, dur: 0.3, size: 1.4 }); vibe(20);
       if (e.type === "brute" && !guarded) { flashRed(); L.shake = 0.3; floatText(e.x, 2.5, e.z, `-${e.dmg}`, "#ff6a5a"); }
@@ -1196,7 +1205,15 @@ function hitEnemy(e, dmg) {
 }
 function damageBoss(n, raw = false) {
   if (state !== "boss" || L.boss.hp <= 0) return;
-  L.boss.hp -= n * (raw ? 1 : bossWeakMultiplier(L.boss)); L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
+  const b = L.boss, split = b._campaignEnemy;
+  const amount = n * (raw ? 1 : bossWeakMultiplier(b));
+  if (split?.split) {
+    const halves = [split.half1, split.half2].filter(e => e && e.hp > 0);
+    const total = halves.reduce((sum,e) => sum + e.hp, 0);
+    for (const e of halves) hitEnemy(e, total ? amount * e.hp / total : 0);
+    b.hp = Math.max(0,split.half1?.hp || 0) + Math.max(0,split.half2?.hp || 0);
+  } else b.hp -= amount;
+  b.flash = 0.08; if (b.hp <= 0) bossDown();
 }
 function bossDown() {
   if (L.bankLocked) return;
@@ -1243,7 +1260,7 @@ function win() {
     save.best[L.level] = 1; save.stars[L.level] = Math.max(save.stars[L.level] || 0, stars);
     if (newBest) save.bestSquad[L.level] = n;
     if (newBestScore) save.bestScore[L.level] = total;
-    save.level = L.level + 1; save.campaign = save.campaign && typeof save.campaign === "object" ? save.campaign : {};
+    save.level = L.level + 1; save.campaign = save.campaign && typeof save.campaign === "object" && !Array.isArray(save.campaign) ? save.campaign : {};
 save.unlocked = Math.max(save.unlocked, save.level); persist();
   }
   $("stars").innerHTML = starIcons(stars);
@@ -1329,7 +1346,7 @@ function render(dt) {
     if (e.state === "dying") { f = 4 + Math.min(3, Math.floor(e.dieT / 0.15)); a = e.dieT > 0.6 ? 1 - (e.dieT - 0.6) / 0.3 : 1; }
     else f = e.state === "walk" ? Math.floor(e.t * 8) % 4 : 0;
     const layer = registeredLayers[e.type] || (e.type === "brute" ? brute : enem);
-    layer.push(e.x, 0, e.z, e.h * CHAR_K * ENEMY_ASPECT[e.type === "brute" ? "brute" : eTex], e.h * CHAR_K, f, a, e.flash > 0 ? 0.7 : 0);
+    layer.push(e.x, 0, e.z, e.h * CHAR_K * (e.scale ?? e.def?.scale ?? 1) * (e.def ? (e.def.aspect || .85) : ENEMY_ASPECT[e.type === "brute" ? "brute" : eTex]), e.h * CHAR_K * (e.scale ?? e.def?.scale ?? 1), f, a, e.flash > 0 ? 0.7 : 0);
     if (e.state !== "dying") shadow.push(e.x + SHADOW_DX, e.z + SHADOW_DZ, e.r * 2.5);
   }
   const b = L.boss;
@@ -1346,8 +1363,10 @@ function render(dt) {
   else tu.set(tr.rgb[0], tr.rgb[1], tr.rgb[2]);
   if (L.surgeT > 0) tu.multiplyScalar(1.5); // SURGE: hotter, bigger tracers
   for (const bl of L.bullets) bl.splash ? fx.push(bl.x, 0.85, bl.z, 0.6 * sk, 2.4 * sk, 12, 1, 1) : fx.push(bl.x, 1.0, bl.z, 0.3 * sk, 1.6 * sk, 12, 1, 1);
+  let corpses = 0;
   for (const f of L.fx) {
     if (f.t < 0) continue;
+    if (f.soldier) { if (corpses++ < 128) (specialistLayers[f.specialist] || sold).push(f.x, f.y - .6, f.z, SOLDIER_H * .512, SOLDIER_H, 0, 1 - f.t / f.dur); continue; }
     const p = f.t / f.dur, base = f.f, frame = base === 9 ? 8 + Math.min(3, Math.floor(p * 4)) : base === 4 ? 4 + Math.min(3, Math.floor(p * 4)) : base === 1 ? 1 : base;
     fx.push(f.x, f.y - f.size / 2, f.z, f.size, f.size, frame, base >= 14 ? 1 - p : 1);
   }
@@ -1399,6 +1418,7 @@ function frame(now) {
 
 // ---------- campaign engine: deterministic simulation and module contracts ----------
 const FIXED_DT = 1/60, MAX_CATCHUP = 5, HASH_CELL = 2;
+const CAMPAIGN_TUNING = { normalDamage: .34, hardDamage: .35, bossDamage: .43, firstBossDamage: 2.5, gateCharge: .015, gateGrowth: 6 };
 const clocks = { real: 0, sim: 0, slow: 0, wall: 0 };
 let accumulator = 0, slowAccumulator = 0, testMode = false, nextEntityId = 1;
 let runSeed = 1, streams = Object.create(null), replay = null, playback = null, playbackAt = 0;
@@ -1479,7 +1499,9 @@ function advanceClock(dt) {
   if(accumulator>=FIXED_DT){const drop=Math.floor(accumulator/FIXED_DT)*FIXED_DT;profile.droppedSeconds+=drop;accumulator-=drop;}
 }
 async function playReplay(record) {
-  if(record.version!==1)throw new Error("Unsupported replay version");testMode=true;
+  if(record.version!==1)throw new Error("Unsupported replay version");
+  if(record.rules && Object.keys(CAMPAIGN_TUNING).some(k => record.rules[k] !== CAMPAIGN_TUNING[k]))throw new Error("Replay tuning differs from this engine");
+  testMode=true;
   if(record.initial)save.jackDry=record.initial.jackDry;
   if(record.mission)await goMission(record.mission,{assist:record.assist,elite:record.elite});
   else await goLevel(record.level,"play",{seed:record.seed,mode:record.mode,modifier:record.modifier});
@@ -1495,16 +1517,18 @@ function registerLayer(key,def) {
   if(!TEX.grunt)return;
   if(registeredLayers[key]){const old=registeredLayers[key];scene.remove(old.mesh);old.g.dispose();old.mesh.material.dispose();const i=spriteLayers.indexOf(old);if(i>=0)spriteLayers.splice(i,1);}
   const layer=new SpriteLayer(TEX.grunt,4,2,key.startsWith("boss:")?4:600);registeredLayers[key]=layer;
-  layer.mesh.material.uniforms.tint.value.set(def.tint || 0xb6c6e8);
-  if(def.sheet)loader.load(def.sheet,tex=>{tex.anisotropy=4;layer.mesh.material.uniforms.map.value=tex;layer.mesh.material.uniforms.grid.value.set(def.cols||4,def.rows||2);layer.mesh.material.uniforms.tint.value.set(def.tint || 0xffffff);},undefined,()=>{layer.mesh.material.uniforms.map.value=TEX.grunt;layer.mesh.material.uniforms.grid.value.set(4,2);layer.mesh.material.uniforms.tint.value.set(def.tint || 0xb6c6e8);});
+  layer.baseTint=new THREE.Color(def.tint || 0xb6c6e8);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);
+  if(def.sheet)loader.load(def.sheet,tex=>{tex.anisotropy=4;layer.mesh.material.uniforms.map.value=tex;layer.mesh.material.uniforms.grid.value.set(def.cols||4,def.rows||2);layer.baseTint.set(def.tint || 0xffffff);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);},undefined,()=>{layer.mesh.material.uniforms.map.value=TEX.grunt;layer.mesh.material.uniforms.grid.value.set(4,2);layer.baseTint=new THREE.Color(def.tint || 0xb6c6e8);layer.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(layer.baseTint);});
 }
 function registerEnemy(type,def){enemyDefs[type]=def;registerLayer(type,def);}
 function registerBoss(type,def){bossDefs[type]=def;registerLayer("boss:"+type,def);}
-function createSpecialistLayers(){for(const k in SPECIALISTS){const l=new SpriteLayer(TEX.soldier,4,2,300);l.mesh.material.uniforms.tint.value.set(SPECIALISTS[k].color);specialistLayers[k]=l;}}
+function createSpecialistLayers(){for(const k in SPECIALISTS){const l=new SpriteLayer(TEX.soldier,4,2,300);l.baseTint=new THREE.Color(SPECIALISTS[k].color);l.mesh.material.uniforms.tint.value.copy(spriteTint).multiply(l.baseTint);specialistLayers[k]=l;}}
 function initEnemy(e){if(e.initialized)return;e.initialized=true;e.def?.init?.(e);}
 function spawnEnemy(type,x,z,opts={}) {
+  const factor=L.missionState?.assisted===2?.65:L.missionState?.assisted?.8:1;
+  if(opts.campaignChild && factor<1 && gameplayRng("assist")>factor)return null;
   const e=enemy(type,x,z,L.level,{authored:!!L.mission,...opts});
-  const factor=L.missionState?.assisted===2?.65:L.missionState?.assisted?.8:1;e.hp*=factor;e.maxHp=e.hp;L.enemies.push(e);initEnemy(e);return e;
+  e.hp*=factor;e.maxHp=e.hp;L.enemies.push(e);initEnemy(e);return e;
 }
 function damageEnemiesInCircle(x,z,r,dmg){for(const e of L.enemies)if(e.hp>0 && Math.hypot(e.x-x,e.z-z)<r+e.r)hitEnemy(e,dmg);const b=L.boss;if(state==="boss"&&Math.hypot(b.x-x,b.z-z)<r+(b.r||2.6))damageBoss(dmg);}
 function compactEnemies(){let n=0;for(const e of L.enemies)if(e.state!=="dead")L.enemies[n++]=e;L.enemies.length=n;}
@@ -1572,7 +1596,7 @@ function updateCampaign(dt) {
   for(const g of L.gates)if(g.moving&&!g.used){g.offset=Math.sin(L.time*1.2)*1.25;for(const h of g.halves)h.x=h.baseX+g.offset;Obj3D.moveGate?.(g);}
   for(const h of L.hazards){
     if(h.done)continue;const ahead=L.sz-h.z;
-    if(!h.warned&&ahead<32+squadRadius(L.soldiers.length)){h.warned=true;h.age=0;bus.emit("enemyTelegraph",{type:"hazard",kind:h.kind,x:h.x,z:h.z,lane:h.lane});}
+    if(!h.warned&&ahead<32+squadRadius(L.soldiers.length)){h.warned=true;h.age=-dt;bus.emit("enemyTelegraph",{type:"hazard",kind:h.kind,x:h.x,z:h.z,lane:h.lane});}
     if(!h.warned)continue;h.age+=dt;
     const phase=h.age%h.period;h.active=h.age>=.9&&(h.kind==="collapse"||phase>=.9&&phase<1.7);
     if(h.kind==="saw")h.x=h.lane*3.4+Math.sin(h.age*2)*.7;
@@ -1592,7 +1616,7 @@ function updateRegisteredBoss(b,dt) {
     if(b.weakT>0){b.weakT=Math.max(0,b.weakT-dt);if(!b.weakT)bus.emit("bossWeak",{on:false});}
     const p=phases[phase]||{attacks:["slam"],cadence:2.6};b.attackT+=dt;
     if(!b.pending && b.attackT>=Math.max(0,p.cadence-.9)){
-      const a=p.attacks[(b.attackIndex||0)%p.attacks.length];b.pending=typeof a==="string"?{name:a}:a;b.warnT=.9;b.lockX=L.sx;
+      const a=p.attacks[(b.attackIndex||0)%p.attacks.length];b.pending=typeof a==="string"?{name:a}:a;b.warnT=.9+dt;b.lockX=L.sx;
       bus.emit("enemyTelegraph",{type:b.type,kind:b.pending.name||b.pending.type,x:b.lockX,z:L.sz});
       Obj3D.bossWarning?.(b,true);
     }
@@ -1611,7 +1635,15 @@ function updateRegisteredBoss(b,dt) {
   if(b.hp<=0)bossDown();
 }
 Object.assign(ctx,{registerEnemy,registerBoss,spawnEnemy,killSoldiersInRect,killSoldiersInCircle,damageEnemiesInCircle,telegraphGroup,goMission,goArcade,restartSame});
-Object.defineProperties(ctx,{squad:{get:()=>({x:L?.sx||0,z:L?.sz||0,count:L?.soldiers.length||0,radius:squadRadius(L?.soldiers.length||0),soldiers:L?.soldiers||[]})},mission:{get:()=>L?.mission||null},missionState:{get:()=>L?.missionState||null}});
+// Registered boss telegraphs participate in the existing PERFECT/belt lifecycle.
+bus.on("enemyTelegraph", ev => {
+  if (!L || state !== "boss" || ev.type !== L.boss.type) return;
+  if (L.threat) endThreat(L.threat);
+  const t = { id:`boss-${L.tick}-${ev.kind}`, kind:ev.kind, counter:ev.kind==="summon"?"airstrike":ev.kind==="split"?"giant":"shield", z:L.boss.z, actors:[], age:0, lost:0, countered:false, bossAttack:true, announced:true };
+  bus.emit("threat", {id:t.id,kind:t.kind,counter:t.counter,z:t.z}); liveThreat(t);
+});
+const squadView = Object.freeze({ get x(){return L?.sx||0;}, get z(){return L?.sz||0;}, get count(){return L?.soldiers.length||0;}, get radius(){return squadRadius(L?.soldiers.length||0);}, get soldiers(){return L?.soldiers||[];} });
+Object.defineProperties(ctx,{squad:{get:()=>squadView},mission:{get:()=>L?.mission||null},missionState:{get:()=>L?.missionState||null}});
 
 // Swept bullets: insert hit bounds into 2 m cells, query once, resolve by entry distance.
 class SpatialHash {
@@ -1620,7 +1652,7 @@ class SpatialHash {
   insert(o,x0,x1,z0,z1){for(let x=Math.floor(x0/this.cell);x<=Math.floor(x1/this.cell);x++)for(let z=Math.floor(z0/this.cell);z<=Math.floor(z1/this.cell);z++){const key=x+","+z;let a=this.cells.get(key);if(!a){a=this.buckets.pop()||[];this.cells.set(key,a);}a.push(o);}}
   query(x0,x1,z0,z1){this.results.length=0;const id=++this.queryId;for(let x=Math.floor(x0/this.cell);x<=Math.floor(x1/this.cell);x++)for(let z=Math.floor(z0/this.cell);z<=Math.floor(z1/this.cell);z++){const a=this.cells.get(x+","+z);if(a)for(const o of a)if(o._hashSeen!==id){o._hashSeen=id;this.results.push(o);}}return this.results;}
 }
-const bulletGrid=new SpatialHash(),crowdGrid=new SpatialHash(.65);
+const bulletGrid=new SpatialHash(),crowdGrid=new SpatialHash(.65),crowdGaps=[];
 function sweepEntry(x,z,nx,nz,x0,x1,z0,z1){
   let lo=0,hi=1;
   for(const [p,d,a,b] of [[x,nx-x,x0,x1],[z,nz-z,z0,z1]]){if(Math.abs(d)<1e-10){if(p<a||p>b)return Infinity;}else{let t0=(a-p)/d,t1=(b-p)/d;if(t0>t1)[t0,t1]=[t1,t0];lo=Math.max(lo,t0);hi=Math.min(hi,t1);if(lo>hi)return Infinity;}}
@@ -1644,14 +1676,16 @@ function updateBullets(dt){
       if(o.hitKind==="solid"&&!o.alive)continue;
       b.x=x+(nx-x)*o.entry;b.z=z+(nz-z)*o.entry;
       if(o.hitKind==="gate"){
-        const h=o;if(h.op==="+"&&!h.powerup&&!h.recruit&&!h.rescue){h.acc=(h.acc||0)+b.dmg*(L.mission?.015:.35);if(h.acc>=1){const inc=Math.floor(h.acc);h.acc-=inc;h.v=Math.min(h.v+inc,L.mission?h.initialV+6:99);refreshGate(h.gate);bus.emit("gateShot",{gate:h.gate,half:h});}}
+        const h=o;if(h.op==="+"&&!h.powerup&&!h.recruit&&!h.rescue){h.acc=(h.acc||0)+b.dmg*(L.mission?CAMPAIGN_TUNING.gateCharge:.35);if(h.acc>=1){const inc=Math.floor(h.acc);h.acc-=inc;h.v=Math.min(h.v+inc,L.mission?h.initialV+CAMPAIGN_TUNING.gateGrowth:99);refreshGate(h.gate);bus.emit("gateShot",{gate:h.gate,half:h});}}
         else if(h.op==="x"&&!L.mission){h.acc=(h.acc||0)+b.dmg*.02;if(h.acc>=1&&h.v<3){h.acc=0;h.v++;refreshGate(h.gate);bus.emit("gateShot",{gate:h.gate,half:h});}}hit=true;
       } else if(o.hitKind==="solid"){hitSolid(o,b.dmg);if(b.splash)explode(b.x,b.z,b.dmg,b.splash);hit=true;}
       else if(o.hitKind==="boss") {const hp=o.hp, base=b.dmg*(b.splash?1.2:1)*(L.giantT>0?2:1);
         if(!(o.shieldT>0&&!b.shieldPierce&&!b.splash)&&o.def?.onBullet?.(o,b)!==false){if(o.hp<=0)bossDown();else damageBoss(Math.max(0,base*bossWeakMultiplier(o)-(hp-o.hp)),true);}hit=true;}
       else {
-        const blocked=o.def?.onBullet?.(o,b)===false && !b.shieldPierce && !b.splash;
-        if(!blocked){if(o.hp<=0){o.hp=.001;hitEnemy(o,.001);}else hitEnemy(o,b.dmg);}if(b.splash)explode(o.x,o.z,b.dmg,b.splash,o);
+        const hp=o.hp, parent=o._campaignEnemy?.parent;
+        const blocked=o.def?.onBullet?.(o,b)===false;
+        const amount=parent?.boss ? Math.max(0,b.dmg*(L.giantT>0?2:1)*(parent.weak>0?parent.config.weak.mult:1)-(hp-o.hp)) : b.dmg;
+        if(!blocked){if(o.hp<=0){o.hp=.001;hitEnemy(o,.001);}else hitEnemy(o,amount);}if(b.splash)explode(o.x,o.z,b.dmg,b.splash,o);
         b.lastHit=o;if(!blocked&&b.pierce>0)b.pierce--;else hit=true;
       }
       if(hit)break;
@@ -1661,15 +1695,19 @@ function updateBullets(dt){
 }
 function updateCrowd(dt){
   const radius=squadRadius(L.soldiers.length);let width=Math.min(5.3,radius),centre=L.sx;
-  // A nearby wall or a telegraphed hazard leaves an interval for the formation.
-  let left=-5.7,right=5.7;
-  for(const o of L.solids)if(o.alive&&o.z<L.sz+radius&&o.z>L.sz-12&&!["airdrop","ammo","weaponCase","barrel","fuelTruck"].includes(o.kind)){
-    if(o.x<L.sx)left=Math.max(left,o.x+o.hw+.3);else right=Math.min(right,o.x-o.hw-.3);
-  }
-  for(const h of L.hazards||[])if(!h.done&&h.warned&&Math.abs(h.z-L.sz)<14){if(h.x<L.sx)left=Math.max(left,h.x+1.6);else right=Math.min(right,h.x-1.6);}
-  if(right>left+.6){width=Math.min(width,(right-left)/2);centre=Math.max(left+width,Math.min(right-width,L.sx));}
-  else width=.5;
-  const target=Math.max(.12,Math.min(1,width/radius));L.compression+=(target-L.compression)*Math.min(1,dt*(target<L.compression?8:3));
+  // Subtract obstacle spans; choose the reachable free interval nearest the steering target.
+  const gaps = crowdGaps; gaps.length=2; gaps[0]=-5.7; gaps[1]=5.7;
+  const block = (a,b) => {
+    for(let i=gaps.length-2;i>=0;i-=2){const lo=gaps[i],hi=gaps[i+1];if(b<=lo||a>=hi)continue;
+      if(a<=lo&&b>=hi){gaps[i]=gaps[gaps.length-2];gaps[i+1]=gaps[gaps.length-1];gaps.length-=2;}
+      else if(a<=lo)gaps[i]=b;else if(b>=hi)gaps[i+1]=a;else{gaps[i+1]=a;gaps.push(b,hi);}
+    }
+  };
+  for(const o of L.solids)if(o.alive&&o.z<L.sz+radius&&o.z>L.sz-20&&!["airdrop","ammo","weaponCase","barrel","fuelTruck"].includes(o.kind))block(o.x-o.hw-.15,o.x+o.hw+.15);
+  for(const h of L.hazards||[])if(!h.done&&h.warned&&Math.abs(h.z-L.sz)<20)block(h.x-1.5,h.x+1.5);
+  let best=Infinity;
+  for(let i=0;i<gaps.length;i+=2){const lo=gaps[i],hi=gaps[i+1];if(hi-lo<.35)continue;const w=Math.min(5.3,radius,(hi-lo)/2),c=Math.max(lo+w,Math.min(hi-w,L.sx));const cost=Math.abs(c-L.sx);if(cost<best){best=cost;centre=c;width=w;}}
+  const target=Math.max(.03,Math.min(1,width/radius));L.compression+=(target-L.compression)*Math.min(1,dt*(target<L.compression?10:3));
   crowdGrid.clear();for(const s of L.soldiers)crowdGrid.insert(s,s.x,s.x,s.z,s.z);
   for(let i=0;i<L.soldiers.length;i++){
     const s=L.soldiers[i],[ox,oz]=slot(i),tx=centre+ox*L.compression,tz=L.sz+oz/Math.sqrt(Math.max(.2,L.compression));
@@ -1714,7 +1752,7 @@ function updateCrowd(dt){
   requestAnimationFrame(frame);
 })();
 // test hooks (read by the headless playtest bot)
-window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, goLevel, save, bus, ctx, cam: CAM, quality, stateHash, input: queueInput, advance: advanceTicks, advanceClock, setTestMode: v => { testMode = !!v; }, get replay() { return JSON.parse(JSON.stringify(replay)); }, playReplay, profile: profileSnapshot, resetProfile, clocks, draw: () => render(FIXED_DT) };
+window.__game = { get L() { return L; }, get state() { return state; }, setState, startLevel, goLevel, save, bus, ctx, cam: CAM, quality, stateHash, input: queueInput, advance: advanceTicks, advanceClock, setTestMode: v => { testMode = !!v; }, get replay() { return JSON.parse(JSON.stringify(replay)); }, playReplay, profile: profileSnapshot, resetProfile, clocks, draw: () => render(FIXED_DT), tuning: CAMPAIGN_TUNING };
 </script>
 
 </body></html>

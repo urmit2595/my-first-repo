@@ -48,6 +48,7 @@ async function installBot({id,policy,seed}) {
       if(!gate){
         const medics=L.enemies.filter(e=>e.hp>0&&e.type==="medic"&&L.sz-e.z<43&&e.z<L.sz).sort((a,b)=>b.z-a.z);
         if(medics.length)x=medics[0].x;
+        else if(g.state==="boss"&&L.enemies.some(e=>e.type==="colossus_half"&&e.hp>0))x=L.enemies.find(e=>e.type==="colossus_half"&&e.hp>0).x;
         else {const shield=L.enemies.find(e=>e.type==="shieldbearer"&&e.hp>0&&L.sz-e.z<30&&e.z<L.sz);if(shield)x=shield.x>0?shield.x-3:shield.x+3;}
       }
       const danger=[];
@@ -75,7 +76,7 @@ async function installBot({id,policy,seed}) {
   window.__campaignBatch=(ticks=120)=>{
     for(let i=0;i<ticks&&["play","boss","bonus"].includes(g.state);i++){decide();g.advance(1);if(g.draw&&g.L.tick%60===0)g.draw();}
     const L=g.L;
-    return {done:!!result,tick:L.tick,result:result?{...result,chapter:L.mission.chapter,tag:L.mission.tag,hash:g.stateHash(),score:L.score,peak:L.peakSquad,profile:g.profile()}:null};
+    return {done:!!result,tick:L.tick,debug:L.tick>=18000?{state:g.state,squad:L.soldiers.length,x:L.sx,z:L.sz,boss:{hp:L.boss.hp,x:L.boss.x,z:L.boss.z,mode:L.boss._campaignEnemy?.mode},enemies:L.enemies.filter(e=>e.hp>0).map(e=>({type:e.type,hp:e.hp,x:e.x,z:e.z,mode:e._campaignEnemy?.mode}))}:null,result:result?{...result,chapter:L.mission.chapter,tag:L.mission.tag,hash:g.stateHash(),score:L.score,peak:L.peakSquad,profile:g.profile()}:null};
   };
 }
 function makeSimulation(){
@@ -111,9 +112,9 @@ let browser;
         await page.evaluate(installBot,config);batch=()=>page.evaluate(()=>window.__campaignBatch(120));
       }
       let data;do{data=await batch();}while(!data.done&&data.tick<18000);
-      if(!data.done)throw Error("Mission exceeded 300 simulation seconds");
+      if(!data.done)throw Error("Mission exceeded 300 simulation seconds: "+JSON.stringify(data.debug));
       const row={id,policy,run:run+1,engine,...data.result,errors};results.push(row);console.log(JSON.stringify(row));
-    }catch(e){const row={id,policy,run:run+1,result:"ERROR",error:e.message,errors};results.push(row);console.error(JSON.stringify(row));process.exitCode=1;}
+    }catch(e){const row={id,chapter:Math.floor(ordinal(id)/6)+1,tag:ordinal(id)%6===5?"boss":ordinal(id)%6===4?"hard":"normal",policy,run:run+1,result:"ERROR",error:e.message,errors};results.push(row);console.error(JSON.stringify(row));process.exitCode=1;}
     finally{if(context)await context.close();}
   }
   const summary=(label,select)=>policies.map(policy=>{const all=results.filter(r=>r.policy===policy&&select(r)),r=all.filter(r=>r.result!=="ERROR");return {group:label,policy,wins:r.filter(r=>r.result==="win").length,attempts:r.length,errors:all.length-r.length,winRate:r.length?(100*r.filter(r=>r.result==="win").length/r.length).toFixed(1)+"%":"—",stars:r.length?(r.reduce((s,x)=>s+x.stars.filter(Boolean).length,0)/r.length).toFixed(2):"—"};});

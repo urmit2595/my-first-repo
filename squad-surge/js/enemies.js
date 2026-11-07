@@ -19,6 +19,9 @@ window.Enemies = (() => {
     telegraphs: 256, bossReserve: 12
   });
   // Per-archetype tuning: [HP, contact radius, sprite height, speed, contact loss, fallback tint].
+  const SHEET_SPEC = { ogre: ["assets/boss.webp", 3], colossus_half: ["assets/units2/boss-colossus.webp", 3], splitter_mini: ["assets/units2/splitter-mini.webp", 4] };
+  const SHEET_ASPECT = { shieldbearer: 0.904, charger: 0.88, bomber: 0.836, rifleman: 0.867, medic: 0.639, splitter: 0.92, splitter_mini: 0.886,
+    ogre: 1.0, bulwark: 1.041, ravager: 1.029, gunner: 1.017, colossus: 0.994, colossus_half: 0.994, warlord: 0.997 };
   const ENEMY_DATA = {
     shieldbearer: [18, 0.65, 2.05, 2.1, 3, 0x8ecbff],
     charger: [10, 0.48, 1.8, 3.5, 2, 0xff7163],
@@ -600,14 +603,17 @@ window.Enemies = (() => {
     record.probed = true;
     try {
       const img = new window.Image();
+      // Sheet paths and cell aspect (width/height) as produced by the art pass (assets/units2/atlas.json).
+      const spec = SHEET_SPEC[record.type] || (record.boss ? ["assets/units2/boss-" + record.type + ".webp", 3] : ["assets/units2/" + record.type + ".webp", 4]);
       img.onload = function () {
         if (!number(img.naturalWidth, img.width)) return;
-        record.def.sheet = img.src; record.def.cols = record.boss ? 3 : 4;
+        record.def.sheet = img.src; record.def.cols = spec[1]; record.def.rows = 2;
+        if (SHEET_ASPECT[record.type]) record.def.aspect = SHEET_ASPECT[record.type];
         record.def.tint = 0xffffff; register(record);
       };
       // The already registered, correctly laid-out tinted fallback remains live.
       img.onerror = function () {};
-      img.src = "assets/units2/" + record.type + ".webp";
+      img.src = spec[0];
     } catch (_) { /* optional browser image loader */ }
   }
   function refresh() {
