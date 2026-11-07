@@ -1,0 +1,1451 @@
+OpenAI Codex v0.167.0
+--------
+workdir: /home/user/my-first-repo/squad-surge
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: high
+reasoning summaries: none
+session id: 01a1b619-cc5f-7483-b64d-076befb7e0d5
+--------
+user
+# Task for Codex: Squad Surge Tactics Update, tuning pass (A2)
+
+Repo: /home/user/my-first-repo/squad-surge. You built the Tactics Update. Read design/strategy.md and
+tools/tactics-notes.md again. This pass may edit `index.html`, `js/juice.js`, `js/meta.js` and `tools/bot-tactics.js`.
+No other run is active. Do not run git.
+
+## Findings from real-browser testing (orchestrator)
+- Balance bot (casual steering, 2 runs): ALL policies win levels 1–8, with no errors. Score: smart is 1.6–2.7× never;
+  random is about the same as never. Good.
+- **Problem 1, no stakes.** The end-of-level squad is almost the same for never and smart (level 7: 541 vs 531).
+  `liveThreat()` caps losses at `min(10 or 12, ceil(squad*0.24))`, which is 2–5% of a 200–550 squad. Stars (3★ at
+  ≥30+10×level) are trivially met. So ignoring threats costs nothing except score, and the strategy does not condition
+  survival.
+- **Problem 2, the reward is hidden.** In design/qa/tactics/L4-perfect-shield.png, the PERFECT SHIELD callout was queued
+  behind a "NICE x1.5" combo callout, and a "TROPHY: CENTURION" toast overlapped the callout panel.
+
+## Do
+1. **Threat stakes scale with the squad.**
+   - The loss cap per uncountered threat is `ceil(squad * pct)`, where pct is 0.12 (levels 2–3), 0.16 (4–6) or 0.20
+     (7+), with a minimum of 4. One threat never takes the squad below 60% of its pre-threat size.
+   - Make the threats actually reach that cap when ignored (playtest the numbers with the bot):
+     - mortar shells kill `max(2, ceil(3% of squad))` per hit
+     - barricade contact kills enough to matter
+     - SWARM size scales with the squad: `clamp(round(squad*0.3), 12+3*level, 90)`
+   - With the counter used in time, losses stay at about 0.
+2. **Stars reward keeping the squad**, which is clear conditioning.
+   - Track `L.peakSquad`, the maximum squad size before the boss.
+   - 3★ needs `bossSoldiers ≥ 30+10*level` AND kept ≥ 65% of the peak.
+   - 2★ needs `bossSoldiers ≥ 10+3*level` AND kept ≥ 35%.
+   - Otherwise 1★.
+   - Add `keptPct` to the win data.
+   - meta.js results: show "SQUAD KEPT 82%" in the tally, plus the hint "Counter threats to keep your squad" when kept
+     < 65%.
+3. **The PERFECT callout preempts:** it shows immediately and does not wait behind combo or tier callouts, which can
+   follow afterwards. Trophy and mission toasts must never overlap the central callout: stack them lower or delay them
+   by ≥ 1.2 s.
+4. **Bot:** report `stars` and `keptPct` per run, and print a summary table (wins, average stars and average kept per
+   policy).
+   - Target: **never** still wins 100% of levels 1–8 with casual steering, at mostly 2★ from level 4 on.
+   - Target: **smart** gets 3★ clearly more often than never.
+   - Keep the threats survivable. The user has said in the past "Too tough" and "I always lose level 7", so do not make
+     losing likely.
+5. `node --check` everything, including the extracted inline scripts. Finish with a short summary and the final tuning
+   values.
+
+warning: Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.
+codex
+I’ll reread the tactics notes, tune squad losses and retention stars, then check the balance bot and callout timing. I’ll stay within the four allowed files and won’t run git.
+
+exec
+/bin/bash -lc "pwd && rg --files -g 'AGENTS.md' -g 'strategy.md' -g 'tactics-notes.md' -g 'bot-tactics.js' -g 'package.json' -g 'juice.js' -g 'meta.js' -g 'index.html'" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+/home/user/my-first-repo/squad-surge
+js/meta.js
+js/juice.js
+tools/tactics-notes.md
+tools/bot-tactics.js
+index.html
+design/strategy.md
+
+exec
+/bin/bash -lc 'cat design/strategy.md tools/tactics-notes.md' in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+# Squad Surge "Tactics Update": player-activated power-ups and strategic choices
+
+## 1. Goal
+
+Squad Surge plays itself too much. Today a power-up fires the moment its crate is shot open, so the player only steers.
+This update makes the player **decide**:
+- **What to take:** fork drops and power-up gates.
+- **When to use it:** activation buttons and telegraphed threats with a matching counter.
+- **Whether to save it:** unused power-ups pay off at the end, so saving is a gamble.
+
+Players are **conditioned** to make these choices through a clear loop:
+1. A cue: a telegraphed threat with the counter icon.
+2. An action: tap the matching power-up.
+3. An immediate, juicy reward: PERFECT callout, bonus score and combo.
+4. Mild loss feedback for waste or misuse.
+5. A long-term reward for planning: banked power-ups multiply the finale.
+
+Hard constraint (from the user): **no upgrades, no shop, no currency.** Everything here is in-run.
+
+## 2. Mechanics (acceptance criteria)
+
+### T1. The belt (2 slots), and activation
+- Power-ups from crates and gates go into a 2-slot **belt** instead of firing instantly. JACKPOT stays instant (+soldiers).
+- HUD: two large round buttons at the bottom corners, 64–72 px and thumb-reachable, with safe-area insets. Each shows its
+  icon from `assets/ui/icons/pu-*.webp`, or a faint empty socket. Keys **1** and **2**, and **Q** and **E**, also activate.
+- Button taps never steer the squad: stop propagation, and exclude the button rects from the drag area.
+- Activation applies the existing effect (SHIELD 6 s, AIRSTRIKE on the road ahead, GIANT 6 s) and empties the slot.
+  The button pulses while an effect is active.
+- **Full belt:** a new pickup shows a "SWAP?" chip with its icon above the belt for 3 s. Tapping a slot (or pressing its
+  key) swaps it in. Otherwise the new one turns into **+8 soldiers**. This is a micro keep-or-swap choice and is never
+  forced.
+- The buttons are visible in the `play` and `boss` states, and hidden elsewhere.
+
+### T2. Fork drops (choose what to take)
+- From level 2, about half of the airdrops land as a **pair**: two crates side by side (x ≈ −3.3 and +3.3), each showing
+  its power-up icon on a billboard. The squad shoots what is in front of it, so steering picks one. The other crate
+  stays shootable if the player can manage both, which is a skill reward.
+- From level 3, about one gate pair per level is a **tool gate**: one half is a power-up (big icon, no number), the other
+  is a good soldier gain (+N). The player chooses numbers or a tool.
+
+### T3. Telegraphed threats with a counter (when to use it)
+Each threat is announced about 2.5 s ahead. A tall holo sign stands on the road ("⚠ SWARM" plus the counter's icon),
+and a `threat` event fires.
+
+| Threat | From level | What it is | Without the counter | Counter |
+|---|---|---|---|---|
+| **SWARM** | 2 | a very dense horde (1.8× a normal horde, packed) | costly but survivable | **AIRSTRIKE** clears most of it |
+| **BARRICADE** | 3 | a reinforced wall across the road: 3 tall blocks with a gap of about 1.2 units at one random side; touching the wall kills soldiers | shoot it down (high HP) or squeeze through the gap | **GIANT** smashes straight through, no losses |
+| **MORTARS** | 4 | 1–2 mortar towers at the road edge that lob shells with red target rings onto the squad every ~1.6 s for ~6 s; each hit kills 2–4 soldiers | lose soldiers, or shoot the towers (moderate HP) | **SHIELD** nullifies the hits |
+
+- Spawn about 2–3 threats per level, scaled with level, and never two at once. The generator ensures that the level's
+  drops and tool gates make at least one counter likely to be available before each threat (not guaranteed: planning
+  matters).
+- **Boss uses:**
+  - the boss slam is a threat (counter SHIELD: no losses)
+  - AIRSTRIKE deals 18% of boss max HP and clears adds
+  - GIANT doubles squad damage to the boss for its duration
+
+### T4. PERFECT, WASTED, MISUSED (conditioning feedback)
+- **PERFECT:** activating a threat's counter while that threat is live (in range or active). Rewards:
+  - callout "PERFECT AIRSTRIKE!"
+  - +300 × level score, raw (not multiplied)
+  - +10 combo and a short slow-mo (respect the existing slow-mo limit)
+  - counts toward `tactics.perfect`
+- **WASTED:** activating with no target, meaning no enemies or solids in the effect range (for SHIELD: no threat within
+  4 s). A small grey "WASTED" chip appears; it counts toward `tactics.wasted`.
+- **MISUSED:** using a non-counter on a live threat. Allowed, but no bonus.
+
+### T5. SURGE becomes player-activated
+- When the meter fills, it holds at 100% (no drain) and shows **SURGE READY**. A third button sits bottom-centre, or the
+  player can tap the surge bar, or press Space.
+- Activation behaves as today (6 s of double fire rate and more).
+- Using it during a threat or the boss fight counts as PERFECT SURGE: score bonus, no extra slow-mo.
+
+### T6. Banking (save versus use)
+- When the boss falls, each power-up still on the belt is **banked**: +0.5× on the final multiplier (finale multiplier
+  plus bank).
+- Show it with a "BANKED ×2 → +1.0×" toast before the finale.
+- Dying loses the belt. Saving is a gamble against loss aversion.
+
+### T7. Teaching (early levels condition the habit)
+- **Level 2:** the first SWARM comes with a guaranteed AIRSTRIKE drop just before it. A coach mark points at the
+  AIRSTRIKE slot ("Tap to call an airstrike!"), with a pulsing ring.
+- **Level 3:** the first BARRICADE, with a GIANT drop before it.
+- **Level 4:** the first MORTARS, with a SHIELD drop before it.
+- After a counter has been used PERFECT twice, its coach mark stops showing. Never show more than one coach mark at a
+  time.
+- The slot whose power-up counters the live threat glows: a gold ring, always on as a gentle hint, which fades after 3
+  PERFECT uses overall.
+
+## 3. Contracts
+
+### ctx additions (index.html provides)
+- `ctx.belt`: `[type|null, type|null]`
+- `ctx.usePowerup(slot)`
+- `ctx.tactics`: `{perfect, used, wasted, misused, banked, surgePerfect}`
+- `ctx.threat`: the live threat, or null
+- `ctx.surgeReady`: boolean
+
+### Events
+- `belt {slots}`: on every change.
+- `powerupGot {type, slot}`
+- `swapOffer {type, until}`
+- `swapDone {type, slot}`
+- `swapExpired {type}`
+- `powerupUse {type, slot, perfect, misused, wasted, threatKind}`
+- `threat {id, kind, counter, z}`: when the sign appears.
+- `threatLive {id, kind}`: in range.
+- `threatEnd {id, kind, countered, lost}`
+- `surgeReady {}`
+- `bank {count, bonus}`
+- `tacticsCoach {kind, slot}`: when a coach mark should show.
+
+## 4. Ownership and process
+
+| Owner | Files |
+|---|---|
+| Codex run A (mechanics) | index.html, js/powerups.js, js/objects3d.js, tools/* (bots) |
+| Codex run B (feedback, meta) | js/juice.js (callouts, PERFECT/WASTED/SWAP visuals, coach marks), js/meta.js (results "Tactics" line, 6+ new missions and 3+ trophies about tactics, stats) |
+
+- Never edit a file outside your column.
+- Do not commit; the orchestrator does.
+- Keep the game's style, performance (no per-frame allocation), and the existing balance targets: a player who never
+  presses the buttons can still clear levels 1–5, and level 7 stays winnable for a casual player.
+# Tactics run A handoff
+
+Mechanics live in `index.html`; supply planning/activation in `js/powerups.js`; icons, tool gates, barricades, mortar towers and warning/target visuals in `js/objects3d.js`. No changes to juice/meta or git operations.
+
+## Run B contract
+
+- `ctx.belt` contains two types/nulls; slots are **zero-based**. Buttons are `#belt0`/`#belt1`, also `[data-slot="0"]`/`[data-slot="1"]`.
+- `ctx.usePowerup(slot)` activates, or accepts the outstanding swap **without activating it**. `ctx.collectPowerup(type)` is the pickup entry point. JACKPOT remains instant.
+- `ctx.tactics` / `L.tactics`: `perfect`, `used`, `wasted`, `misused`, `banked`, `surgePerfect`. `perfect` and `used` include SURGE; `surgePerfect` is its subset.
+- `ctx.threat` / `L.threat`: current live encounter, or null. Kinds are `swarm`, `barricade`, `mortars`, `slam`; counters are `airstrike`, `giant`, `shield`, `shield`.
+- `ctx.surgeReady` / `L.surgeReady`, `ctx.useSurge()`.
+- All section 3 events are emitted: `belt`, `powerupGot`, `swapOffer`, `swapDone`, `swapExpired`, `powerupUse`, `threat`, `threatLive`, `threatEnd`, `surgeReady`, `bank`, `tacticsCoach`.
+- **SURGE also emits `powerupUse`**, with `type:"surge"`, `slot:null`, and the PERFECT flag, before `surge {on:true, perfect}`. No extra slow motion for PERFECT SURGE.
+- `tacticsCoach.kind` is the tool type, not the encounter kind. Each teaching encounter emits at most once. Persistent counters are `save.tacticsCounters[type]` (stop coaching at 2) and `save.tacticsPerfect` (fade gold HUD hint at 3).
+- `swapOffer.until` is in **`L.time` simulation seconds**, so the offer freezes while paused and follows slow motion. The core has a fallback swap chip, suppressed while juice's `.jt-swap` is visible; juice should derive its countdown from the simulation deadline.
+- `bank` fires at boss death, before `bossDown`. Belt consumption closes at that instant. `win` includes `tactics`, `bankBonus`, `finaleMult`, and `mult` already includes banking. **Do not add bank again in meta.** `lose` includes `tactics` and empties the belt.
+- Existing `powerup {type}` still fires on actual effect activation, not pickup or swap.
+
+## Tuning
+
+- 70 px belt buttons; keys 1/Q, 2/E. SURGE: centre button, meter tap, Space.
+- SHIELD/GIANT: 6 simulation seconds. Full belt offer: 3 seconds, then +8 soldiers.
+- PERFECT: `ctx.addScore(300 * level, {raw:true})`, +10 combo; slow-mo 0.4x for 0.35 s, subject to the existing cooldown/cap.
+- SURGE holds at 100%; activation lasts 6 s, doubles fire rate and retains existing double damage/pierce. Existing cap: 2 activations/level.
+- Road threats: 2 on levels 2–5; 3 from level 6. First is at z=-100; remaining threats spaced through the road, ending at least 65 units before the boss. Holo warning 2.5 s before live range (24 units).
+- Threat corridors replace ordinary encounter segments; positive soldier halves on supply gates and existing jackpot pity preserve squad growth. Drops arrive 43 units before threats; one tool gate/level from level 3. Counter availability is visible; steering still decides the pickup. First teaching supplies have a missed-crate fallback.
+- SWARM: 1.8 × (6 + 3 × level) normal enemies. BARRICADE: three 3.6-unit blocks, 1.2-unit side gap, HP 70 + 8 × level. MORTARS: one tower, two from level 6; HP 22 + 4 × level; shots every 1.6 s, 0.85 s warning rings, 2–4 losses/hit, encounter up to 6 s.
+- Road threat loss budget: 24% of squad size at live start, capped at 12 for SWARM / 10 otherwise; these added hazards preserve the last 3 soldiers. Ordinary enemies/solids and the boss retain their normal lethal behavior.
+- Boss: shield counters slam; AIRSTRIKE deals exactly 18% max HP and clears adds (bombs cannot add extra boss splash); GIANT doubles bullet damage. Effects carry into the boss fight.
+- Bank: +0.5 final multiplier per held item (maximum +1.0), added once by `finishLevel`.
+
+## Validation
+
+`node --check` the two modules and tools; extract inline scripts from `index.html` and check those too.
+
+Browser-free behavioral tests (real core, Powerups and Obj3D; stubbed DOM, textures and renderer):
+
+```sh
+THREE_LOCAL=/path/to/three-r128.min.js node tools/check-tactics.js
+```
+
+Checks swaps/expiry, held SURGE, PERFECT/WASTED/MISUSED, early teaching supplies, counter effects, exact boss damage, bank integration, encounter spacing, restart cleanup and per-level disposal. Includes a no-power-up simulation smoke run across levels 1–8. This is not visual/browser balance validation.
+
+Orchestrator browser run:
+
+```sh
+THREE_LOCAL=/path/to/three-r128.min.js node tools/bot-tactics.js --runs 3 --steering casual
+```
+
+All three policies use the same casual steering (60% preferred gate choices and 50% slam dodges). `never` never presses any power-up or SURGE; `smart` uses live counters and SURGE on the boss; `random` activates at random intervals. Optional `--steering perfect`, `--levels 1-8`, `--policies never,smart,random`, `CHROMIUM_PATH`. Fresh browser contexts isolate saves. Renderer is stubbed after boot; both performance.now and RAF timestamps run at ×4 (the game's 50 ms step cap still applies). Prints per-run JSON and a win/attempt table, distinguishing errors/timeouts from losses. Chromium was not launched in the sandbox.
+
+exec
+/bin/bash -lc 'for p in /AGENTS.md /home/AGENTS.md /home/user/AGENTS.md /home/user/my-first-repo/AGENTS.md /home/user/my-first-repo/squad-surge/AGENTS.md; do if [ -f "$p" ]; then cat "$p"; fi; done
+rg -n '"'liveThreat|peakSquad|bossSoldiers|finishLevel|mortar|barricade|swarm|threatLoss|killSoldier' index.html
+rg -n 'callout|toast|PERFECT|trophy|mission|stars|tally|win' js/juice.js js/meta.js
+cat tools/bot-tactics.js" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+422:  addSoldiers: n => addSoldiers(n), killSoldiers: (n, nearX = null, force = true) => killSoldiers(n, nearX, force),
+423:  setShield: s => setShield(s), setGiant: s => setGiant(s), finishLevel: m => finishLevel(m), goMode: o => goMode(o),
+443:const THREAT_COUNTER = { swarm: "airstrike", barricade: "giant", mortars: "shield", slam: "shield" };
+529:function threatLossLeft(t) { return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - 3)); }
+534:function liveThreat(t) {
+536:  t.lossCap = Math.min(t.kind === "swarm" ? 12 : 10, Math.ceil(L.soldiers.length * 0.24));
+537:  if (t.kind === "swarm") {
+543:  } else if (t.kind === "barricade") {
+544:    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, 70 + L.level * 8, { threat: t }));
+545:  } else if (t.kind === "mortars") {
+546:    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z, 22 + L.level * 4, { threat: t }));
+564:    announceThreat(t); liveThreat(t);
+570:    if (!t.live && d <= 24 && !L.threat) liveThreat(t);
+574:  if (t.kind === "barricade" && L.giantT > 0 && L.sz - t.z < 12) for (const o of t.actors) if (o.alive) breakSolid(o, true);
+575:  if (t.kind === "mortars") {
+583:          const loss = Math.min(2 + L.level % 3, threatLossLeft(t));
+584:          killSoldiers(loss, t.targetX, true); t.lost += loss;
+600:  for (const a of t.actors) if (t.kind === "swarm" ? a.hp > 0 && a.state !== "dead" && a.state !== "dying" : a.alive) { alive = true; break; }
+601:  if ((!alive && !(t.shellT > 0)) || t.age >= 6 || (t.kind === "barricade" && L.sz < t.z - 2)) endThreat(t);
+614:const SOLID_HW = { blockBlue: 1.1, blockYellow: 1.2, crate: 1.2, tyres: 0.9, ammo: 1.05, weaponCase: 1.3, airdrop: 1.2, barrel: 0.8, barricade: 1.8, mortar: 0.8 };
+640:    const count = level >= 6 ? 3 : 2, kinds = level >= 4 ? ["swarm", "barricade", "mortars"] : level >= 3 ? ["swarm", "barricade"] : ["swarm"];
+732:function killSoldiers(n, nearX = null, force = false) {
+765:    bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
+934:function finishLevel(mult) { if (state !== "bonus" && state !== "boss") return; L.finaleMult = Math.max(1, mult || 1); L.mult = L.finaleMult + L.bankBonus; win(); } // called by js/finale.js
+937:  else finishLevel(1);
+945:  L.bonusT += dt; if (state === "bonus" && L.bonusT > 9) finishLevel(L.mult || 1); // safety net if the finale never reports
+1010:    else if (after < before) { killSoldiers(before - after, null, true); breakCombo(); sfx("bad"); vibe(60); flashRed(); floatText(L.sx, 2, L.sz, `${after - before}`, "#ff6a5a"); }
+1021:    if (o.threat) lose = Math.min(lose, threatLossLeft(o.threat));
+1022:    if (lose) { killSoldiers(lose, o.x); breakCombo(); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a"); }
+1089:        const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
+1090:        killSoldiers(loss, e.x); if (e.threat) e.threat.lost += loss;
+1121:    if (b0.z + 2.6 > L.sz - R) killSoldiers(L.soldiers.length, null, true);
+1173:  L.bossSoldiers = L.soldiers.length; // stars are decided here; the finale cannot lower them
+1198:  const n = L.bossSoldiers || L.soldiers.length, stars = n >= 30 + L.level * 10 ? 3 : n >= 10 + L.level * 3 ? 2 : 1;
+js/juice.js:3:window.Juice = (() => {
+js/juice.js:13:    const media = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+js/juice.js:22:    let current = null, calloutAge = 0;
+js/juice.js:23:    const callouts = [], flights = [];
+js/juice.js:156:      if (d.perfect && type) enqueue("PERFECT " + type.toUpperCase() + "!", { color: "#ffd84a", size: 9, ring: true });
+js/juice.js:214:      callouts.push(Object.assign({ text, color: "#fff", size: 7, sub: "", icon: "", stamp: false }, options));
+js/juice.js:217:      current = callouts.shift() || null; calloutAge = 0;
+js/juice.js:238:      callouts.length = 0; current = null; banner.hidden = true;
+js/juice.js:247:        if (!current && callouts.length) nextCallout();
+js/juice.js:249:          calloutAge += delta;
+js/juice.js:250:          const t = clamp(calloutAge / .8, 0, 1);
+js/juice.js:295:      const modal = $("winModal");
+js/juice.js:324:        if (modal.id === "winModal" && !visible) clearConfetti();
+js/juice.js:343:    window.addEventListener("pointerup", safe(release), { passive: true });
+js/juice.js:344:    window.addEventListener("pointercancel", safe(release), { passive: true });
+js/juice.js:345:    window.addEventListener("blur", safe(release));
+js/juice.js:356:      if (to === "home" || to === "win" || to === "lose") bossActive = false;
+js/juice.js:443:    on("win", ({ stars }) => {
+js/juice.js:444:      const container = $("stars");
+js/juice.js:449:          { opacity: 1, transform: base + "scale(1.3)", filter: i < stars ? "drop-shadow(0 0 14px #ffe782)" : "none", offset: .55 },
+js/meta.js:1:/* Squad Surge "Surge Update": meta layer (missions, daily, results, armory, trophies, bests, share).
+js/meta.js:2:   window.Meta.setup(ctx). Own storage key squad-surge-meta-v1. Everything is wrapped so the game works without it. */
+js/meta.js:15:  return { v: 1, uid: 1, started: false, medals: 0, missions: [], trophies: {}, seenUnlock: {}, skin: null, tracer: null,
+js/meta.js:16:    daily: { best: {}, stars: {}, lastDay: null, streak: 0, bestStreak: 0, freezes: 0, wins: 0, played: {} },
+js/meta.js:17:    stats: { perfect: 0, wasted: 0, banked: 0, threatsCountered: 0, bankLevels: 0, cleanWins: 0, kills: 0, wins: 0, gates: 0, maxCombo: 0, maxSquad: 0, maxMult: 0, maxScore: 0, surges: 0, barrels: 0, slams: 0, airdrops: 0, noLoss: 0, missions: 0, maxRunKills: 0, jackpots: 0, bosses: 0, pu: {} } };
+js/meta.js:29:  if (!Array.isArray(m.missions)) m.missions = [];
+js/meta.js:35:const totalStars = () => Object.values(gsave().stars || {}).reduce((a, b) => a + (+b || 0), 0);
+js/meta.js:36:const stars3 = () => Object.values(gsave().stars || {}).filter(v => v >= 3).length;
+js/meta.js:53:  trophy: '<path fill="#ffc928" stroke="#0d1630" stroke-width="1.5" stroke-linejoin="round" d="M7 3h10v6a5 5 0 0 1-10 0z"/><path d="M7 5H3.5c0 4 1.5 5.5 3.7 5.5M17 5h3.5c0 4-1.5 5.5-3.7 5.5" stroke="#0d1630" stroke-width="1.5" fill="none"/><path fill="#ffc928" stroke="#0d1630" stroke-width="1.5" d="M10.5 14h3v4h-3zM7 21h10v-3H7z"/>',
+js/meta.js:82:/* ---------------- toasts ---------------- */
+js/meta.js:83:let toastBox;
+js/meta.js:84:function toast(html, cls) {
+js/meta.js:85:  if (!toastBox) return;
+js/meta.js:86:  const t = document.createElement("div"); t.className = "mt-toast " + (cls || ""); t.innerHTML = html;
+js/meta.js:87:  toastBox.appendChild(t);
+js/meta.js:88:  while (toastBox.children.length > 3) toastBox.firstChild.remove();
+js/meta.js:111:  D.stars[d] = Math.max(D.stars[d] || 0, data.stars || 0);
+js/meta.js:113:  for (const k of Object.keys(D.best)) if (!keep.includes(+k)) { delete D.best[k]; delete D.stars[k]; }
+js/meta.js:116:    first = true; D.wins++;
+js/meta.js:130:/* ---------------- missions ---------------- */
+js/meta.js:133:  { id: "tPerfect", k: "tPerfectRun", mode: "max", t: "Score {n} PERFECT uses in one run", base: 3, per: 0, m: 2, ic: "target" },
+js/meta.js:139:  { id: "tSurge", k: "tSurge", t: "Score {n} PERFECT SURGE uses", base: 2, per: 0, m: 2, ic: "bolt" },
+js/meta.js:162:  { id: "squadwin", k: "squadwin", mode: "max", t: "Win with {n}+ soldiers", base: 25, per: 7, step: 5, m: 2, ic: "helmet-plus" },
+js/meta.js:164:  { id: "star", k: "star", t: "Earn {n} stars", base: 4, per: .6, m: 1, ic: "star" },
+js/meta.js:165:  { id: "win", k: "win", t: "Win {n} levels", base: 2, per: .3, m: 1, ic: "crown" },
+js/meta.js:184:  const used = new Set(M.missions.map(m => (pdef(m.id) || {}).k));
+js/meta.js:185:  const ids = new Set(M.missions.map(m => m.id));
+js/meta.js:197:  while (M.missions.length < 3) M.missions.push(drawMission(!M.started && M.missions.length === 0));
+js/meta.js:201:  if (!active() || !M.missions.length) return;
+js/meta.js:203:  for (let i = 0; i < M.missions.length; i++) {
+js/meta.js:204:    const m = M.missions[i], e = pdef(m.id);
+js/meta.js:214:  const m = M.missions[i], e = pdef(m.id);
+js/meta.js:215:  M.medals += e.m; M.stats.missions++;
+js/meta.js:217:  toast(`${ico("medal")}<span><b>MISSION COMPLETE</b><small>${mtext(m)} · +${e.m} medal${e.m > 1 ? "s" : ""}</small></span>`, "ms");
+js/meta.js:218:  M.missions[i] = drawMission(false);
+js/meta.js:244:  if (r.s) return { ok: totalStars() >= r.s, need: r.s - totalStars(), text: `${r.s} total stars`, unit: "star" };
+js/meta.js:259:  toast(`${ico("helmet-plus")}<span><b>ARMORY UNLOCKED</b><small>${fresh.length === 1 ? fresh[0].name + (fresh[0].kind === "skin" ? " squad" : " tracers") : fresh.length + " new items"}</small></span>`, "ar");
+js/meta.js:303:  { id: "tactician", n: "TACTICIAN", d: "10 lifetime PERFECT uses", ic: "target", f: () => S().perfect >= 10, p: () => [S().perfect, 10] },
+js/meta.js:306:  { id: "first", n: "FIRST WIN", d: "Win a level", ic: "crown", f: () => S().wins >= 1 },
+js/meta.js:307:  { id: "vet", n: "VETERAN", d: "Win 25 levels", ic: "crown", f: () => S().wins >= 25, p: () => [S().wins, 25] },
+js/meta.js:314:  { id: "st6", n: "STAR COLLECTOR", d: "3 stars on 6 levels", ic: "star", f: () => stars3() >= 6, p: () => [stars3(), 6] },
+js/meta.js:315:  { id: "st12", n: "PERFECTIONIST", d: "3 stars on 12 levels", ic: "star", f: () => stars3() >= 12, p: () => [stars3(), 12] },
+js/meta.js:319:  { id: "dly5", n: "DAILY REGULAR", d: "Win 5 daily challenges", ic: "calendar", f: () => M.daily.wins >= 5, p: () => [M.daily.wins, 5] },
+js/meta.js:328:  { id: "miss", n: "ON A MISSION", d: "Complete 10 missions", ic: "medal", f: () => S().missions >= 10, p: () => [S().missions, 10] },
+js/meta.js:340:    toast(`${ico(t.ic)}<span><b>TROPHY: ${t.n}</b><small>${t.d}</small></span>`, "tr");
+js/meta.js:347:  const st = "★".repeat(d.stars || 0) + "☆".repeat(3 - (d.stars || 0));
+js/meta.js:354:  try { await navigator.clipboard.writeText(text); toast("<span><b>Copied!</b></span>", "tr"); return; } catch (e) { /* fall through */ }
+js/meta.js:357:    document.execCommand("copy"); ta.remove(); toast("<span><b>Copied!</b></span>", "tr");
+js/meta.js:358:  } catch (e) { toast("<span><b>Could not share</b></span>", "tr"); }
+js/meta.js:364:.mt-toast{display:flex;align-items:center;gap:8px;max-width:92%;padding:6px 14px 6px 8px;border-radius:14px;background:linear-gradient(#2b4a9a,#1b2a52);border:2px solid #0d1630;box-shadow:0 3px 0 #0d1630,0 8px 18px #0006;font:15px 'Lilita One',sans-serif;color:#fff;animation:mtIn .35s cubic-bezier(.2,1.4,.4,1) both;transition:opacity .35s,transform .35s}
+js/meta.js:365:.mt-toast .mi{width:30px;height:30px}.mt-toast span{display:grid;line-height:1.1;text-align:left}.mt-toast small{font:12px Nunito,sans-serif;font-weight:800;color:#bcd0ff}
+js/meta.js:366:.mt-toast.ms{background:linear-gradient(#3aa85a,#1f7a3a)}.mt-toast.ms small{color:#d6ffe0}.mt-toast.tr b{color:#ffd84a}
+js/meta.js:367:.mt-toast.out{opacity:0;transform:translateY(-10px)}
+js/meta.js:448:#winModal .panel{max-height:100%;overflow:auto}
+js/meta.js:449:@media (max-height:720px){.mm-row.x2,.mm-row.x3{display:none}.stars svg{width:44px;height:44px}.stars svg:nth-child(2){width:52px;height:52px}}
+js/meta.js:450:@media (prefers-reduced-motion:reduce){.mt-toast,.mt-best.on{animation-duration:.01s}.mt-spark{display:none}}
+js/meta.js:453:/* ---------------- missions UI ---------------- */
+js/meta.js:454:function missionRow(m, cls) {
+js/meta.js:466:    <button class="mm-side" id="mmTroph" aria-label="Trophies"><span class="round">${ico("trophy")}</span><small>TROPHIES</small></button>`;
+js/meta.js:470:  homeParts.card.onclick = () => openPanel("missions");
+js/meta.js:477:  else toast("<span><b>Daily coming soon</b></span>", "tr");
+js/meta.js:489:  const rows = M.missions.map((m, k) => missionRow(m, "x" + (k + 1))).join("");
+js/meta.js:530:    M.missions.map(m => { const e = pdef(m.id) || {}; const pc = clamp(m.prog / m.target, 0, 1) * 100;
+js/meta.js:538:  p.innerHTML = `<h2 class="stroke">ARMORY</h2><div class="mm-cnt">${got}/${items.length} collected</div><div class="sub" style="margin:2px 0 0">${ico("medal")} ${M.medals} medals · ${ico("star")} ${totalStars()} stars</div>`;
+js/meta.js:549:        if (!it.req.ok) { toast(`<span><b>${it.name}</b><small>Unlock: ${it.req.text}</small></span>`, "tr"); return; }
+js/meta.js:562:  p.innerHTML = `<h2 class="stroke">${ico("trophy")}TROPHIES</h2><div class="mm-cnt">${got}/${TROPHIES.length}</div><div class="mm-sec"></div><div class="mm-trophies">` +
+js/meta.js:568:/* ---------------- results (win) ---------------- */
+js/meta.js:569:let tallyAnim = null, winRoot = null;
+js/meta.js:571:  if (tallyAnim) { cancelAnimationFrame(tallyAnim.raf); tallyAnim = null; }
+js/meta.js:572:  const pn = q("#winModal .panel"); if (!pn) return;
+js/meta.js:576:  const pn = q("#winModal .panel"), next = $("nextBtn");
+js/meta.js:588:  else if (window.__game && __game.goLevel) __game.goLevel(level, "play");
+js/meta.js:595:  S().wins++; S().bosses++; S().maxSquad = Math.max(S().maxSquad, d.n || 0);
+js/meta.js:605:  if (d.mode === "daily") { dinfo = dailyInfo(); drec = recordDaily({ ...d, stars: d.stars }); }
+js/meta.js:608:    feed("win", 1); feed("star", d.stars || 0); feed("squadwin", d.n || 0);
+js/meta.js:622:  const pn = q("#winModal .panel"); if (!pn) return;
+js/meta.js:631:  add("TACTICS", run.perfect, () => `${run.perfect} PERFECT · +${run.bankBonus.toFixed(1)}× banked · ${run.wasted} wasted`);
+js/meta.js:637:  if ((d.stars || 0) < 3) {
+js/meta.js:638:    const need = (d.stars || 0) >= 2 ? t3 - n : t2 - n, tgt = (d.stars || 0) >= 2 ? "★★★" : "★★";
+js/meta.js:650:  const anchor = $("winSub"); (anchor || pn.firstChild).after(wrap);
+js/meta.js:651:  // mission ticks
+js/meta.js:656:      const cur = M.missions.find(m => m.uid === s.uid);
+js/meta.js:660:    if (!items.length && M.missions[0]) { const m = M.missions[0]; items.push({ text: mtext(m), ic: (pdef(m.id) || {}).ic, from: m.prog / m.target, to: m.prog / m.target, label: `${fmt(m.prog)}/${fmt(m.target)}` }); }
+js/meta.js:666:  // tally animation, skippable, <= ~2 s, never blocks the buttons
+js/meta.js:672:    if (tallyAnim) cancelAnimationFrame(tallyAnim.raf);
+js/meta.js:681:  tallyAnim = { raf: 0 };
+js/meta.js:692:    tallyAnim.raf = requestAnimationFrame(step);
+js/meta.js:694:  tallyAnim.raf = requestAnimationFrame(step);
+js/meta.js:774:  // Completion feeds once per run, so newly drawn missions cannot reuse the same run's peak.
+js/meta.js:788:  if (run.misused) return "Match the power-up icon on the threat warning for a PERFECT counter.";
+js/meta.js:797:  run = { perfect: 0, wasted: 0, misused: 0, banked: 0, bankBonus: 0, bankSeen: false, tacticsFinished: false, ready: false, belt: [null, null], threats: new Map(), liveThreat: null, kills: 0, lost: 0, combo: 0, done: [], snap: M.missions.map(m => ({ uid: m.uid, prog: m.prog })), cTick: 0 };
+js/meta.js:809:    if (d.to === "play" && d.from === "home") run.snap = M.missions.map(m => ({ uid: m.uid, prog: m.prog }));
+js/meta.js:811:    if (d.to !== "win") cleanupResults();
+js/meta.js:848:      // PERFECT SURGE alone is not proof that the named matching tool cleared a threat.
+js/meta.js:892:  on("win", onWin);
+js/meta.js:910:    toastBox = document.createElement("div"); toastBox.id = "metaToasts"; game.appendChild(toastBox);
+js/meta.js:916:    window.addEventListener("load", () => tryF(layoutHome));
+js/meta.js:922:window.Meta = { setup, _state: () => M, _dailyInfo: dailyInfo, _open: openPanel, _feed: feed, _toast: toast, _onWin: onWin, _onLose: onLose };
+#!/usr/bin/env node
+"use strict";
+// Real browser balance run. No gameplay shortcuts: all policies share the same steering.
+// node tools/bot-tactics.js [--runs 3] [--levels 1-8] [--steering casual|perfect]
+//                         [--policies never,smart,random] [--three /path/three.min.js]
+// THREE_LOCAL can provide offline three.js r128. Otherwise use the game's CDN.
+// Outputs each result as JSON, then a wins/attempts table. A timeout is an error, not a loss.
+const http = require("http"), fs = require("fs"), path = require("path");
+const { chromium } = require("playwright");
+const ROOT = path.resolve(__dirname, "..");
+const args = {};
+for (let i = 2; i < process.argv.length; i += 2) args[process.argv[i].replace(/^--/, "")] = process.argv[i + 1];
+const runs = Math.max(1, Number(args.runs || 1)), policies = (args.policies || "never,smart,random").split(",");
+const range = args.levels || "1-8";
+const levels = range.includes("-") ? (() => { const [a, b] = range.split("-").map(Number); return Array.from({ length: b - a + 1 }, (_, i) => a + i); })() : range.split(",").map(Number);
+const steering = args.steering || "casual";
+if (!policies.every(p => ["never", "smart", "random"].includes(p)) || !["casual", "perfect"].includes(steering)) throw new Error("Invalid policy or steering");
+const local = args.three || process.env.THREE_LOCAL;
+if (local && !fs.existsSync(local)) throw new Error(`Missing THREE_LOCAL: ${local}`);
+const TYPES = { ".html": "text/html", ".js": "application/javascript", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".woff2": "font/woff2" };
+const server = http.createServer((req, res) => {
+  let name;
+  try { name = decodeURIComponent(new URL(req.url, "http://localhost").pathname); } catch { res.writeHead(400); return res.end(); }
+  const file = path.resolve(ROOT, "." + (name === "/" ? "/index.html" : name));
+  if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); }
+  res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream" }); fs.createReadStream(file).pipe(res);
+});
+let browser;
+(async () => {
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  browser = await chromium.launch({ args: ["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"], ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
+  const results = [];
+  for (let attempt = 0; attempt < runs; attempt++) for (const level of levels) for (const policy of policies) {
+    // Fresh context isolates saves, jackpot pity, coach counts and mission state per policy.
+    const context = await browser.newContext({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 1 });
+    const page = await context.newPage(), errors = [];
+    page.on("pageerror", e => errors.push(e.message));
+    page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
+    if (local) await page.route("**/three.min.js", r => r.fulfill({ path: path.resolve(local), contentType: "application/javascript" }));
+    await page.addInitScript(({ seed }) => {
+      localStorage.setItem("squad-surge-v1", JSON.stringify({ level: 1, unlocked: 99, sound: false, vibe: false }));
+      let r = seed >>> 0;
+      Math.random = () => (r = (Math.imul(r, 1664525) + 1013904223) >>> 0) / 4294967296;
+      const now = performance.now.bind(performance), raf = requestAnimationFrame.bind(window);
+      performance.now = () => now() * 4;
+      // RAF timestamps must use the same clock as performance.now; otherwise x4 has no effect.
+      window.requestAnimationFrame = cb => raf(t => cb(t * 4));
+    }, { seed: level * 997 + attempt * 193 + 17 });
+    try {
+      await page.goto(`http://127.0.0.1:${server.address().port}/index.html?hq`);
+      await page.waitForFunction(() => window.__game && __game.state === "home", null, { timeout: 60000 });
+      await page.evaluate(async ({ level, policy, steering, seed }) => {
+        const g = window.__game, C = g.ctx;
+        C.renderer.render = () => {};
+        await g.goLevel(level, "play");
+        let steerSeed = seed, actionSeed = seed ^ 0xaffe, nextDecision = 0, nextAction = 1, dodge = null, lastSlam = 0;
+        const choices = new Map(), counts = { threats: 0, ends: 0, got: 0, uses: 0, perfect: 0, maxLive: 0 }, live = new Set();
+        const sr = () => (steerSeed = (Math.imul(steerSeed, 1664525) + 1013904223) >>> 0) / 4294967296;
+        const ar = () => (actionSeed = (Math.imul(actionSeed, 1664525) + 1013904223) >>> 0) / 4294967296;
+        C.bus.on("threatLive", t => { counts.threats++; live.add(t.id); counts.maxLive = Math.max(counts.maxLive, live.size); });
+        C.bus.on("threatEnd", t => { counts.ends++; live.delete(t.id); });
+        C.bus.on("powerupGot", () => counts.got++);
+        C.bus.on("powerupUse", e => { counts.uses++; if (e.perfect) counts.perfect++; });
+        window.__tacticsCounts = counts;
+        C.bus.on("tick", () => {
+          const L = g.L;
+          if (g.state !== "play" && g.state !== "boss") return;
+          if (L.time < nextDecision) return; nextDecision = L.time + 0.12;
+          // Equal steering for all three policies, with independent RNG from power-up decisions.
+          if (g.state === "boss") {
+            if (L.boss.slamT < lastSlam) dodge = null; lastSlam = L.boss.slamT;
+            if (dodge === null) dodge = steering === "perfect" || sr() < 0.5;
+            L.targetX = L.boss.slamT > 1.5 && dodge ? (L.boss.x > 0 ? -5 : 5) : Math.sin(L.time * 0.8) * 1.5;
+          } else {
+            let gate = null;
+            for (const q of L.gates) if (!q.used && q.z < L.sz && q.z > L.sz - 32 && (!gate || q.z > gate.z)) gate = q;
+            if (gate) {
+              if (!choices.has(gate)) {
+                const value = h => h.powerup ? L.soldiers.length + 8 : h.op === "x" ? L.soldiers.length * h.v : L.soldiers.length + h.v;
+                const good = value(gate.halves[0]) >= value(gate.halves[1]) ? 0 : 1;
+                choices.set(gate, steering === "perfect" || sr() < 0.6 ? good : 1 - good);
+              }
+              L.targetX = gate.halves[choices.get(gate)].x;
+            } else L.targetX = steering === "perfect" ? 0 : Math.sin(L.time * 0.65) * 3;
+          }
+          if (policy === "smart") {
+            const t = C.threat;
+            if (t) {
+              if (L.swap && L.swap.type === t.counter) C.usePowerup(C.belt[0] === t.counter ? 1 : 0);
+              if (!L.swap) { const slot = C.belt.indexOf(t.counter); if (slot >= 0) C.usePowerup(slot); }
+            }
+            if (g.state === "boss" && C.surgeReady) C.useSurge();
+          } else if (policy === "random" && L.time >= nextAction) {
+            nextAction = L.time + 0.8 + ar() * 2;
+            C.usePowerup(ar() < 0.5 ? 0 : 1);
+            if (C.surgeReady && ar() < 0.5) C.useSurge();
+          }
+        });
+      }, { level, policy, steering, seed: level * 173 + attempt * 697 + 11 });
+      await page.waitForFunction(() => ["win", "lose"].includes(__game.state), null, { timeout: 180000, polling: 200 });
+      const result = await page.evaluate(() => {
+        const { L, state, ctx } = __game;
+        return { result: state, squad: L.bossSoldiers || L.soldiers.length, progress: Math.round(L.reached * 100), bossPct: Math.max(0, Math.round(L.boss.hp / L.boss.maxHp * 100)), score: Math.round(L.score * L.mult), mult: L.mult, tactics: { ...ctx.tactics }, events: window.__tacticsCounts };
+      });
+      if (result.events.maxLive > 1) errors.push("Overlapping live threats");
+      if (policy === "never" && result.events.uses) errors.push("Never policy activated a power-up");
+      const row = { level, policy, attempt: attempt + 1, steering, ...result, errors };
+      results.push(row); console.log(JSON.stringify(row));
+    } catch (error) {
+      const row = { level, policy, attempt: attempt + 1, result: "ERROR", error: error.message, errors };
+      results.push(row); console.error(JSON.stringify(row)); process.exitCode = 1;
+    } finally { await context.close(); }
+  }
+  console.log(`\nWins / attempts (${steering} steering; errors reported separately)`);
+  console.table(levels.map(level => {
+    const row = { level };
+    for (const policy of policies) { const r = results.filter(x => x.level === level && x.policy === policy); row[policy] = `${r.filter(x => x.result === "win").length}/${r.length}` + (r.some(x => x.result === "ERROR" || x.errors.length) ? " ERROR" : ""); }
+    return row;
+  }));
+  if (results.some(r => r.errors.length)) process.exitCode = 1;
+})().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (browser) await browser.close(); server.close(); });
+
+exec
+/bin/bash -lc "sed -n '440,610p' index.html
+sed -n '710,775p' index.html
+sed -n '995,1035p' index.html
+sed -n '1060,1100p' index.html
+sed -n '1160,1220p' index.html
+sed -n '200,260p' js/juice.js
+sed -n '80,95p' js/meta.js
+sed -n '355,365p' js/meta.js
+sed -n '622,650p' js/meta.js
+rg -n 'banner|jt-call|z-index|top:' js/juice.js | head -30
+ls /tmp
+rg --files tools /usr/bin /opt /tmp 2>/dev/null | rg 'three.*(min|js)|chrom(e|ium)|playwright|check-tactics' | head -40" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+function themeFor(level) { return THEMES[(level - 1) % THEMES.length]; }
+
+// ---------- tactics: belt, learning, encounter lifecycle ----------
+const THREAT_COUNTER = { swarm: "airstrike", barricade: "giant", mortars: "shield", slam: "shield" };
+function updateBeltHUD() {
+  if (!L || !L.belt) return;
+  for (let i = 0; i < 2; i++) {
+    const b = beltButtons[i], type = L.belt[i], fx = L.beltFxUntil[i] > L.time ? L.beltFx[i] : null, icon = type || fx;
+    if (b.dataset.icon !== (icon || "")) {
+      b.dataset.icon = icon || ""; const img = b.firstElementChild; img.hidden = !icon;
+      if (icon) img.src = `assets/ui/icons/pu-${icon}.webp`;
+    }
+    b.dataset.type = type || "";
+    b.classList.toggle("empty", !icon); b.classList.toggle("active", !!fx);
+    b.classList.toggle("counter", !!type && !!L.threat && L.threat.counter === type && save.tacticsPerfect < 3);
+    b.setAttribute("aria-label", L.swap ? `Swap ${L.swap.type} into slot ${i + 1}` : type ? `Use ${type}, slot ${i + 1}` : `Empty slot ${i + 1}`);
+  }
+  $("surgeButton").hidden = !L.surgeReady || L.bankLocked;
+  $("count").classList.toggle("ready", L.surgeReady);
+  $("swapChip").hidden = !L.swap || !!(hud.externalSwap && !hud.externalSwap.hidden);
+  if (L.swap && $("swapIcon").dataset.type !== L.swap.type) {
+    $("swapIcon").dataset.type = L.swap.type; $("swapIcon").src = `assets/ui/icons/pu-${L.swap.type}.webp`;
+  }
+}
+function beltChanged() { bus.emit("belt", { slots: L.belt.slice() }); updateBeltHUD(); }
+function expireSwap() {
+  if (!L.swap) return;
+  const type = L.swap.type; L.swap = null;
+  addSoldiers(8); floatText(L.sx, 2.5, L.sz, "+8", "#7fd0ff");
+  bus.emit("swapExpired", { type }); updateBeltHUD();
+}
+function collectPowerup(type) {
+  if (!L || L.bankLocked || !["shield", "airstrike", "giant", "jackpot"].includes(type)) return false;
+  if (type === "jackpot") { window.Powerups?.activate(type); return true; }
+  const slot = L.belt.indexOf(null);
+  if (slot < 0) {
+    // A second pickup settles the earlier offer first, so no supplies silently disappear.
+    expireSwap(); L.swap = { type, until: L.time + 3 };
+    bus.emit("swapOffer", { type, until: L.swap.until }); updateBeltHUD(); return true;
+  }
+  L.belt[slot] = type; beltChanged(); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+}
+function coachCounter() {
+  if (!L || L.coach || (state !== "play" && state !== "boss")) return;
+  for (const t of L.threats) {
+    if (!t.teaching || t.done || t.coached || (save.tacticsCounters[t.counter] || 0) >= 2) continue;
+    const slot = L.belt.indexOf(t.counter); if (slot < 0) continue;
+    t.coached = true; L.coach = t.id;
+    // kind is the power-up being taught (airstrike/giant/shield), slot is zero-based.
+    bus.emit("tacticsCoach", { kind: t.counter, slot }); return;
+  }
+}
+function rewardPerfect(type, slow = true) {
+  L.tactics.perfect++; save.tacticsPerfect++;
+  if (type !== "surge") save.tacticsCounters[type] = (save.tacticsCounters[type] || 0) + 1;
+  ctx.addScore(300 * L.level, { raw: true, reason: "perfect" });
+  const before = L.combo; L.combo += 10; L.comboT = COMBO_WINDOW; L.bestCombo = Math.max(L.bestCombo, L.combo);
+  for (const t of COMBO_TIERS) if (before < t[0] && L.combo >= t[0]) bus.emit("combo", { count: L.combo, tier: COMBO_TIERS.length - COMBO_TIERS.indexOf(t), name: t[2], mult: t[1] });
+  if (slow) slowMo(0.4, 0.35); persist();
+}
+function hasPowerTarget(type) {
+  if (type === "shield") {
+    if (L.threat || (state === "boss" && L.boss.hp > 0)) return true;
+    for (const t of L.threats) if (!t.done && L.sz - t.z >= 0 && L.sz - t.z < 24 + SPEED * L.speedMul * 4) return true;
+    for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z <= L.sz + 5 && L.sz - e.z < 4 * (SPEED * L.speedMul + e.sp)) return true;
+    return false;
+  }
+  if (state === "boss" && L.boss.hp > 0) return true;
+  const range = type === "giant" ? SPEED * L.speedMul * 6 : 60;
+  for (const e of L.enemies) if (e.hp > 0 && e.state !== "dying" && e.state !== "dead" && e.z < L.sz + 5 && e.z > L.sz - range) return true;
+  for (const o of L.solids) if (o.alive && o.z < L.sz + 2 && o.z > L.sz - range) return true;
+  return false;
+}
+function usePowerup(slot) {
+  if (!L || (slot !== 0 && slot !== 1) || L.bankLocked || (state !== "play" && state !== "boss")) return false;
+  if (L.swap && L.time >= L.swap.until) expireSwap();
+  if (L.swap) {
+    const type = L.swap.type; L.swap = null; L.belt[slot] = type; beltChanged();
+    bus.emit("swapDone", { type, slot }); bus.emit("powerupGot", { type, slot }); coachCounter(); return true;
+  }
+  const type = L.belt[slot]; if (!type) return false;
+  const threat = L.threat, perfect = !!threat && threat.counter === type, misused = !!threat && !perfect, wasted = !threat && !hasPowerTarget(type);
+  L.belt[slot] = null; L.beltFx[slot] = type; L.beltFxUntil[slot] = L.time + (type === "airstrike" ? 2.5 : 6);
+  L.tactics.used++; if (wasted) L.tactics.wasted++; if (misused) L.tactics.misused++;
+  if (perfect) { threat.countered = true; rewardPerfect(type); }
+  beltChanged();
+  bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
+  window.Powerups?.activate(type); return true;
+}
+function threatLossLeft(t) { return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - 3)); }
+function announceThreat(t) {
+  t.announced = true; Obj3D.threatSign(t);
+  bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
+}
+function liveThreat(t) {
+  t.live = true; L.threat = t;
+  t.lossCap = Math.min(t.kind === "swarm" ? 12 : 10, Math.ceil(L.soldiers.length * 0.24));
+  if (t.kind === "swarm") {
+    const count = Math.round(1.8 * (6 + L.level * 3));
+    for (let i = 0; i < count; i++) {
+      const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
+      e.threat = t; L.enemies.push(e); t.actors.push(e);
+    }
+  } else if (t.kind === "barricade") {
+    for (let i = 0; i < 3; i++) t.actors.push(spawnSolid("barricade", -4.2 + i * 3.6 + (t.gap < 0 ? 1.2 : 0), t.z, 70 + L.level * 8, { threat: t }));
+  } else if (t.kind === "mortars") {
+    for (let i = 0; i < (L.level >= 6 ? 2 : 1); i++) t.actors.push(spawnSolid("mortar", (i ? 1 : -1) * 5.2, t.z, 22 + L.level * 4, { threat: t }));
+  }
+  bus.emit("threatLive", { id: t.id, kind: t.kind }); coachCounter(); updateBeltHUD();
+}
+function endThreat(t) {
+  if (!t || t.done) return;
+  t.done = true; t.live = false;
+  if (t.vis) { t.vis.sign.visible = t.vis.ring.visible = t.vis.shell.visible = false; }
+  if (L.threat === t) L.threat = null;
+  if (L.coach === t.id) L.coach = null;
+  bus.emit("threatEnd", { id: t.id, kind: t.kind, countered: t.countered, lost: t.lost }); updateBeltHUD();
+}
+function updateTactics(dt) {
+  if (L.swap && L.time >= L.swap.until) expireSwap();
+  coachCounter();
+  if (L.bankLocked) return;
+  if (state === "boss" && !L.threat && L.boss.hp > 0) {
+    const t = { id: `slam-${L.slamId = (L.slamId || 0) + 1}`, kind: "slam", counter: "shield", z: L.boss.z, actors: [], age: 0, lost: 0, countered: false };
+    announceThreat(t); liveThreat(t);
+  }
+  if (state === "play") for (const t of L.threats) {
+    if (t.done) continue;
+    const d = L.sz - t.z;
+    if (!t.announced && d <= 24 + 2.5 * SPEED * L.speedMul) announceThreat(t);
+    if (!t.live && d <= 24 && !L.threat) liveThreat(t);
+  }
+  const t = L.threat; if (!t || t.kind === "slam") return;
+  t.age += dt;
+  if (t.kind === "barricade" && L.giantT > 0 && L.sz - t.z < 12) for (const o of t.actors) if (o.alive) breakSolid(o, true);
+  if (t.kind === "mortars") {
+    if (t.shellT > 0) {
+      t.shellT -= dt;
+      const u = Math.min(1, 1 - t.shellT / 0.85);
+      t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.z + (t.targetZ - t.z) * u);
+      if (t.shellT <= 0) {
+        t.vis.shell.visible = t.vis.ring.visible = false;
+        if (L.shieldT <= 0 && Math.abs(L.sx - t.targetX) < 2.8) {
+          const loss = Math.min(2 + L.level % 3, threatLossLeft(t));
+          killSoldiers(loss, t.targetX, true); t.lost += loss;
+        }
+        bus.emit("explosion", { x: t.targetX, z: t.targetZ, radius: 2.8 });
+        L.fx.push({ x: t.targetX, y: 0.3, z: t.targetZ, f: 9, t: 0, dur: 0.4, size: 4 });
+      }
+    }
+    t.shotT -= dt;
+    if (t.shotT <= 0 && t.age < 5.1) {
+      let tower = null; for (const o of t.actors) if (o.alive) { tower = o; break; }
+      if (tower) {
+        t.shotT = 1.6; t.shellT = 0.85; t.fromX = tower.x; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.85;
+        t.vis.ring.position.set(t.targetX, 0.09, t.targetZ); t.vis.ring.visible = t.vis.shell.visible = true;
+      }
+    }
+  }
+  let alive = false;
+  for (const a of t.actors) if (t.kind === "swarm" ? a.hp > 0 && a.state !== "dead" && a.state !== "dying" : a.alive) { alive = true; break; }
+  if ((!alive && !(t.shellT > 0)) || t.age >= 6 || (t.kind === "barricade" && L.sz < t.z - 2)) endThreat(t);
+}
+
+// ---------- level generation ----------
+const isGood = h => h.powerup ? true : h.op === "x" ? h.v >= 1 : h.v >= 0;
+const gateText = h => h.powerup ? "" : h.op === "x" ? `x${h.v}` : (h.v > 0 ? `+${h.v}` : `${h.v}`);
+function makeGate(z, left, right) {
+  const gate = { kind: "gate", z, used: false, halves: [] };
+  for (const [s, spec] of [[-1, left], [1, right]]) gate.halves.push({ x: s * ROAD / 2, hw: ROAD / 2, op: spec[0], v: spec[1], side: s, jackpot: !!(spec[2] && spec[2].jackpot), powerup: spec[0] === "tool" ? spec[1] : null });
+  Obj3D.gate(gate); refreshGate(gate); return gate;
+  }
+  if (level >= 3 && !solids.some(o => o.kind === "weaponCase")) { // guarantee a weapon upgrade on the way
+    const free = zz => !solids.some(o => Math.abs(o.z - zz) < 5) && !gates.some(g => Math.abs(g.z - zz) < 5) && !threats.some(t => Math.abs(t.z - zz) < 35);
+    let zc = -length * 0.35; while (zc > -length * 0.8 && !free(zc)) zc -= 2;
+    solids.push(makeSolid("weaponCase", (rj() < 0.5 ? -1 : 1) * 3.3, zc, 30 + d * 18, { weapon: 2 + Math.floor(rj() * (level >= 4 ? 3 : 2)) }));
+  }
+  const bossHp = Math.round(40 * Math.pow(level, 1.3) + 40);
+  if (!seeded && level > 1) { save.jackDry = jackpots ? 0 : (save.jackDry || 0) + 1; persist(); }
+  return { level, theme, length, gates, solids, enemies, threats, expectedKills: enemies.length, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
+}
+
+// ---------- squad ----------
+function slot(i) { const r = 0.5 * Math.sqrt(i), a = i * 2.39996; return [Math.cos(a) * r, Math.sin(a) * r * 0.85]; }
+function squadRadius(n) { return 0.5 * Math.sqrt(Math.max(1, n)) + 0.35; }
+function addSoldiers(n) {
+  let added = 0;
+  for (let i = 0; i < n && L.soldiers.length < 600; i++, added++) {
+    const [ox, oz] = slot(L.soldiers.length);
+    L.soldiers.push({ x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, ph: Math.random() * 4, born: L.time });
+  }
+  if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
+}
+function killSoldiers(n, nearX = null, force = false) {
+  if (L.bankLocked && state === "boss") return; // victory is locked during the pre-finale celebration
+  if (!force && (L.shieldT > 0 || L.giantT > 0)) return; // SHIELD / GIANT power-ups
+  for (let k = 0; k < n && L.soldiers.length; k++) {
+    let idx = L.soldiers.length - 1;
+    if (nearX !== null) { let best = 1e9; L.soldiers.forEach((s, i) => { const d = Math.abs(s.x - nearX); if (d < best) { best = d; idx = i; } }); }
+    const s = L.soldiers[idx]; L.fx.push({ x: s.x, y: 0.6, z: s.z, f: 4, t: 0, dur: 0.35, size: 1.1 });
+    L.soldiers.splice(idx, 1);
+  }
+  if (n > 0) bus.emit("soldiersLost", { n, total: L.soldiers.length });
+}
+
+// ---------- floating text ----------
+function floatText(x, y, z, text, color) {
+  tmpV.set(x, y, z).project(camera);
+  if (tmpV.z > 1) return;
+  const el = document.createElement("div"); el.className = "float stroke"; el.textContent = text; el.style.color = color;
+  el.style.left = `${(tmpV.x * 0.5 + 0.5) * 100}%`; el.style.top = `${(-tmpV.y * 0.5 + 0.5) * 100}%`;
+  floatsEl.appendChild(el); setTimeout(() => el.remove(), 950);
+}
+
+// ---------- game state ----------
+let state = "loading"; // loading | home | play | boss | win | lose | paused
+let resumeState = "play";
+function startLevel(level, opts = {}) {
+  floatsEl.innerHTML = "";
+  const mod = opts.modifier && MODIFIERS[opts.modifier] ? opts.modifier : null;
+  L = generateLevel(level, { ...opts, modifier: mod });
+  Object.assign(L, { sx: 0, sz: 0, targetX: 0, soldiers: [], bullets: [], fx: [], fireAcc: 0, weapon: 0, shake: 0, time: 0, shotSfx: 0, boomSfx: 0, popSfx: 0, reached: 0, winT: 0,
+    rateMult: mod === "swift" ? 1.25 : 1, speedMul: mod === "swift" ? 1.2 : 1, mode: opts.mode || "normal", modifier: mod, seed: opts.seed, scoreMult: mod ? MODIFIERS[mod].scoreMult : 1,
+    belt: [null, null], beltFx: [null, null], beltFxUntil: [0, 0], swap: null, coach: null,
+    tactics: { perfect: 0, used: 0, wasted: 0, misused: 0, banked: 0, surgePerfect: 0 }, threat: null, surgeReady: false, bankBonus: 0, bankLocked: false,
+    score: 0, kills: 0, combo: 0, comboT: 0, bestCombo: 0, surge: 0, surgeT: 0, surges: 0, idleT: 0, shieldT: 0, giantT: 0, giantK: 1,
+    bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
+  time.scale = time.target = 1; time.slowT = time.stopT = 0; time.lastSlow = time.lastStop = -99;
+  addSoldiers(mod === "lone" ? 1 : START_SQUAD);
+  beltChanged();
+  $("levelName").textContent = mod ? MODIFIERS[mod].name : levelName(level); $("levelNo").textContent = L.mode === "daily" ? "Daily Challenge" : `Level ${level}`;
+  setWeapon(mod === "arsenal" ? 4 : 0);
+  hud.score = 0; hud.best = L.mode === "normal" ? save.bestScore[level] || 0 : 0;
+  bus.emit("generate", { L, level, rng: rng((opts.seed ?? level) * 4241 + 7), length: L.length, theme: L.theme, mode: L.mode, modifier: mod });
+  bus.emit("levelStart", { level, name: levelName(level), theme: L.theme, mode: L.mode, modifier: mod });
+}
+// switch level once its theme's art is loaded (shows the loading screen only if that takes a moment)
+  });
+  // gates
+  for (const g of L.gates) {
+    if (g.used || !(prevZ > g.z && L.sz <= g.z)) continue;
+    g.used = true;
+    const h = g.halves.find(h => (L.sx < 0) === (h.side < 0));
+    const before = L.soldiers.length;
+    const after = h.powerup ? before : h.op === "x" ? Math.round(before * h.v) : before + h.v;
+    if (h.powerup) collectPowerup(h.powerup);
+    if (after > before) {
+      const gain = after - before;
+      addSoldiers(gain); sfx("gate"); floatText(L.sx, 2, L.sz, h.op === "x" ? `x${h.v}` : `+${gain}`, h.jackpot ? "#ffd84a" : "#7fd0ff");
+      addScore(gain * POINTS.soldier, { raw: true, x: L.sx, z: L.sz, reason: "gate" }); fillSurge(Math.min(0.15, gain / 200));
+      if (h.jackpot || (h.op === "x" && h.v >= 3)) slowMo(0.4, 0.45); else if (gain >= Math.max(10, before * 0.4)) hitStop(0.07);
+    }
+    else if (after < before) { killSoldiers(before - after, null, true); breakCombo(); sfx("bad"); vibe(60); flashRed(); floatText(L.sx, 2, L.sz, `${after - before}`, "#ff6a5a"); }
+    Obj3D.gateUsed(g, h);
+    bus.emit("gatePass", { gate: g, half: h, before, after });
+  }
+  // squad runs into unbroken solids: soldiers in that column die, object breaks
+  for (const o of L.solids) {
+    if (!o.alive || !(prevZ > o.z + 0.4 && L.sz <= o.z + 0.4)) continue;
+    const hit = L.soldiers.filter(s => Math.abs(s.x - o.x) < o.hw + 0.2).length;
+    if (!hit) continue;
+    const guarded = L.shieldT > 0 || L.giantT > 0;
+    let lose = guarded || o.kind === "airdrop" ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);
+    if (o.threat) lose = Math.min(lose, threatLossLeft(o.threat));
+    if (lose) { killSoldiers(lose, o.x); breakCombo(); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a"); }
+    if (o.threat) o.threat.lost += lose;
+    breakSolid(o, L.giantT > 0 || o.kind === "airdrop"); // a GIANT squad smashes things and keeps the reward
+  }
+  // shooting (gates/solids above may have changed the count)
+  const nNow = L.soldiers.length;
+  if (nNow > 0) {
+    const n = nNow;
+    const shooters = Math.min(n, MAX_SHOOTERS), per = n / shooters, wp = WEAPONS[L.weapon];
+    L.fireAcc += dt * shooters * fireRate();
+    while (L.fireAcc >= 1) {
+      L.fireAcc -= 1;
+      const s = L.soldiers[Math.floor(Math.random() * n)];
+      for (let k = 0; k < wp.spread; k++) {
+        hit = true; break;
+      }
+    }
+    if (!hit) for (const e of active) {
+      if (e.hp > 0 && Math.abs(b.x - e.x) < e.r + 0.08 && oz >= e.z - 0.3 && b.z <= e.z + 0.3) { hitEnemy(e, b.dmg); if (b.splash) explode(e.x, e.z, b.dmg, b.splash, e); if (b.pierce > 0) { b.pierce--; b.z -= 0.7; } else hit = true; break; }
+    }
+    if (!hit && state === "boss" && b0.hp > 0 && Math.abs(b.x - b0.x) < 2.6 && b.z <= b0.z + 0.5) {
+      b0.hp -= b.dmg * (b.splash ? 1.2 : 1) * (L.giantT > 0 ? 2 : 1); b0.flash = 0.08; hit = true;
+      if (b.splash) L.fx.push({ x: b.x, y: 1.5 + Math.random() * 3, z: b0.z + 1, f: 9, t: 0, dur: 0.4, size: 2.6 });
+      else if (Math.random() < 0.3) L.fx.push({ x: b.x, y: 2 + Math.random() * 3, z: b0.z + 1, f: 4, t: 0, dur: 0.2, size: 1.3 });
+      if (b0.hp <= 0) bossDown();
+    }
+    if (hit || b.life <= 0) L.bullets.splice(i, 1);
+  }
+  // enemies
+  L.boomSfx -= dt;
+  const R = squadRadius(L.soldiers.length);
+  for (const e of L.enemies) {
+    if (e.state === "dead") continue;
+    e.t += dt; e.flash = Math.max(0, e.flash - dt);
+    if (e.state === "dying") { e.dieT += dt; if (e.dieT > 0.9) e.state = "dead"; continue; }
+    if (e.state === "idle" && e.z > L.sz - 48) e.state = "walk";
+    if (e.state !== "walk") continue;
+    e.z += e.sp * dt;
+    const dx = L.sx - e.x; e.x += Math.sign(dx) * Math.min(Math.abs(dx), dt * e.sp * 0.35);
+    // separation
+    if (L.soldiers.length && Math.hypot(e.x - L.sx, (e.z - L.sz) * 1.2) < R * (L.giantT > 0 ? 1.4 : 1) + e.r) {
+      const guarded = L.shieldT > 0 || L.giantT > 0;
+      if (!guarded) {
+        const loss = e.threat ? Math.min(e.dmg, threatLossLeft(e.threat)) : e.dmg;
+        killSoldiers(loss, e.x); if (e.threat) e.threat.lost += loss;
+      }
+      e.hp = 0; e.state = "dying"; e.dieT = 0.3;
+      if (guarded) onKill(e); // trampled by a GIANT squad or bounced off the SHIELD
+      L.fx.push({ x: e.x, y: 0.8, z: e.z, f: 5, t: 0, dur: 0.3, size: 1.4 }); vibe(20);
+      if (e.type === "brute" && !guarded) { flashRed(); L.shake = 0.3; floatText(e.x, 2.5, e.z, `-${e.dmg}`, "#ff6a5a"); }
+    }
+    if (e.z > L.sz + 12) e.state = "dead";
+  }
+  // boss
+  if (state === "boss" && b0.hp > 0) {
+  if (state !== "boss" || L.boss.hp <= 0) return;
+  L.boss.hp -= n; L.boss.flash = 0.08; if (L.boss.hp <= 0) bossDown();
+}
+function bossDown() {
+  if (L.bankLocked) return;
+  if (L.threat) endThreat(L.threat);
+  L.bankLocked = true;
+  const count = (L.belt[0] ? 1 : 0) + (L.belt[1] ? 1 : 0);
+  L.tactics.banked = count; L.bankBonus = count * 0.5;
+  bus.emit("bank", { count, bonus: L.bankBonus });
+  L.swap = null; L.belt[0] = L.belt[1] = null; beltChanged();
+  L.boss.state = "down"; L.shake = 0.6; sfx("boom"); vibe(200);
+  for (let k = 0; k < 6; k++) L.fx.push({ x: L.boss.x + (Math.random() - 0.5) * 4, y: Math.random() * 4, z: L.boss.z + 1, f: 9, t: -k * 0.08, dur: 0.6, size: 4 });
+  L.bossSoldiers = L.soldiers.length; // stars are decided here; the finale cannot lower them
+  addScore(400 + 100 * L.level, { x: L.boss.x, z: L.boss.z, reason: "boss" });
+  slowMo(0.3, 0.6, true);
+  L.winT = 1.2; // counted in step() so pausing can't swallow the win
+  bus.emit("bossDown", { boss: L.boss });
+}
+let flashTimer = 0;
+function flashRed() { const f = $("flash"); f.style.opacity = 1; clearTimeout(flashTimer); flashTimer = setTimeout(() => f.style.opacity = 0, 140); }
+const STAR_PATH = "M12 2l3 6.5 7 .8-5.2 4.8 1.4 7L12 17.6 5.8 21l1.4-7L2 9.3l7-.8z";
+function starIcons(n) { return [0, 1, 2].map(i => `<svg viewBox="0 0 24 24"><path d="${STAR_PATH}" fill="${i < n ? "#ffd84a" : "#3a4a78"}" stroke="#0d1630" stroke-width="1.5"/></svg>`).join(""); }
+function renderLevels() {
+  const grid = $("lvgrid"); grid.innerHTML = "";
+  const last = Math.max(12, Math.ceil((save.unlocked + 1) / 3) * 3);
+  for (let n = 1; n <= last; n++) {
+    const b = document.createElement("button"), open = n <= save.unlocked;
+    b.className = "lvtile" + (n === save.level ? " cur" : ""); b.disabled = !open;
+    b.innerHTML = open ? `<b class="stroke">${n}</b><small>${levelName(n)}</small><span class="st">${starIcons(save.stars[n] || 0)}</span>` : `<b>🔒</b><small>${n}</small>`;
+    b.setAttribute("aria-label", open ? `Level ${n}, ${levelName(n)}, ${save.stars[n] || 0} stars` : `Level ${n}, locked`);
+    b.onclick = () => { save.level = n; persist(); goLevel(n, "home"); };
+    grid.appendChild(b);
+  }
+  grid.querySelector(".cur")?.scrollIntoView({ block: "nearest" });
+}
+function win() {
+  if (state !== "boss" && state !== "bonus") return;
+  const n = L.bossSoldiers || L.soldiers.length, stars = n >= 30 + L.level * 10 ? 3 : n >= 10 + L.level * 3 ? 2 : 1;
+  const normal = L.mode === "normal", total = Math.round(L.score * (L.mult || 1));
+  const newBest = normal && n > (save.bestSquad[L.level] || 0), bestScore = normal ? save.bestScore[L.level] || 0 : 0, newBestScore = normal && total > bestScore;
+  if (normal) {
+    save.best[L.level] = 1; save.stars[L.level] = Math.max(save.stars[L.level] || 0, stars);
+    if (newBest) save.bestSquad[L.level] = n;
+    if (newBestScore) save.bestScore[L.level] = total;
+    save.level = L.level + 1; save.unlocked = Math.max(save.unlocked, save.level); persist();
+  }
+  $("stars").innerHTML = starIcons(stars);
+  $("winSub").textContent = `${total.toLocaleString()} POINTS${L.mult > 1 ? ` · x${L.mult} FINALE` : ""} · ${n} soldiers${newBestScore ? " · NEW BEST!" : ""}`;
+  sfx("win"); setState("win");
+  bus.emit("win", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
+  if (normal) Scenery.preload(themeFor(L.level + 1)).catch(() => {}); // fetch the next theme while the player looks at the stars
+}
+function explode(x, z, dmg, radius, skip = null) {
+  L.fx.push({ x, y: 0.6, z, f: 9, t: 0, dur: 0.4, size: radius * 1.3 });
+  if (L.boomSfx <= 0) { sfx("boom"); L.boomSfx = 0.18; }
+  for (const e of L.enemies) {
+    if (e === skip || e.hp <= 0 || e.state === "dead" || e.state === "dying") continue;
+    if (Math.hypot(e.x - x, e.z - z) < radius + e.r) hitEnemy(e, dmg * 0.6);
+  }
+}
+    banner.append(title, subtitle);
+    game.appendChild(banner);
+
+    const icon = document.createElement("img");
+    icon.alt = ""; icon.hidden = true; banner.prepend(icon);
+    const layers = ["gold", "lines", "blue", "orange", "flash"].map(kind => {
+      const el = document.createElement("div");
+      el.className = "juice-layer juice-" + kind;
+      el.setAttribute("aria-hidden", "true"); game.appendChild(el);
+      return { el, value: 0 };
+    });
+    let flash = 0;
+    function enqueue(text, options = {}) {
+      if (!inRun()) return;
+      callouts.push(Object.assign({ text, color: "#fff", size: 7, sub: "", icon: "", stamp: false }, options));
+    }
+    function nextCallout() {
+      current = callouts.shift() || null; calloutAge = 0;
+      if (!current) { banner.hidden = true; return; }
+      const oldRing = banner.querySelector(".jt-ring"); if (oldRing) oldRing.remove();
+      if (current.ring) { const ring = document.createElement("i"); ring.className = "jt-ring"; banner.appendChild(ring); }
+      title.textContent = current.text; subtitle.textContent = current.sub;
+      subtitle.hidden = !current.sub;
+      icon.hidden = !current.icon;
+      if (current.icon) icon.src = "assets/ui/icons/" + current.icon + ".webp";
+      banner.className = "juice-banner" + (current.stamp ? " juice-stamp" : "");
+      banner.style.setProperty("--color", current.color);
+      banner.style.setProperty("--heat", current.color + "55");
+      banner.style.setProperty("--size", current.size + "vw");
+      banner.style.opacity = "0"; banner.hidden = false;
+    }
+    function showBanner(isBoss) {
+      enqueue(isBoss ? "BOSS!" : `LEVEL ${level ? level.level : (ctx.L ? ctx.L.level : 1)}`, {
+        sub: isBoss ? "" : (level ? level.name : ""), color: isBoss ? "#ff6957" : "#8bd9ff"
+      });
+    }
+    function clearMoments() {
+      clearTactics();
+      callouts.length = 0; current = null; banner.hidden = true;
+      trauma = pullback = surgeKick = flash = 0;
+      surgeOn = shieldOn = giantOn = false;
+      layers.forEach(layer => { layer.value = 0; layer.el.style.opacity = "0"; });
+      flights.forEach(f => f.el.remove()); flights.length = 0;
+      meterHot = false; if ($("surgeBar")) $("surgeBar").classList.remove("juice-hot");
+    }
+    function updateMoments(delta, active, L) {
+      if (active) {
+        if (!current && callouts.length) nextCallout();
+        if (current) {
+          calloutAge += delta;
+          const t = clamp(calloutAge / .8, 0, 1);
+          banner.style.opacity = String(Math.min(1, t / .12, (1 - t) / .18));
+          banner.style.transform = reduced ? "none" : `scale(${1 + .18 * Math.pow(1 - clamp(t / .3, 0, 1), 2)})`;
+          if (t >= 1) nextCallout();
+        }
+      }
+      flash = Math.max(0, flash - delta * 2);
+      const targets = [surgeOn ? 1 : 0, surgeOn && !reduced ? .65 : 0, shieldOn ? .065 : 0, giantOn ? .065 : 0, flash];
+      layers.forEach((layer, i) => {
+        const value = layer.value + (targets[i] - layer.value) * Math.min(1, delta * 8);
+        const rounded = Math.abs(value - targets[i]) < .001 ? targets[i] : value;
+}
+
+/* ---------------- toasts ---------------- */
+let toastBox;
+function toast(html, cls) {
+  if (!toastBox) return;
+  const t = document.createElement("div"); t.className = "mt-toast " + (cls || ""); t.innerHTML = html;
+  toastBox.appendChild(t);
+  while (toastBox.children.length > 3) toastBox.firstChild.remove();
+  setTimeout(() => t.classList.add("out"), 2600);
+  setTimeout(() => t.remove(), 3000);
+}
+
+/* ---------------- days / daily ---------------- */
+function dayIndex(d) { d = d || new Date(); return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DAY0) / 864e5); }
+function dailyInfo() {
+  try {
+    const ta = document.createElement("textarea"); ta.value = text; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove(); toast("<span><b>Copied!</b></span>", "tr");
+  } catch (e) { toast("<span><b>Could not share</b></span>", "tr"); }
+}
+
+/* ---------------- CSS ---------------- */
+const CSS = `
+.mi{width:1.15em;height:1.15em;flex:none;display:inline-block;vertical-align:middle;object-fit:contain}
+.mt-toast{display:flex;align-items:center;gap:8px;max-width:92%;padding:6px 14px 6px 8px;border-radius:14px;background:linear-gradient(#2b4a9a,#1b2a52);border:2px solid #0d1630;box-shadow:0 3px 0 #0d1630,0 8px 18px #0006;font:15px 'Lilita One',sans-serif;color:#fff;animation:mtIn .35s cubic-bezier(.2,1.4,.4,1) both;transition:opacity .35s,transform .35s}
+.mt-toast .mi{width:30px;height:30px}.mt-toast span{display:grid;line-height:1.1;text-align:left}.mt-toast small{font:12px Nunito,sans-serif;font-weight:800;color:#bcd0ff}
+  const pn = q("#winModal .panel"); if (!pn) return;
+  const row = ensureWinButtons();
+  const wrap = document.createElement("div"); wrap.className = "mt";
+  const rows = [];
+  const add = (lab, val, fmtFn) => rows.push({ lab, val, fmtFn });
+  if (x.kills != null) add("KILLS", x.kills);
+  if (x.bc) add("BEST COMBO", x.bc);
+  add("SQUAD", d.n || 0);
+  if (d.mult > 1) add("FINALE", d.mult, v => "x" + (Math.round(v * 10) / 10));
+  add("TACTICS", run.perfect, () => `${run.perfect} PERFECT · +${run.bankBonus.toFixed(1)}× banked · ${run.wasted} wasted`);
+  const hasTotal = x.total != null;
+  let html = `<div class="mt-grid">` + rows.map((r, i) => `<div class="mt-r${r.lab === "TACTICS" ? " mt-tactics" : ""}" data-i="${i}"><span>${r.lab}</span><b>${r.fmtFn ? r.fmtFn(r.val) : fmt(r.val)}</b></div>`).join("") + `</div>`;
+  if (run.perfect >= 2 && run.wasted === 0) html += '<div class="mt-hint" style="color:#ffd84a">★ TACTICIAN</div>';
+  if (hasTotal) html += `<div class="mt-total" id="mtTotal"><span class="lb">SCORE</span><span class="num" id="mtNum">0</span><span class="mt-best" id="mtBest">NEW BEST!</span><span class="mt-spark" id="mtSpark"></span></div>`;
+  const n = d.n || 0, lv = d.level || (ctx.L && ctx.L.level) || 1, t3 = 30 + 10 * lv, t2 = 10 + 3 * lv;
+  if ((d.stars || 0) < 3) {
+    const need = (d.stars || 0) >= 2 ? t3 - n : t2 - n, tgt = (d.stars || 0) >= 2 ? "★★★" : "★★";
+    if (need > 0) html += `<div class="mt-hint">${need} more soldier${need > 1 ? "s" : ""} for ${tgt}</div>`;
+  }
+  if (x.dinfo) {
+    const s = effStreak();
+    html += `<div class="mt-dly">DAILY #${x.dinfo.num}${s > 0 ? " · " + s + "-day streak" : ""}${x.drec && x.drec.used ? " · freeze saved your streak" : ""}</div>`;
+  }
+  if (active()) {
+    const goal = nextUnlockGoal(); if (goal) html += `<div class="mt-goal">Next: ${goal}</div>`;
+    html += `<div class="mt-ms" id="mtMs"></div>`;
+  }
+  wrap.innerHTML = html;
+  const anchor = $("winSub"); (anchor || pn.firstChild).after(wrap);
+43:#game .juice-vignette{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 36%,#ed25335c 72%,#d90025b8 100%)}
+44:#game .juice-banner{position:absolute;left:6%;right:6%;top:32%;z-index:5;pointer-events:none;text-align:center;padding:14px 12px 17px;border:3px solid #102b65;border-radius:20px;background:linear-gradient(165deg,#6bcaff,#2874ed);box-shadow:0 6px 0 #102b65,0 12px 30px #10214455;color:#fff;font-family:'Lilita One',Nunito,sans-serif;transform-origin:center}
+45:#game .juice-banner strong{display:block;font-size:clamp(30px,9vw,48px);line-height:1.05;text-shadow:0 3px #102b65}
+46:#game .juice-banner small{display:block;font-size:17px;margin-top:5px;letter-spacing:1px}
+47:#game .juice-banner.juice-boss{background:linear-gradient(165deg,#ff8863,#ed2840);border-color:#80152a;box-shadow:0 6px 0 #80152a,0 12px 30px #80152a55}
+49:#game .modal .panel{position:relative;z-index:1;transform-origin:50% 55%}
+50:#game .juice-confetti{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+51:.juice-confetti i{position:absolute;left:50%;top:28%;width:8px;height:13px;border-radius:2px;opacity:0;animation:juice-confetti 2.1s linear forwards;animation-delay:var(--delay)}
+55:#game .juice-banner{top:19%;padding:10px 8px;border-color:#543418;background:linear-gradient(165deg,#302e49ee,#151a32ee);box-shadow:0 4px 0 #111b35,0 0 24px var(--heat,#ffc84955);color:var(--color,#fff)}
+56:#game .juice-banner strong{font-size:clamp(24px,var(--size,7vw),48px);text-shadow:0 3px #261b30}
+57:#game .juice-banner img{width:42px;height:42px;object-fit:contain;vertical-align:middle;margin-bottom:3px}
+58:#game .juice-banner.juice-stamp{top:43%;border:0;background:none;box-shadow:none}
+60:#game .juice-layer{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0}
+66:#game .juice-points{position:absolute;z-index:5;pointer-events:none;font:24px 'Lilita One',sans-serif;color:#ffe68a;text-shadow:0 2px 2px #34251d}
+86:#game .jt-chip{position:absolute;z-index:6;pointer-events:none;background:#17223aef;border:2px solid #705934;border-radius:16px;padding:7px 10px;color:#ffe392;font:16px 'Lilita One',sans-serif;text-align:center;max-width:90%;box-sizing:border-box}
+89:#game .jt-threat{top:110px;left:50%;transform:translateX(-50%);white-space:nowrap}
+94:#game .jt-coach span{position:absolute;top:100%;font-size:32px;left:var(--finger,50%);transform:translateX(-50%);animation:jt-point .6s ease-in-out infinite alternate}
+97:@keyframes jt-point{to{margin-top:8px;filter:drop-shadow(0 0 7px #ffd84a)}}
+195:    const banner = document.createElement("div");
+196:    banner.className = "juice-banner";
+197:    banner.setAttribute("aria-hidden", "true");
+198:    banner.hidden = true;
+200:    banner.append(title, subtitle);
+201:    game.appendChild(banner);
+204:    icon.alt = ""; icon.hidden = true; banner.prepend(icon);
+218:      if (!current) { banner.hidden = true; return; }
+219:      const oldRing = banner.querySelector(".jt-ring"); if (oldRing) oldRing.remove();
+220:      if (current.ring) { const ring = document.createElement("i"); ring.className = "jt-ring"; banner.appendChild(ring); }
+225:      banner.className = "juice-banner" + (current.stamp ? " juice-stamp" : "");
+226:      banner.style.setProperty("--color", current.color);
+c1.png
+c2.png
+c3.png
+c4.png
+cc-socks
+check-tactics-visuals.js
+check-tactics.js
+chime.bak
+chk.js
+claude-0
+claude-append-system-prompt.txt
+claude-code-1034348734.diag.log
+claude-code-1368653717.diag.log
+claude-code-2355450372.diag.log
+claude-code-247197849.diag.log
+claude-code-3045239895.diag.log
+claude-code-4072892809.diag.log
+claude-code-589033736.diag.log
+claude-code-596412939.diag.log
+claude-code-807780561.diag.log
+claude-code-896049794.diag.log
+claude-code.log
+claude-command
+code-sign
+codesign-mcp-config.json
+codex-bwrap-synthetic-mount-targets-0
+codex-daemon-0
+env-manager.log
+environment-manager-1283055106.diag.log
+environment-manager-142058170.diag.log
+environment-manager-1825226991.diag.log
+environment-manager-1830460626.diag.log
+environment-manager-2173333106.diag.log
+environment-manager-2542601094.diag.log
+environment-manager-3535094293.diag.log
+environment-manager-3568184427.diag.log
+environment-manager-4148071494.diag.log
+environment-manager-767402411.diag.log
+environment-manager-cse_01KHq9E4PP77B82NWFRYgzJt.lock
+environment-manager-cse_01KHq9E5MBREE6g39ggw2JyL.lock
+environment-manager.out
+gen_.log
+gen_arena.log
+gen_bridge.log
+gen_desert.log
+gen_g.log
+gen_logo.log
+gen_p1.log
+gen_p2.log
+gen_pier.log
+gen_ruins.log
+gen_sa2.log
+gen_sb2.log
+gen_st.log
+gen_sw.log
+gen_town.log
+hero-new.js
+hsperfdata_root
+ic1.log
+ic2.log
+initgoogle_syslog_dir.0
+lamp.bak
+mat-debug-173.log
+mat-debug-954.log
+mcp-config-cse_01KHq9E4PP77B82NWFRYgzJt.json
+node-compile-cache
+playwright-artifacts-40IjVM
+playwright-artifacts-Ufukba
+playwright-artifacts-h8kyXy
+playwright-artifacts-umTazL
+playwright_chromiumdev_profile-LmvxWU
+playwright_chromiumdev_profile-e0Yw2Z
+playwright_chromiumdev_profile-gckbzO
+playwright_chromiumdev_profile-oSbPzq
+pu.log
+pulse-PKdhtXMmr18n
+ruby-build.20261027194449.544.log
+ruby-build.20261027194558.12508.log
+ruby-build.20261027194705.24690.log
+sky.log
+span.js
+squad-final-inline-7.js
+squad-inline-7.js
+tactics-core.py
+tactics-functions.txt
+tactics-powerups.py
+tactics-visuals.py
+title.bak
+uv-22a0e7931f9bd769.lock
+uv-266d0b89619b88f5.lock
+uv-2efeda42c0254870.lock
+uv-34f8a03ede367f42.lock
+uv-355b0858434c27c0.lock
+uv-4a82edf34c5d495d.lock
+uv-5ff565eb2d7e502e.lock
+uv-bcb837755ba79986.lock
+uv-e0680593bbb538ab.lock
+v8-compile-cache-0
+wick-numeric.js
+wick-qa.js
+x.png
+tools/check-tactics.js
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/declarative_performance_observer.db
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/LOG
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/000003.log
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/LOCK
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/CURRENT
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/MANIFEST-000001
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/metadata/LOG
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/metadata/000003.log
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/metadata/LOCK
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/metadata/CURRENT
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/shared_proto_db/metadata/MANIFEST-000001
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Shared Dictionary/db
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Shared Dictionary/db-journal
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Shared Dictionary/cache/index
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Shared Dictionary/cache/index-dir/the-real-index
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Code Cache/js/index
+/usr/bin/google-chrome
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Code Cache/js/index-dir/the-real-index
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Code Cache/wasm/index
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Code Cache/wasm/index-dir/the-real-index
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/declarative_performance_observer.db-journal
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/PersistentOriginTrials/LOG
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/PersistentOriginTrials/LOCK
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Local Storage/leveldb/LOG
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Local Storage/leveldb/000003.log
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Local Storage/leveldb/LOCK
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Local Storage/leveldb/CURRENT
+/tmp/playwright_chromiumdev_profile-e0Yw2Z/Default/Local Storage/leveldb/MANIFEST-000001
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.module.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/package.json
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/examples/js/textures/FlakesTexture.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/examples/js/geometries/DecalGeometry.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/examples/js/geometries/TeapotGeometry.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/examples/js/geometries/BoxLineGeometry.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/examples/js/geometries/ParametricGeometries.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/examples/js/geometries/ConvexGeometry.js
+/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/examples/js/geometries/RoundedBoxGeometry.js
+
+codex
+The fixed loss cap is the main issue: large squads can absorb ignored threats with little consequence. I’ll scale that budget, track the pre-boss squad peak for stars, and make PERFECT interrupt the callout queue. I’ll also add threat-loss details to the bot output so we can see whether each hazard actually uses its budget.
+
+exec
+/bin/bash -lc "rg -n 'metaToasts|shotT|function enemy|hp:|dmg:' js/meta.js index.html | head -30
+sed -n '1,90p' tools/check-tactics.js
+sed -n '635,665p' index.html
+node -p 'require.resolve(\"playwright\")'" in /home/user/my-first-repo/squad-surge
+ succeeded in 0ms:
+index.html:235:  { name: "PISTOL", img: "assets/w-pistol.png", dmg: 1, rate: 1, spread: 1 },
+index.html:236:  { name: "RIFLE", img: "assets/w-rifle.png", dmg: 1.4, rate: 1.35, spread: 1 },
+index.html:237:  { name: "SHOTGUN", img: "assets/w-shotgun.png", dmg: 1.2, rate: 1, spread: 3 },
+index.html:238:  { name: "MINIGUN", img: "assets/w-minigun.png", dmg: 1.3, rate: 2.4, spread: 1 },
+index.html:239:  { name: "BAZOOKA", img: "assets/w-bazooka.png", dmg: 7, rate: 0.4, spread: 1, splash: 2.6 },
+index.html:590:    t.shotT -= dt;
+index.html:591:    if (t.shotT <= 0 && t.age < 5.1) {
+index.html:594:        t.shotT = 1.6; t.shellT = 0.85; t.fromX = tower.x; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.85;
+index.html:623:function enemy(type, x, z, level) {
+index.html:625:  const def = { zombie: { hp: 2, r: 0.42, h: 1.45, sp: 2.6, dmg: 1 }, grunt: { hp: 2, r: 0.42, h: 1.45, sp: 3.2, dmg: 1 }, brute: { hp: 22, r: 0.85, h: 2.3, sp: 2.2, dmg: 5 } }[type];
+index.html:626:  return { type, x, z, hp: def.hp * hpScale, maxHp: def.hp * hpScale, r: def.r, h: def.h, sp: def.sp * (0.85 + Math.random() * 0.3), dmg: def.dmg, state: "idle", t: Math.random() * 4, flash: 0, dieT: 0 };
+index.html:643:      threats.push({ id: `road-${i}`, kind, counter: THREAT_COUNTER[kind], z: -100 - i * (length - 165) / (count - 1), announced: false, live: false, done: false, countered: false, lost: 0, actors: [], age: 0, shotT: 0, shellT: 0, gap: rj() < 0.5 ? -1 : 1, teaching: i === 0 && level <= 4 });
+index.html:718:  return { level, theme, length, gates, solids, enemies, threats, expectedKills: enemies.length, boss: { x: 0, z: -length - 14, hp: bossHp, maxHp: bossHp, state: "wait", t: 0, flash: 0, slamT: 0 } };
+index.html:1037:        L.bullets.push({ x: s.x + 0.12, z: s.z - 0.4, vx, life: BULLET_RANGE / BULLET_SPEED, dmg: damage() * per, splash: wp.splash || 0, pierce: L.surgeT > 0 ? 1 : 0 });
+js/meta.js:369:#metaToasts{position:absolute;left:0;right:0;top:calc(max(10px,env(safe-area-inset-top)) + 96px);z-index:30;display:grid;justify-items:center;gap:6px;pointer-events:none}
+js/meta.js:910:    toastBox = document.createElement("div"); toastBox.id = "metaToasts"; game.appendChild(toastBox);
+#!/usr/bin/env node
+"use strict";
+// Browser-free behavioral checks using the real inline simulation, Powerups and Obj3D.
+// Stubs DOM, texture loading, PMREM and renderer only; does not validate pixels or GPU shaders.
+// Run from the repository root:
+//   THREE_LOCAL=/path/to/three-r128.min.js node tools/check-tactics.js
+// The Playwright bot remains the authoritative browser balance check.
+const fs = require('fs'), vm = require('vm'), assert = require('assert');
+const THREE = require(process.env.THREE_LOCAL || 'three');
+THREE.TextureLoader.prototype.load = function(url, cb) { const t = new THREE.Texture({width:128,height:128}); if(cb) cb(t); return t; };
+const noop=()=>{};
+const elements = new Map();
+const paint = new Proxy({createLinearGradient:()=>({addColorStop:noop}),createRadialGradient:()=>({addColorStop:noop}),measureText:t=>({width:t.length*10})}, {get:(o,k)=>o[k]||noop});
+function el() { return {hidden:false,style:{},dataset:{},classList:{toggle:noop,add:noop,remove:noop},setAttribute:noop,appendChild:noop,remove:noop,addEventListener:noop,querySelector:()=>null,closest:()=>null,getBoundingClientRect:()=>({left:0,right:70,top:0,bottom:70}),getContext:()=>paint,clientWidth:390,clientHeight:780, firstElementChild:{hidden:true,src:''}}; }
+const document={getElementById:id=>{if(!elements.has(id))elements.set(id,el());return elements.get(id);},createElement:el,addEventListener:noop};
+
+const sandbox={console,THREE,document,Scenery:{build:noop,preload:async()=>{},update:noop},localStorage:{getItem:()=>JSON.stringify({sound:false,vibe:false}),setItem:noop},performance:{now:()=>10000},location:{search:''},devicePixelRatio:1,matchMedia:()=>({matches:true}),navigator:{},setTimeout:noop,clearTimeout:noop,addEventListener:noop,requestAnimationFrame:noop};
+sandbox.window=sandbox;
+THREE.PMREMGenerator = class { fromScene() { return {texture:new THREE.Texture()}; } dispose() {} };
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync('js/objects3d.js','utf8'),sandbox);
+vm.runInContext(fs.readFileSync('js/powerups.js','utf8'),sandbox);
+let src=fs.readFileSync('index.html','utf8').match(/<script>\s*"use strict";([\s\S]*?)<\/script>/)[1];
+src=src.slice(0,src.indexOf('// ---------- boot ----------'));
+src=src.replace('new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" })','({setPixelRatio(){},setSize(){},render(){},shadowMap:{enabled:false}})');
+vm.runInContext(src+'\nwindow.H={ctx,startLevel,setState,step,fillSurge,updateTactics,collectPowerup,usePowerup,useSurge,liveThreat,announceThreat,endThreat,damageBoss,bossDown,finishLevel,breakSolid,fireRate,damage,get L(){return L},get state(){return state},save,bus}; Obj3D.setup(ctx); Powerups.setup(ctx);',sandbox);
+const H=sandbox.H,events=[];for(const n of ['belt','powerupGot','swapOffer','swapDone','swapExpired','powerupUse','threat','threatLive','threatEnd','surgeReady','bank','win','tacticsCoach'])H.bus.on(n,d=>events.push([n,d]));
+function start(l=2){H.startLevel(l);H.setState('play');events.length=0;}
+start();H.collectPowerup('shield');H.collectPowerup('giant');assert.deepEqual(Array.from(H.ctx.belt),['shield','giant']);const before=H.L.soldiers.length;
+H.collectPowerup('airstrike');H.L.time+=3.1;H.updateTactics(.01);assert.equal(H.L.soldiers.length,before+8);assert.equal(H.ctx.belt[0],'shield');
+H.collectPowerup('airstrike');H.usePowerup(1);assert.equal(H.ctx.belt[1],'airstrike');assert.equal(H.ctx.tactics.used,0);
+H.L.threats=[];H.L.enemies=[];H.L.solids=[];H.usePowerup(1);assert.equal(H.ctx.tactics.wasted,1);assert.equal(H.ctx.belt[1],null);
+H.setState('paused');assert.equal(H.usePowerup(0),false);assert.equal(H.ctx.belt[0],'shield');H.setState('play');
+start();H.fillSurge(1);assert(H.ctx.surgeReady);const uses=H.L.surges;H.L.idleT=10;H.step(.05);assert.equal(H.L.surge,1);assert.equal(H.L.surges,uses);
+H.setState('boss');H.L.boss.z=H.L.sz-20;H.useSurge();assert.equal(H.ctx.surgeReady,false);assert.equal(H.L.tactics.surgePerfect,1);assert(events.some(e=>e[0]==='powerupUse'&&e[1].type==='surge'&&e[1].perfect));
+start(3);const t=H.L.threats[0];H.L.sz=t.z+24;H.updateTactics(.01);assert.equal(H.ctx.threat.kind,'barricade');H.collectPowerup('giant');const score=H.L.score;H.usePowerup(0);assert.equal(H.L.score-score,900);assert.equal(H.L.tactics.perfect,1);assert.equal(H.L.combo,10);H.L.sz=t.z+10;H.updateTactics(.01);assert(t.actors.every(o=>!o.alive));assert(t.done);
+start(4);const m=H.L.threats[0];H.ctx.addSoldiers(45);H.L.sz=m.z+24;H.updateTactics(.01);H.collectPowerup('shield');H.usePowerup(0);const protectedN=H.L.soldiers.length;for(let i=0;i<100;i++){H.L.sz-=.05*8.5;H.updateTactics(.05);}assert.equal(H.L.soldiers.length,protectedN);
+start(4);H.setState('boss');H.L.boss.z=H.L.sz-14;H.collectPowerup('airstrike');const hp=H.L.boss.hp;H.usePowerup(0);assert(Math.abs(H.L.boss.hp-hp*.82)<1e-7);
+start(3);H.collectPowerup('shield');H.collectPowerup('giant');H.setState('boss');H.damageBoss(H.L.boss.hp);assert.equal(H.L.bankBonus,1);assert.equal(H.ctx.tactics.banked,2);assert(H.ctx.belt.every(x=>x===null));H.finishLevel(3);assert.equal(H.L.mult,4);assert.equal(H.state,'win');H.finishLevel(3);assert.equal(H.L.mult,4);
+for(let level=2;level<=8;level++){start(level);assert.equal(H.L.threats.length,level>=6?3:2);assert.equal(H.L.gates.filter(g=>g.halves.some(h=>h.powerup)).length,level>=3?1:0);for(let i=1;i<H.L.threats.length;i++)assert(H.L.threats[i-1].z-H.L.threats[i].z>80);}
+console.log('PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.');
+// Pure simulation smoke: actual core and power-up module, stubbing only DOM/graphics.
+for(let level=1;level<=8;level++){start(level);for(let i=0;i<6000&&['play','boss'].includes(H.state);i++){const L=H.L;let target=0;for(const g of L.gates){if(g.used||g.z>L.sz||g.z<L.sz-30)continue;const val=h=>h.powerup?L.soldiers.length+8:h.op==='x'?L.soldiers.length*h.v:L.soldiers.length+h.v;target=val(g.halves[0])>val(g.halves[1])?g.halves[0].x:g.halves[1].x;break;}L.targetX=H.state==='boss'?(L.boss.slamT>1.5?(L.boss.x>0?-5:5):0):target;H.step(.05);}console.log(JSON.stringify({level,state:H.state,squad:H.L.bossSoldiers||H.L.soldiers.length,used:H.ctx.tactics.used,perfect:H.ctx.tactics.perfect}));assert.equal(H.state,'win');}
+
+// The three introductory supplies must be on the belt before their first encounter,
+// even if steering misses the crate. No button is pressed during this check.
+for (const level of [2, 3, 4]) {
+  start(level);
+  const first = H.L.threats[0];
+  for (let i = 0; i < 400 && !first.live && !first.done; i++) {
+    H.L.targetX = 4.5; H.step(.05);
+  }
+  assert(first.live || first.done);
+  assert(H.ctx.belt.includes(first.counter), `Level ${level} teaching counter missing`);
+  assert(events.some(e => e[0] === 'tacticsCoach' && e[1].kind === first.counter));
+}
+// MISUSED gives no PERFECT score; repeat starts discard both offers and held SURGE.
+start(3); H.L.sz = H.L.threats[0].z + 24; H.updateTactics(.01);
+H.collectPowerup('shield'); const misuseScore = H.L.score; H.usePowerup(0);
+assert.equal(H.ctx.tactics.misused, 1); assert.equal(H.L.score, misuseScore);
+H.collectPowerup('shield'); H.collectPowerup('giant'); H.collectPowerup('airstrike'); H.fillSurge(1);
+start(3); assert.equal(H.L.swap, null); assert.equal(H.ctx.surgeReady, false); assert(H.ctx.belt.every(x => x === null));
+console.log('PASS: guaranteed teaching supplies/coaches, MISUSED classification, restart cleanup.');
+// Bomb ticks must not secretly deal additional boss damage after the initial 18%.
+start(4); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+H.collectPowerup('airstrike'); H.usePowerup(0);
+const afterStrike = H.L.boss.hp;
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'boss' });
+assert.equal(H.L.boss.hp, afterStrike);
+// The same bullet does exactly twice the boss damage while GIANT is active.
+const bossHits = [];
+for (const giant of [false, true]) {
+  start(3); H.setState('boss'); H.L.boss.z = H.L.sz - 14;
+  if (giant) H.ctx.setGiant(6);
+  H.L.bullets.push({ x: 0, z: H.L.boss.z + 1, vx: 0, life: 1, dmg: 10, splash: 0, pierce: 0 });
+  const hp = H.L.boss.hp; H.step(.02); bossHits.push(hp - H.L.boss.hp);
+}
+assert.deepEqual(bossHits, [10, 20]);
+// Counter clears a dense SWARM; road threat losses stay bounded without a counter.
+start(2); const swarm = H.L.threats[0]; H.L.sz = swarm.z + 24; H.updateTactics(.01);
+H.collectPowerup('airstrike'); H.usePowerup(0);
+for (let i = 0; i < 70; i++) H.bus.emit('tick', { dt: .05, L: H.L, state: 'play' });
+assert(swarm.actors.filter(e => e.hp <= 0).length >= swarm.actors.length * .8);
+start(4); const mortar = H.L.threats[0]; H.L.sz = mortar.z + 24; H.updateTactics(.01);
+for (let i = 0; i < 130; i++) H.updateTactics(.05);
+assert(mortar.done); assert(mortar.lost <= mortar.lossCap); assert(H.L.soldiers.length >= 3);
+// Per-level label resources are disposed; old warning meshes detach on restart.
+let disposed = false;
+mortar.vis.sign.children[1].material.addEventListener('dispose', () => { disposed = true; });
+start(2); assert(disposed); assert.equal(mortar.vis.sign.parent, null);
+  const length = Math.min(200 + level * 35, 520);
+  Obj3D.clear(); Scenery.build(theme, length);
+  const gates = [], solids = [], enemies = [];
+  const threats = [];
+  if (level >= 2) {
+    const count = level >= 6 ? 3 : 2, kinds = level >= 4 ? ["swarm", "barricade", "mortars"] : level >= 3 ? ["swarm", "barricade"] : ["swarm"];
+    for (let i = 0; i < count; i++) {
+      const kind = i === 0 && level <= 4 ? kinds[kinds.length - 1] : kinds[(i + level) % kinds.length];
+      threats.push({ id: `road-${i}`, kind, counter: THREAT_COUNTER[kind], z: -100 - i * (length - 165) / (count - 1), announced: false, live: false, done: false, countered: false, lost: 0, actors: [], age: 0, shotT: 0, shellT: 0, gap: rj() < 0.5 ? -1 : 1, teaching: i === 0 && level <= 4 });
+    }
+  }
+  let threatIndex = 0;
+  const etype = theme.enemy, d = level;
+  const horde = (z, n, spread = 4.2, depth = 6) => {
+    n = Math.round(n * hordeMul);
+    for (let i = 0; i < n; i++) enemies.push(enemy(etype, (r() * 2 - 1) * spread, z - r() * depth, level));
+    if (mod === "brutes") enemies.push(enemy("brute", (rj() * 2 - 1) * 3, z - depth * 0.5, level));
+  };
+  let z = -26;
+  if (level === 1) { // tutorial: shoot the gate up, small hordes, one lane strip, case, tiny boss
+    gates.push(makeGate(z, ["+", -5], ["+", 4])); z -= 30;
+    horde(z, 5, 3); z -= 26;
+    gates.push(makeGate(z, ["x", 2], ["+", -3])); z -= 24;
+    for (let i = 0; i < 6; i++) solids.push(makeSolid("blockBlue", -4.6, z - i * 2.6, 3, { reward: 1 }));
+    horde(z - 4, 8, 2.2, 10); z -= 32;
+    solids.push(makeSolid("weaponCase", 3.3, z, 30, { weapon: 1 })); solids.push(makeSolid("ammo", -3.3, z, 18, { ammo: true })); horde(z - 6, 8, 3); z -= 30;
+    gates.push(makeGate(z, ["+", 6], ["+", -8])); z -= 26;
+    horde(z, 16, 4.5, 10);
+  } else {
+    // every level opens with a free boost so the squad isn't wiped by the first wave
+    gates.push(makeGate(z, ["+", 4 + d], ["+", 8 + d])); z -= 26;
+/opt/node-tools/node_modules/playwright/index.js
+
+exec
+/bin/bash -lc "python3 - <<'PY'
+p='index.html'
+s=open(p).read().replace('L.soldiers.length - 3)); }','L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }')
+s=s.replace('t.lossCap = Math.min(t.kind === \"swarm\" ? 12 : 10, Math.ceil(L.soldiers.length * 0.24));','t.startSquad = L.soldiers.length;\\n  t.lossCap = Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));')
+s=s.replace('Math.round(1.8 * (6 + L.level * 3))','clamp(Math.round(t.startSquad * 0.3), 12 + 3 * L.level, 90)')
+s=s.replace('2 + L.level % 3, threatLossLeft(t)','Math.max(2, Math.ceil(L.soldiers.length * 0.03)), threatLossLeft(t)')
+s=s.replace('t.shellT / 0.85','t.shellT / 0.65').replace('t.age < 5.1','t.age < 5.3').replace('t.shotT = 1.6; t.shellT = 0.85','t.shotT = 0.7; t.shellT = 0.65').replace('SPEED * L.speedMul * 0.85','SPEED * L.speedMul * 0.65')
+s=s.replace('if (o.threat) lose = Math.min(lose, threatLossLeft(o.threat));','if (o.threat) lose = Math.min(o.kind === \"barricade\" && "'!guarded ? o.threat.lossCap : lose, threatLossLeft(o.threat));'"')
+s=s.replace('if (added) bus.emit(\"soldiersAdded\"', 'if (L.boss.state === \"wait\") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);\\n  if (added) bus.emit(\"soldiersAdded\"')
+s=s.replace('bossSoldiers: 0, mult:', 'peakSquad: 0, bossSoldiers: 0, mult:')
+s=s.replace('const n = L.bossSoldiers || L.soldiers.length, stars = n >= 30 + L.level * 10 ? 3 : n >= 10 + L.level * 3 ? 2 : 1;', 'const n = L.bossSoldiers || L.soldiers.length, kept = Math.min(1, n / Math.max(1, L.peakSquad));\\n  const keptPct = Math.round(kept * 100), stars = n >= 30 + L.level * 10 && kept >= 0.65 ? 3 : n >= 10 + L.level * 3 && kept >= 0.35 ? 2 : 1;')
+s=s.replace('finaleMult: L.finaleMult || 1, stars, n,','finaleMult: L.finaleMult || 1, stars, keptPct, n,')
+open(p,'w').write(s)
+p='js/juice.js';s=open(p).read().replace('size: 9, ring: true','size: 9, ring: true, priority: true')
+s=s.replace('callouts.push(Object.assign({ text, color: \"#fff\", size: 7, sub: \"\", icon: \"\", stamp: false }, options));','const item = Object.assign({ text, color: \"#fff\", size: 7, sub: \"\", icon: \"\", stamp: false }, options);\\n      if (item.priority) {\\n        if (current) callouts.unshift(current);\\n        callouts.unshift(item); nextCallout();\\n        banner.style.opacity = \"1\";\\n      } else callouts.push(item);')
+# Hide existing toasts immediately as well as future ones; release only after banners finish + 1.2 seconds.
+s=s.replace('let current = null, calloutAge = 0;', 'let current = null, calloutAge = 0, toastRelease = 0;')
+s=s.replace('if ("'!current) { banner.hidden = true; return; }'"','clearTimeout(toastRelease);\\n      if ("'!current) {'"\\n        banner.hidden = true;\\n        toastRelease = setTimeout(() => game.classList.remove(\"juice-callout\"), 1200);\\n        return;\\n      }\\n      game.classList.add(\"juice-callout\");')
+s=s.replace('callouts.length = 0; current = null; banner.hidden = true;', 'callouts.length = 0; current = null; banner.hidden = true;\\n      clearTimeout(toastRelease); game.classList.remove(\"juice-callout\");')
+open(p,'w').write(s)
+p='js/meta.js';s=open(p).read().replace('if ("'!toastBox) return;'"', 'if ("'!toastBox) return;'"\\n  if (toastBox.parentElement.classList.contains(\"juice-callout\")) {\\n    setTimeout(() => toast(html, cls), 1200); return;\\n  }',1)
+s=s.replace('.mt-toast{display:flex;', '#game.juice-callout #metaToasts{visibility:hidden}\\n.mt-toast{display:flex;')
+s=s.replace('add(\"SQUAD\", d.n || 0);','add(\"SQUAD\", d.n || 0);\\n  if (d.keptPct "'!= null) add("SQUAD KEPT", d.keptPct, v => Math.round(v) + "%");'"')
+s=s.replace('if ((d.stars || 0) < 3) {','if (d.keptPct "'!= null && d.keptPct < 65) html += '"\\'<div class=\"mt-hint\">Counter threats to keep your squad</div>\\';\\n  if ((d.stars || 0) < 3) {')
+open(p,'w').write(s)
+p='tools/bot-tactics.js';s=open(p).read().replace('Outputs each result as JSON, then a wins/attempts table.', 'Outputs each result as JSON, then wins, stars and retention summary tables.')
+s=s.replace('window.__tacticsCounts = counts;', 'window.__tacticsCounts = counts;\\n        window.__tacticsThreats = []; window.__tacticsWin = null;\\n        C.bus.on(\"threatEnd\", t => window.__tacticsThreats.push({ ...t }));\\n        C.bus.on(\"win\", d => { window.__tacticsWin = { stars: d.stars, keptPct: d.keptPct }; });')
+s=s.replace('return { result: state, squad:', 'return { result: state, stars: window.__tacticsWin?.stars ?? 0, keptPct: window.__tacticsWin?.keptPct ?? Math.round(L.soldiers.length / Math.max(1, L.peakSquad) * 100), peakSquad: L.peakSquad, threats: window.__tacticsThreats, squad:')
+s=s.replace('if (results.some(r => r.errors.length))', '''console.log(\"Policy summary (completed runs; losses count as zero stars)\");
+  console.table(policies.map(policy => {
+    const r = results.filter(x => x.policy === policy && x.result "'!== "ERROR");
+    const avg = key => r.length ? (r.reduce((sum, x) => sum + x[key], 0) / r.length).toFixed(1) : "—";
+    return { policy, wins: `${r.filter(x => x.result === "win").length}/${results.filter(x => x.policy === policy).length}`, averageStars: avg("stars"), averageKeptPct: avg("keptPct") };
+  }));
+  if (results.some(r => r.errors.length))'"''')
+open(p,'w').write(s)
+PY
+THREE_LOCAL=/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js CHROMIUM_PATH=/usr/bin/google-chrome node tools/bot-tactics.js --runs 1 --levels 4,7 --policies never,smart --steering casual > /tmp/a2-bot-first.log 2>&1" in /home/user/my-first-repo/squad-surge
+ exited 1 in 252ms:
+exec
+/bin/bash -lc "cat /tmp/a2-bot-first.log
+rg -n 'function clamp|const clamp|boss.state =' index.html
+node --check js/juice.js
+node --check js/meta.js
+node --check tools/bot-tactics.js
+THREE_LOCAL=/tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js node tools/check-tactics.js" in /home/user/my-first-repo/squad-surge
+ exited 1 in 501ms:
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EPERM: operation not permitted 127.0.0.1
+    at Server.setupListenHandle [as _listen2] (node:net:1919:21)
+    at listenInCluster (node:net:1998:12)
+    at node:net:2207:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1977:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '127.0.0.1'
+}
+
+Node.js v22.23.4
+731:  if (L.boss.state === "wait") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
+974:      L.sz = -L.length; setState("boss"); L.boss.state = "walk"; vibe(80);
+1173:  L.boss.state = "down"; L.shake = 0.6; sfx("boom"); vibe(200);
+PASS: belt/swap/expiry, paused input, WASTED, held SURGE, PERFECT rewards, GIANT wall smash, SHIELD mortars, 18% boss AIRSTRIKE, banking, threat spacing/tool gates.
+{"level":1,"state":"win","squad":183,"used":0,"perfect":0}
+evalmachine.<anonymous>:343
+    const count = clamp(Math.round(t.startSquad * 0.3), 12 + 3 * L.level, 90);
+                  ^
+
+ReferenceError: clamp is not defined
+    at liveThreat (evalmachine.<anonymous>:343:19)
+    at updateTactics (evalmachine.<anonymous>:375:42)
+    at Object.step (evalmachine.<anonymous>:791:3)
+    at Object.<anonymous> (/home/user/my-first-repo/squad-surge/tools/check-tactics.js:43:447)
+    at Module._compile (node:internal/modules/cjs/loader:1781:14)
+    at Object..js (node:internal/modules/cjs/loader:1913:10)
+    at Module.load (node:internal/modules/cjs/loader:1505:32)
+    at Function._load (node:internal/modules/cjs/loader:1309:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+
+Node.js v22.23.4
+

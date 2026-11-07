@@ -83,6 +83,9 @@ function probeIcons() {
 let toastBox;
 function toast(html, cls) {
   if (!toastBox) return;
+  if (toastBox.parentElement.classList.contains("juice-callout")) {
+    setTimeout(() => toast(html, cls), 1200); return;
+  }
   const t = document.createElement("div"); t.className = "mt-toast " + (cls || ""); t.innerHTML = html;
   toastBox.appendChild(t);
   while (toastBox.children.length > 3) toastBox.firstChild.remove();
@@ -361,6 +364,7 @@ async function share(text) {
 /* ---------------- CSS ---------------- */
 const CSS = `
 .mi{width:1.15em;height:1.15em;flex:none;display:inline-block;vertical-align:middle;object-fit:contain}
+#game.juice-callout #metaToasts{visibility:hidden}
 .mt-toast{display:flex;align-items:center;gap:8px;max-width:92%;padding:6px 14px 6px 8px;border-radius:14px;background:linear-gradient(#2b4a9a,#1b2a52);border:2px solid #0d1630;box-shadow:0 3px 0 #0d1630,0 8px 18px #0006;font:15px 'Lilita One',sans-serif;color:#fff;animation:mtIn .35s cubic-bezier(.2,1.4,.4,1) both;transition:opacity .35s,transform .35s}
 .mt-toast .mi{width:30px;height:30px}.mt-toast span{display:grid;line-height:1.1;text-align:left}.mt-toast small{font:12px Nunito,sans-serif;font-weight:800;color:#bcd0ff}
 .mt-toast.ms{background:linear-gradient(#3aa85a,#1f7a3a)}.mt-toast.ms small{color:#d6ffe0}.mt-toast.tr b{color:#ffd84a}
@@ -627,6 +631,7 @@ function buildResults(d, x) {
   if (x.kills != null) add("KILLS", x.kills);
   if (x.bc) add("BEST COMBO", x.bc);
   add("SQUAD", d.n || 0);
+  if (d.keptPct != null) add("SQUAD KEPT", d.keptPct, v => Math.round(v) + "%");
   if (d.mult > 1) add("FINALE", d.mult, v => "x" + (Math.round(v * 10) / 10));
   add("TACTICS", run.perfect, () => `${run.perfect} PERFECT · +${run.bankBonus.toFixed(1)}× banked · ${run.wasted} wasted`);
   const hasTotal = x.total != null;
@@ -634,6 +639,7 @@ function buildResults(d, x) {
   if (run.perfect >= 2 && run.wasted === 0) html += '<div class="mt-hint" style="color:#ffd84a">★ TACTICIAN</div>';
   if (hasTotal) html += `<div class="mt-total" id="mtTotal"><span class="lb">SCORE</span><span class="num" id="mtNum">0</span><span class="mt-best" id="mtBest">NEW BEST!</span><span class="mt-spark" id="mtSpark"></span></div>`;
   const n = d.n || 0, lv = d.level || (ctx.L && ctx.L.level) || 1, t3 = 30 + 10 * lv, t2 = 10 + 3 * lv;
+  if (d.keptPct != null && d.keptPct < 65) html += '<div class="mt-hint">Counter threats to keep your squad</div>';
   if ((d.stars || 0) < 3) {
     const need = (d.stars || 0) >= 2 ? t3 - n : t2 - n, tgt = (d.stars || 0) >= 2 ? "★★★" : "★★";
     if (need > 0) html += `<div class="mt-hint">${need} more soldier${need > 1 ? "s" : ""} for ${tgt}</div>`;

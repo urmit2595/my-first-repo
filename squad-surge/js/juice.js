@@ -19,7 +19,7 @@ window.Juice = (() => {
     let confetti = null, confettiLeft = 0;
     let trauma = 0, pullback = 0, surgeKick = 0;
     let surgeOn = false, shieldOn = false, giantOn = false, meterHot = false;
-    let current = null, calloutAge = 0;
+    let current = null, calloutAge = 0, toastRelease = 0;
     const callouts = [], flights = [];
     const inRun = () => ["play", "boss", "bonus"].includes(ctx.state);
     const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -153,7 +153,7 @@ window.Juice = (() => {
     on("powerupUse", (d = {}) => {
       clearCoach();
       const type = toolType(d.type);
-      if (d.perfect && type) enqueue("PERFECT " + type.toUpperCase() + "!", { color: "#ffd84a", size: 9, ring: true });
+      if (d.perfect && type) enqueue("PERFECT " + type.toUpperCase() + "!", { color: "#ffd84a", size: 9, ring: true, priority: true });
       else if (d.wasted) {
         const button = slotButton(d.slot), g = game.getBoundingClientRect(), r = button && button.getBoundingClientRect();
         wasteChip.textContent = "WASTED"; wasteChip.style.left = (r ? r.left + r.width / 2 - g.left : g.width / 2) + "px";
@@ -211,11 +211,22 @@ window.Juice = (() => {
     let flash = 0;
     function enqueue(text, options = {}) {
       if (!inRun()) return;
-      callouts.push(Object.assign({ text, color: "#fff", size: 7, sub: "", icon: "", stamp: false }, options));
+      const item = Object.assign({ text, color: "#fff", size: 7, sub: "", icon: "", stamp: false }, options);
+      if (item.priority) {
+        if (current) callouts.unshift(current);
+        callouts.unshift(item); nextCallout();
+        banner.style.opacity = "1";
+      } else callouts.push(item);
     }
     function nextCallout() {
       current = callouts.shift() || null; calloutAge = 0;
-      if (!current) { banner.hidden = true; return; }
+      clearTimeout(toastRelease);
+      if (!current) {
+        banner.hidden = true;
+        toastRelease = setTimeout(() => game.classList.remove("juice-callout"), 1200);
+        return;
+      }
+      game.classList.add("juice-callout");
       const oldRing = banner.querySelector(".jt-ring"); if (oldRing) oldRing.remove();
       if (current.ring) { const ring = document.createElement("i"); ring.className = "jt-ring"; banner.appendChild(ring); }
       title.textContent = current.text; subtitle.textContent = current.sub;
@@ -236,6 +247,7 @@ window.Juice = (() => {
     function clearMoments() {
       clearTactics();
       callouts.length = 0; current = null; banner.hidden = true;
+      clearTimeout(toastRelease); game.classList.remove("juice-callout");
       trauma = pullback = surgeKick = flash = 0;
       surgeOn = shieldOn = giantOn = false;
       layers.forEach(layer => { layer.value = 0; layer.el.style.opacity = "0"; });

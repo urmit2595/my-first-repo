@@ -4,7 +4,7 @@
 // node tools/bot-tactics.js [--runs 3] [--levels 1-8] [--steering casual|perfect]
 //                         [--policies never,smart,random] [--three /path/three.min.js]
 // THREE_LOCAL can provide offline three.js r128. Otherwise use the game's CDN.
-// Outputs each result as JSON, then a wins/attempts table. A timeout is an error, not a loss.
+// Outputs each result as JSON, then wins, stars and retention summary tables. A timeout is an error, not a loss.
 const http = require("http"), fs = require("fs"), path = require("path");
 const { chromium } = require("playwright");
 const ROOT = path.resolve(__dirname, "..");
@@ -62,6 +62,9 @@ let browser;
         C.bus.on("powerupGot", () => counts.got++);
         C.bus.on("powerupUse", e => { counts.uses++; if (e.perfect) counts.perfect++; });
         window.__tacticsCounts = counts;
+        window.__tacticsThreats = []; window.__tacticsWin = null;
+        C.bus.on("threatEnd", t => window.__tacticsThreats.push({ ...t }));
+        C.bus.on("win", d => { window.__tacticsWin = { stars: d.stars, keptPct: d.keptPct }; });
         C.bus.on("tick", () => {
           const L = g.L;
           if (g.state !== "play" && g.state !== "boss") return;
@@ -100,7 +103,7 @@ let browser;
       await page.waitForFunction(() => ["win", "lose"].includes(__game.state), null, { timeout: 180000, polling: 200 });
       const result = await page.evaluate(() => {
         const { L, state, ctx } = __game;
-        return { result: state, squad: L.bossSoldiers || L.soldiers.length, progress: Math.round(L.reached * 100), bossPct: Math.max(0, Math.round(L.boss.hp / L.boss.maxHp * 100)), score: Math.round(L.score * L.mult), mult: L.mult, tactics: { ...ctx.tactics }, events: window.__tacticsCounts };
+        return { result: state, stars: window.__tacticsWin?.stars ?? 0, keptPct: window.__tacticsWin?.keptPct ?? Math.round(L.soldiers.length / Math.max(1, L.peakSquad) * 100), peakSquad: L.peakSquad, threats: window.__tacticsThreats, squad: L.bossSoldiers || L.soldiers.length, progress: Math.round(L.reached * 100), bossPct: Math.max(0, Math.round(L.boss.hp / L.boss.maxHp * 100)), score: Math.round(L.score * L.mult), mult: L.mult, tactics: { ...ctx.tactics }, events: window.__tacticsCounts };
       });
       if (result.events.maxLive > 1) errors.push("Overlapping live threats");
       if (policy === "never" && result.events.uses) errors.push("Never policy activated a power-up");
@@ -116,6 +119,12 @@ let browser;
     const row = { level };
     for (const policy of policies) { const r = results.filter(x => x.level === level && x.policy === policy); row[policy] = `${r.filter(x => x.result === "win").length}/${r.length}` + (r.some(x => x.result === "ERROR" || x.errors.length) ? " ERROR" : ""); }
     return row;
+  }));
+  console.log("Policy summary (completed runs; losses count as zero stars)");
+  console.table(policies.map(policy => {
+    const r = results.filter(x => x.policy === policy && x.result !== "ERROR");
+    const avg = key => r.length ? (r.reduce((sum, x) => sum + x[key], 0) / r.length).toFixed(1) : "—";
+    return { policy, wins: `${r.filter(x => x.result === "win").length}/${results.filter(x => x.policy === policy).length}`, averageStars: avg("stars"), averageKeptPct: avg("keptPct") };
   }));
   if (results.some(r => r.errors.length)) process.exitCode = 1;
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (browser) await browser.close(); server.close(); });

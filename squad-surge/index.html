@@ -526,16 +526,17 @@ function usePowerup(slot) {
   bus.emit("powerupUse", { type, slot, perfect, misused, wasted, threatKind: threat ? threat.kind : null });
   window.Powerups?.activate(type); return true;
 }
-function threatLossLeft(t) { return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - 3)); }
+function threatLossLeft(t) { return Math.max(0, Math.min(t.lossCap - t.lost, L.soldiers.length - Math.max(3, Math.ceil(t.startSquad * 0.6)))); }
 function announceThreat(t) {
   t.announced = true; Obj3D.threatSign(t);
   bus.emit("threat", { id: t.id, kind: t.kind, counter: t.counter, z: t.z });
 }
 function liveThreat(t) {
   t.live = true; L.threat = t;
-  t.lossCap = Math.min(t.kind === "swarm" ? 12 : 10, Math.ceil(L.soldiers.length * 0.24));
+  t.startSquad = L.soldiers.length;
+  t.lossCap = Math.max(4, Math.ceil(t.startSquad * (L.level >= 7 ? 0.20 : L.level >= 4 ? 0.16 : 0.12)));
   if (t.kind === "swarm") {
-    const count = Math.round(1.8 * (6 + L.level * 3));
+    const count = clamp(Math.round(t.startSquad * 0.3), 12 + 3 * L.level, 90);
     for (let i = 0; i < count; i++) {
       const e = enemy(L.theme.enemy, (i % 9 - 4) * 0.85, t.z - Math.floor(i / 9) * 0.8, L.level);
       e.threat = t; L.enemies.push(e); t.actors.push(e);
@@ -575,12 +576,12 @@ function updateTactics(dt) {
   if (t.kind === "mortars") {
     if (t.shellT > 0) {
       t.shellT -= dt;
-      const u = Math.min(1, 1 - t.shellT / 0.85);
+      const u = Math.min(1, 1 - t.shellT / 0.65);
       t.vis.shell.position.set(t.fromX + (t.targetX - t.fromX) * u, 2 + Math.sin(u * Math.PI) * 10, t.z + (t.targetZ - t.z) * u);
       if (t.shellT <= 0) {
         t.vis.shell.visible = t.vis.ring.visible = false;
         if (L.shieldT <= 0 && Math.abs(L.sx - t.targetX) < 2.8) {
-          const loss = Math.min(2 + L.level % 3, threatLossLeft(t));
+          const loss = Math.min(Math.max(2, Math.ceil(L.soldiers.length * 0.03)), threatLossLeft(t));
           killSoldiers(loss, t.targetX, true); t.lost += loss;
         }
         bus.emit("explosion", { x: t.targetX, z: t.targetZ, radius: 2.8 });
@@ -588,10 +589,10 @@ function updateTactics(dt) {
       }
     }
     t.shotT -= dt;
-    if (t.shotT <= 0 && t.age < 5.1) {
+    if (t.shotT <= 0 && t.age < 5.3) {
       let tower = null; for (const o of t.actors) if (o.alive) { tower = o; break; }
       if (tower) {
-        t.shotT = 1.6; t.shellT = 0.85; t.fromX = tower.x; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.85;
+        t.shotT = 0.7; t.shellT = 0.65; t.fromX = tower.x; t.targetX = L.sx; t.targetZ = L.sz - SPEED * L.speedMul * 0.65;
         t.vis.ring.position.set(t.targetX, 0.09, t.targetZ); t.vis.ring.visible = t.vis.shell.visible = true;
       }
     }
@@ -727,6 +728,7 @@ function addSoldiers(n) {
     const [ox, oz] = slot(L.soldiers.length);
     L.soldiers.push({ x: L.sx + ox * 0.3, z: L.sz + oz * 0.3, ph: Math.random() * 4, born: L.time });
   }
+  if (L.boss.state === "wait") L.peakSquad = Math.max(L.peakSquad, L.soldiers.length);
   if (added) bus.emit("soldiersAdded", { n: added, total: L.soldiers.length });
 }
 function killSoldiers(n, nearX = null, force = false) {
@@ -762,7 +764,7 @@ function startLevel(level, opts = {}) {
     belt: [null, null], beltFx: [null, null], beltFxUntil: [0, 0], swap: null, coach: null,
     tactics: { perfect: 0, used: 0, wasted: 0, misused: 0, banked: 0, surgePerfect: 0 }, threat: null, surgeReady: false, bankBonus: 0, bankLocked: false,
     score: 0, kills: 0, combo: 0, comboT: 0, bestCombo: 0, surge: 0, surgeT: 0, surges: 0, idleT: 0, shieldT: 0, giantT: 0, giantK: 1,
-    bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
+    peakSquad: 0, bossSoldiers: 0, mult: 1, slowMos: 0, milestone: 0, surgePerKill: 1 / Math.max(12, 0.4 * L.expectedKills) });
   time.scale = time.target = 1; time.slowT = time.stopT = 0; time.lastSlow = time.lastStop = -99;
   addSoldiers(mod === "lone" ? 1 : START_SQUAD);
   beltChanged();
@@ -1018,7 +1020,7 @@ function step(dt) {
     if (!hit) continue;
     const guarded = L.shieldT > 0 || L.giantT > 0;
     let lose = guarded || o.kind === "airdrop" ? 0 : Math.min(hit, Math.ceil(o.hp / 10) + 1);
-    if (o.threat) lose = Math.min(lose, threatLossLeft(o.threat));
+    if (o.threat) lose = Math.min(o.kind === "barricade" && !guarded ? o.threat.lossCap : lose, threatLossLeft(o.threat));
     if (lose) { killSoldiers(lose, o.x); breakCombo(); vibe(50); flashRed(); floatText(o.x, 2, o.z, `-${lose}`, "#ff6a5a"); }
     if (o.threat) o.threat.lost += lose;
     breakSolid(o, L.giantT > 0 || o.kind === "airdrop"); // a GIANT squad smashes things and keeps the reward
@@ -1195,7 +1197,8 @@ function renderLevels() {
 }
 function win() {
   if (state !== "boss" && state !== "bonus") return;
-  const n = L.bossSoldiers || L.soldiers.length, stars = n >= 30 + L.level * 10 ? 3 : n >= 10 + L.level * 3 ? 2 : 1;
+  const n = L.bossSoldiers || L.soldiers.length, kept = Math.min(1, n / Math.max(1, L.peakSquad));
+  const keptPct = Math.round(kept * 100), stars = n >= 30 + L.level * 10 && kept >= 0.65 ? 3 : n >= 10 + L.level * 3 && kept >= 0.35 ? 2 : 1;
   const normal = L.mode === "normal", total = Math.round(L.score * (L.mult || 1));
   const newBest = normal && n > (save.bestSquad[L.level] || 0), bestScore = normal ? save.bestScore[L.level] || 0 : 0, newBestScore = normal && total > bestScore;
   if (normal) {
@@ -1207,7 +1210,7 @@ function win() {
   $("stars").innerHTML = starIcons(stars);
   $("winSub").textContent = `${total.toLocaleString()} POINTS${L.mult > 1 ? ` · x${L.mult} FINALE` : ""} · ${n} soldiers${newBestScore ? " · NEW BEST!" : ""}`;
   sfx("win"); setState("win");
-  bus.emit("win", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
+  bus.emit("win", { tactics: { ...L.tactics }, bankBonus: L.bankBonus, finaleMult: L.finaleMult || 1, stars, keptPct, n, level: L.level, newBest, score: L.score, kills: L.kills, bestCombo: L.bestCombo, mult: L.mult || 1, total, bestScore, newBestScore, mode: L.mode, modifier: L.modifier });
   if (normal) Scenery.preload(themeFor(L.level + 1)).catch(() => {}); // fetch the next theme while the player looks at the stars
 }
 function explode(x, z, dmg, radius, skip = null) {
