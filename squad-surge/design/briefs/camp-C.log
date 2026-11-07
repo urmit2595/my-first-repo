@@ -5699,3 +5699,8 @@ First-attempt results: fresh save, no Assist; errors excluded from win rates.
 └─────────┴─────────────┴─────────┴──────┴──────────┴────────┴──────────┴────────┘
 Causes of loss {"never:boss:charge":1}
 
+exec
+/bin/bash -lc "node tools/bot-campaign.js --missions c1m1-c6m6 --policies never,smart --runs 1 --engine simulation --three /tmp/claude-0/-home-user/d08fbbcb-599c-5888-a78c-4e8e85154330/scratchpad/vendor/three/build/three.min.js | node -e 'let buf=\"\"; const rows=[]; process.stdin.on(\"data\",c=>{buf+=c; let at; while((at=buf.indexOf(\"\\n\"))>=0){const line=buf.slice(0,at);buf=buf.slice(at+1);if(line.startsWith(\"{\")){try{const r=JSON.parse(line);rows.push(r);console.log(r.id,r.policy,r.result,\"peak=\"+r.peak,\"kept=\"+r.keptPct,\"cause=\"+r.cause);}catch{}}}});process.stdin.on(\"end\",()=>{for(const tag of [\"normal\",\"hard\",\"boss\"])for(const policy of [\"never\",\"smart\"]){const a=rows.filter(r=>r.tag===tag&&r.policy===policy);console.log(tag,policy,a.filter(r=>r.result===\"win\").length+\"/\"+a.length);}if(rows.length"'!==72||rows.some(r=>r.result==="ERROR"))process.exitCode=1;});'"'" in /home/user/my-first-repo/squad-surge
+codex
+The gate changes now keep the worst-case inflated bound below 180 after the first onboarding mission. The smoke test passed for onboarding, and the finale distinguished the two policies: smart won; never lost to a charge. I’m running both policies across all 36 missions to check for broader balance problems.
+
